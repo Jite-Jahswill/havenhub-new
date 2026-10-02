@@ -1,4 +1,5 @@
 import type { BookingStatus } from '../enums/booking.js';
+import type { ExperienceKind } from '../enums/experience.js';
 import type {
   AttachmentKind,
   ConversationStatus,
@@ -27,6 +28,16 @@ export type ConversationContextView =
   | {
       type: 'PROPERTY';
       property: { id: string; slug: string; title: string; thumbnailUrl: string | null };
+    }
+  | {
+      type: 'EXPERIENCE';
+      experience: {
+        id: string;
+        slug: string;
+        kind: ExperienceKind;
+        title: string;
+        thumbnailUrl: string | null;
+      };
     }
   | {
       type: 'BOOKING';

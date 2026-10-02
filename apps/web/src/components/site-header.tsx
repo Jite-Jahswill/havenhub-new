@@ -27,6 +27,16 @@ export async function SiteHeader() {
           <Link href="/properties" className={buttonClasses({ variant: 'ghost', size: 'sm' })}>
             Explore
           </Link>
+          <Link
+            href="/experiences"
+            className={buttonClasses({
+              variant: 'ghost',
+              size: 'sm',
+              className: 'hidden sm:inline-flex',
+            })}
+          >
+            Experiences
+          </Link>
           <div className="md:hidden">
             <ThemeToggle variant="compact" />
           </div>

@@ -69,7 +69,7 @@ export async function createTestContext(overrides: Partial<Env> = {}): Promise<T
     env,
     reset: async () => {
       await prisma.$executeRawUnsafe(
-        'TRUNCATE users, sessions, verification_tokens, user_roles, agent_profiles, payout_accounts, audit_logs, properties, property_images, property_videos, property_amenities, property_favorites, property_view_daily, pricing_configs, bookings, booking_line_items, payments, refunds, ledger_entries, agent_earnings, subscription_plans, subscription_plan_entitlements, agent_subscriptions, subscription_payments, conversations, conversation_participants, messages, message_revisions, message_attachments, message_reactions CASCADE',
+        'TRUNCATE users, sessions, verification_tokens, user_roles, agent_profiles, payout_accounts, audit_logs, properties, property_images, property_videos, property_amenities, property_favorites, property_view_daily, pricing_configs, bookings, booking_line_items, payments, refunds, ledger_entries, agent_earnings, subscription_plans, subscription_plan_entitlements, agent_subscriptions, subscription_payments, conversations, conversation_participants, messages, message_revisions, message_attachments, message_reactions, experiences, experience_images, experience_videos, experience_amenities, events, event_ticket_types, tours, tour_dates, hotels, hotel_room_types, hotel_rooms, hotel_room_availability, cleaning_services, vacation_zones, vacation_zone_experiences CASCADE',
       );
       await seedDefaultPlan(prisma);
       await redis.client.flushdb();

@@ -6,7 +6,8 @@ import type { PrismaClient } from '../../generated/prisma/client';
  * The free tier every agent is on without a paid term. Spec §10 fixes it at
  * exactly one property; image/video allowances keep the values agents have
  * had since Phase 2. Storage is bounded by those counts, so it is not capped
- * separately. Features HavenHub does not offer yet are not included (0).
+ * separately. Events, tours and hotels start as not included (0) until an
+ * administrator changes the plan; the cleaning allowance is not enforced.
  *
  * This is only the *initial* row: administrators edit the plan afterwards,
  * and the seed never overwrites it.

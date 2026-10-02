@@ -64,8 +64,8 @@ export interface EntitlementDefinition {
   scope: 'account' | 'perProperty';
   unit: 'count' | 'MB';
   /**
-   * False while the HavenHub feature it limits is not built yet (events,
-   * tours, hotels, cleaning services). Plans can already configure it.
+   * False when the platform does not apply the limit (currently cleaning
+   * services: §14 says cleaners never pay to post). Plans can still set it.
    */
   enforced: boolean;
 }
@@ -95,8 +95,8 @@ export const ENTITLEMENTS: readonly EntitlementDefinition[] = [
     enforced: true,
   },
   { key: 'STORAGE_MB', label: 'Image storage', scope: 'account', unit: 'MB', enforced: true },
-  { key: 'EVENT_COUNT', label: 'Events', scope: 'account', unit: 'count', enforced: false },
-  { key: 'TOUR_COUNT', label: 'Tours', scope: 'account', unit: 'count', enforced: false },
+  { key: 'EVENT_COUNT', label: 'Events', scope: 'account', unit: 'count', enforced: true },
+  { key: 'TOUR_COUNT', label: 'Tours', scope: 'account', unit: 'count', enforced: true },
   {
     key: 'CLEANING_SERVICE_COUNT',
     label: 'Cleaning services',
@@ -104,7 +104,7 @@ export const ENTITLEMENTS: readonly EntitlementDefinition[] = [
     unit: 'count',
     enforced: false,
   },
-  { key: 'HOTEL_COUNT', label: 'Hotel listings', scope: 'account', unit: 'count', enforced: false },
+  { key: 'HOTEL_COUNT', label: 'Hotel listings', scope: 'account', unit: 'count', enforced: true },
 ];
 
 export const entitlementDefinition = (key: EntitlementKey): EntitlementDefinition =>

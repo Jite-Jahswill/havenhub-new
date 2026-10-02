@@ -73,6 +73,7 @@ export class ChatAdminService {
         ? {
             OR: [
               { property: { title: search } },
+              { experience: { title: search } },
               { booking: { reference: search } },
               {
                 participants: {

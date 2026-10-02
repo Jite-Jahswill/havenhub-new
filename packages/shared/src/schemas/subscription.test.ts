@@ -17,13 +17,11 @@ const plan = {
 };
 
 describe('subscription plan schemas', () => {
-  it('every entitlement has a definition, and only built features are enforced', () => {
+  it('every entitlement has a definition; only the cleaning allowance is not enforced', () => {
     expect(ENTITLEMENTS.map((e) => e.key).sort()).toEqual(Object.values(EntitlementKey).sort());
+    // §14: cleaners never pay to post, so CLEANING_SERVICE_COUNT is kept for future use only.
     expect(ENTITLEMENTS.filter((e) => !e.enforced).map((e) => e.key)).toEqual([
-      'EVENT_COUNT',
-      'TOUR_COUNT',
       'CLEANING_SERVICE_COUNT',
-      'HOTEL_COUNT',
     ]);
   });
 

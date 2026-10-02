@@ -54,10 +54,15 @@ export const counterpart = (
   viewerId: string,
 ): ChatParticipantView | undefined => c.participants.find((p) => p.id !== viewerId);
 
-export function contextLine(c: ConversationSummary): string {
-  return c.context.type === 'BOOKING'
-    ? `Booking ${c.context.booking.reference} · ${c.context.booking.propertyTitle}`
-    : c.context.property.title;
+export function contextLine(c: Pick<ConversationSummary, 'context'>): string {
+  switch (c.context.type) {
+    case 'BOOKING':
+      return `Booking ${c.context.booking.reference} · ${c.context.booking.propertyTitle}`;
+    case 'EXPERIENCE':
+      return c.context.experience.title;
+    case 'PROPERTY':
+      return c.context.property.title;
+  }
 }
 
 export const initials = (name: string) =>

@@ -56,6 +56,15 @@ export const CONVERSATION_INCLUDE = {
       images: { where: { isPrimary: true }, take: 1, select: { thumbnailKey: true } },
     },
   },
+  experience: {
+    select: {
+      id: true,
+      slug: true,
+      kind: true,
+      title: true,
+      images: { where: { isPrimary: true }, take: 1, select: { thumbnailKey: true } },
+    },
+  },
   booking: {
     select: {
       id: true,
@@ -121,6 +130,19 @@ export function toContext(row: ConversationRow, urls: Urls): ConversationContext
         propertyTitle: row.booking.property.title,
         startDate: row.booking.startDate.toISOString().slice(0, 10),
         endDate: row.booking.endDate.toISOString().slice(0, 10),
+      },
+    };
+  }
+  if (row.contextType === 'EXPERIENCE' && row.experience) {
+    const e = row.experience;
+    return {
+      type: 'EXPERIENCE',
+      experience: {
+        id: e.id,
+        slug: e.slug,
+        kind: e.kind,
+        title: e.title,
+        thumbnailUrl: urls.url(e.images[0]?.thumbnailKey),
       },
     };
   }

@@ -7,6 +7,7 @@ import { Filters } from '@/components/admin/filters';
 import { NoAccess } from '@/components/admin/no-access';
 import { Pagination } from '@/components/admin/pagination';
 import { EmptyRow, Table, Td, Th, Tr } from '@/components/admin/table';
+import { contextLine } from '@/components/chat/chat-utils';
 import { PageHeader } from '@/components/dashboard/dashboard-shell';
 import { serverApi } from '@/lib/api/server';
 import { formatMoment } from '@/lib/format';
@@ -85,11 +86,7 @@ export default async function AdminConversationsPage({
                       {c.participants.map((p) => p.email).join(', ')}
                     </span>
                   </Td>
-                  <Td className="text-sm">
-                    {c.context.type === 'BOOKING'
-                      ? `Booking ${c.context.booking.reference}`
-                      : c.context.property.title}
-                  </Td>
+                  <Td className="text-sm">{contextLine(c)}</Td>
                   <Td className="text-right tabular-nums">{c.messageCount}</Td>
                   <Td className="text-xs">{formatMoment(c.lastActivityAt)}</Td>
                   <Td>{c.status === 'CLOSED' ? 'Closed' : 'Open'}</Td>

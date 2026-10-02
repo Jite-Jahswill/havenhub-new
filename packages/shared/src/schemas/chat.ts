@@ -26,10 +26,11 @@ const messageText = z
     z.string().max(MAX_MESSAGE_LENGTH, `Messages can be up to ${MAX_MESSAGE_LENGTH} characters`),
   );
 
-/** Starts (or returns the existing) conversation about a property or a booking. */
+/** Starts (or returns the existing) conversation about a property, booking or experience. */
 export const startConversationSchema = z.discriminatedUnion('contextType', [
   z.object({ contextType: z.literal('PROPERTY'), propertyId: z.uuid() }),
   z.object({ contextType: z.literal('BOOKING'), bookingId: z.uuid() }),
+  z.object({ contextType: z.literal('EXPERIENCE'), experienceId: z.uuid() }),
 ]);
 export type StartConversationInput = z.input<typeof startConversationSchema>;
 

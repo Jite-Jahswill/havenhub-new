@@ -6,6 +6,7 @@ import { notFound } from 'next/navigation';
 
 import { ConversationModeration, RemoveMessage } from '@/components/admin/chat/moderation-actions';
 import { NoAccess } from '@/components/admin/no-access';
+import { contextLine } from '@/components/chat/chat-utils';
 import { PageHeader } from '@/components/dashboard/dashboard-shell';
 import { serverApi } from '@/lib/api/server';
 import { formatMoment } from '@/lib/format';
@@ -48,9 +49,7 @@ export default async function AdminConversationPage({
               <Badge tone={c.status === 'CLOSED' ? 'warning' : 'success'}>
                 {c.status === 'CLOSED' ? 'Closed' : 'Open'}
               </Badge>
-              {c.context.type === 'BOOKING'
-                ? `Booking ${c.context.booking.reference}`
-                : c.context.property.title}
+              {contextLine(c)}
             </span>
           }
         />

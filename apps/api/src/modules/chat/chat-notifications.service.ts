@@ -97,6 +97,7 @@ export class ChatNotificationsService implements ChatNotificationChannel {
             contextType: true,
             property: { select: { title: true } },
             booking: { select: { reference: true } },
+            experience: { select: { title: true } },
           },
         },
       },
@@ -127,7 +128,7 @@ export class ChatNotificationsService implements ChatNotificationChannel {
     const about =
       c.contextType === 'BOOKING' && c.booking
         ? `booking ${c.booking.reference}`
-        : `“${c.property?.title ?? 'a listing'}”`;
+        : `“${c.property?.title ?? c.experience?.title ?? 'a listing'}”`;
     const area = participant.user.accountType === 'AGENT' ? 'agent' : 'account';
     await this.mail.send(
       MailTemplates.unreadMessages(

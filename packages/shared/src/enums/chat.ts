@@ -5,6 +5,8 @@
 export const ConversationContextType = {
   PROPERTY: 'PROPERTY',
   BOOKING: 'BOOKING',
+  /** Phase 6: an event, tour, hotel or cleaning-service listing. */
+  EXPERIENCE: 'EXPERIENCE',
 } as const;
 export type ConversationContextType =
   (typeof ConversationContextType)[keyof typeof ConversationContextType];

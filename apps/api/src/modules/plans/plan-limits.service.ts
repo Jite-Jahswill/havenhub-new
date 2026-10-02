@@ -1,9 +1,12 @@
 import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import {
   AgentSubscriptionStatus,
+  EXPERIENCE_ENTITLEMENT,
   ErrorCode,
+  ExperienceStatus,
   PropertyStatus,
   entitlementDefinition,
+  type ExperienceKind,
   type EntitlementKey,
   type PlanEntitlements,
 } from '@havenhub/shared';
@@ -26,6 +29,15 @@ export const COUNTED_STATUSES = [
   PropertyStatus.PUBLISHED,
   PropertyStatus.REJECTED,
   PropertyStatus.SUSPENDED,
+];
+
+/** Archived events, tours and hotels do not count towards their allowances. */
+export const COUNTED_EXPERIENCE_STATUSES = [
+  ExperienceStatus.DRAFT,
+  ExperienceStatus.PENDING_REVIEW,
+  ExperienceStatus.PUBLISHED,
+  ExperienceStatus.REJECTED,
+  ExperienceStatus.SUSPENDED,
 ];
 
 export const BYTES_PER_MB = 1024 * 1024;
@@ -167,13 +179,45 @@ export class PlanLimitsService {
     this.check(agentProfileId, plan, limits, key, used, 1);
   }
 
-  /** Bytes of every stored listing image the agent owns (any status). */
-  async storedBytes(agentProfileId: string, db: Db = this.prisma): Promise<number> {
-    const result = await db.propertyImage.aggregate({
-      where: { property: { agentProfileId } },
-      _sum: { bytes: true },
+  /**
+   * Adding an event, tour or hotel (or restoring an archived one): checks the
+   * kind's allowance against the agent's non-archived listings of that kind.
+   * Cleaning services are never limited (§14) — only the agent is locked.
+   */
+  async assertCanAddExperience(tx: Tx, agentProfileId: string, kind: ExperienceKind) {
+    await lockAgent(tx, agentProfileId);
+    const key = EXPERIENCE_ENTITLEMENT[kind];
+    if (!key) return;
+    const used = await tx.experience.count({
+      where: { agentProfileId, kind, status: { in: COUNTED_EXPERIENCE_STATUSES } },
     });
-    return result._sum.bytes ?? 0;
+    await this.assertWithinAllowance(tx, agentProfileId, key, used);
+  }
+
+  /** Experience images share the agent's storage allowance with property images. */
+  async assertStorageFor(tx: Tx, agentProfileId: string, bytes: number): Promise<void> {
+    await lockAgent(tx, agentProfileId);
+    const { plan, limits } = await this.effectivePlan(agentProfileId, tx);
+    if (limits.STORAGE_MB === null) return;
+    const stored = await this.storedBytes(agentProfileId, tx);
+    if (stored + bytes > limits.STORAGE_MB * BYTES_PER_MB) {
+      throw this.reached(agentProfileId, plan, 'STORAGE_MB', toMb(stored), limits.STORAGE_MB);
+    }
+  }
+
+  /** Bytes of every stored listing image the agent owns (any status, any listing type). */
+  async storedBytes(agentProfileId: string, db: Db = this.prisma): Promise<number> {
+    const [properties, experiences] = await Promise.all([
+      db.propertyImage.aggregate({
+        where: { property: { agentProfileId } },
+        _sum: { bytes: true },
+      }),
+      db.experienceImage.aggregate({
+        where: { experience: { agentProfileId } },
+        _sum: { bytes: true },
+      }),
+    ]);
+    return (properties._sum.bytes ?? 0) + (experiences._sum.bytes ?? 0);
   }
 
   /**
@@ -250,9 +294,21 @@ export function limitMessage(key: EntitlementKey, planName: string, limit: numbe
         : `You have reached your featured listing limit. ${allows} ${limit} featured ${plural(limit, 'property', 'properties')}. Un-feature one or upgrade your plan.`;
     case 'STORAGE_MB':
       return `You have used your image storage. ${allows} ${limit} MB. Remove some images or upgrade your plan.`;
+    case 'EVENT_COUNT':
+      return listingMessage('event', 'events', allows, limit, planName);
+    case 'TOUR_COUNT':
+      return listingMessage('tour', 'tours', allows, limit, planName);
+    case 'HOTEL_COUNT':
+      return listingMessage('hotel listing', 'hotel listings', allows, limit, planName);
     default:
       return `${allows} ${limit} ${entitlementDefinition(key).label.toLowerCase()}. Upgrade your plan to add more.`;
   }
+}
+
+function listingMessage(one: string, many: string, allows: string, limit: number, plan: string) {
+  return limit === 0
+    ? `${many[0]!.toUpperCase()}${many.slice(1)} are not included in your ${plan} plan. Upgrade your plan to add ${many}.`
+    : `You have reached your ${one} limit. ${allows} ${limit} active ${plural(limit, one, many)}. Archive one or upgrade your plan to add more.`;
 }
 
 async function lockAgent(tx: Tx, agentProfileId: string): Promise<void> {

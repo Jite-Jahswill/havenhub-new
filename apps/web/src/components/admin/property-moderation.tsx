@@ -24,7 +24,14 @@ const ACTIONS: Partial<
   SUSPENDED: [{ action: 'RESTORE', label: 'Restore', variant: 'primary' }],
 };
 
-export function PropertyModeration({ property }: { property: AdminPropertyDetail }) {
+/** Also moderates events, tours, hotels and cleaning services (same rules, own endpoint). */
+export function PropertyModeration({
+  property,
+  endpoint = `/admin/properties/${property.id}/moderation`,
+}: {
+  property: Pick<AdminPropertyDetail, 'id' | 'status'>;
+  endpoint?: string;
+}) {
   const router = useRouter();
   const { pending, error, fieldErrors, run } = useApiAction();
   const [note, setNote] = useState('');
@@ -34,7 +41,7 @@ export function PropertyModeration({ property }: { property: AdminPropertyDetail
   async function apply(action: ModerationAction) {
     setTarget(action);
     const done = await run(() =>
-      api('PATCH', `/admin/properties/${property.id}/moderation`, {
+      api('PATCH', endpoint, {
         action,
         note: note.trim() || undefined,
       }),

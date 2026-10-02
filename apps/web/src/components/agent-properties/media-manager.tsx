@@ -11,24 +11,36 @@ import { Photo } from '@/components/properties/photo';
 import { api, apiUpload } from '@/lib/api/client';
 import { formText } from '@/lib/form';
 
-/** Plan allowances for display; null = unlimited. The API enforces them regardless. */
+/** Allowances for display; null = unlimited. The API enforces them regardless. */
 type Limits = { images: number | null; videos: number | null };
+type Listing = Pick<AgentPropertyView, 'id' | 'images' | 'videos'>;
 
+/**
+ * Photos and video links of an agent's listing. Used for properties (limits
+ * from the plan) and for events, tours, hotels and cleaning services
+ * (`basePath`, with fixed per-listing caps that are not plan allowances).
+ */
 export function MediaManager({
   property,
   limits,
   locked,
+  basePath,
+  limitSource = 'plan',
 }: {
-  property: AgentPropertyView;
+  property: Listing;
   limits: Limits;
   locked: boolean;
+  basePath?: string;
+  /** Whether the limits come from the agent's plan (shows upgrade prompts). */
+  limitSource?: 'plan' | 'listing';
 }) {
+  const fromPlan = limitSource === 'plan';
   const router = useRouter();
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<{ text: string; upgrade: boolean } | null>(null);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
-  const base = `/agents/me/properties/${property.id}`;
+  const base = basePath ?? `/agents/me/properties/${property.id}`;
   const images = property.images;
   const remaining =
     limits.images === null ? Number.POSITIVE_INFINITY : limits.images - images.length;
@@ -75,7 +87,7 @@ export function MediaManager({
     <Card id="media" className="scroll-mt-28">
       <CardHeader
         title="Photos & video"
-        description={`${limits.images === null ? 'Unlimited' : `Up to ${limits.images}`} photos (JPEG, PNG, WebP; max 10 MB each) and ${limits.videos === null ? 'unlimited video links' : `${limits.videos} video ${limits.videos === 1 ? 'link' : 'links'}`} on your plan. Photo location data is removed automatically.`}
+        description={`${limits.images === null ? 'Unlimited' : `Up to ${limits.images}`} photos (JPEG, PNG, WebP; max 10 MB each) and ${limits.videos === null ? 'unlimited video links' : `${limits.videos} video ${limits.videos === 1 ? 'link' : 'links'}`}${fromPlan ? ' on your plan' : ' per listing'}. Photo location data is removed automatically.`}
       />
       <CardBody className="flex flex-col gap-6">
         {error && (
@@ -196,15 +208,23 @@ export function MediaManager({
         )}
         {!locked && remaining <= 0 && (
           <p className="text-sm text-text-secondary">
-            You have used all {limits.images} photos your plan allows for this property.{' '}
-            <UpgradeLink />
+            {fromPlan ? (
+              <>
+                You have used all {limits.images} photos your plan allows for this property.{' '}
+                <UpgradeLink />
+              </>
+            ) : (
+              `A listing can have up to ${limits.images} photos.`
+            )}
           </p>
         )}
 
         <VideoSection
           property={property}
+          base={`${base}/videos`}
           limit={limits.videos}
           locked={locked}
+          fromPlan={fromPlan}
           onChange={() => router.refresh()}
         />
       </CardBody>
@@ -214,19 +234,22 @@ export function MediaManager({
 
 function VideoSection({
   property,
+  base,
   limit,
   locked,
+  fromPlan,
   onChange,
 }: {
-  property: AgentPropertyView;
+  property: Listing;
+  base: string;
   limit: number | null;
   locked: boolean;
+  fromPlan: boolean;
   onChange: () => void;
 }) {
   const [error, setError] = useState<string | null>(null);
   const [upgrade, setUpgrade] = useState(false);
   const [pending, setPending] = useState(false);
-  const base = `/agents/me/properties/${property.id}/videos`;
 
   async function add(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -280,7 +303,14 @@ function VideoSection({
       )}
       {!locked && limit !== null && property.videos.length >= limit && (
         <p className="text-sm text-text-secondary">
-          Your plan allows {limit} {limit === 1 ? 'video' : 'videos'} per property. <UpgradeLink />
+          {fromPlan ? (
+            <>
+              Your plan allows {limit} {limit === 1 ? 'video' : 'videos'} per property.{' '}
+              <UpgradeLink />
+            </>
+          ) : (
+            `A listing can have up to ${limit} videos.`
+          )}
         </p>
       )}
       {!locked && (limit === null || property.videos.length < limit) && (

@@ -25,6 +25,10 @@ export const PERMISSIONS = {
   'properties.feature': 'Feature properties',
   'amenities.manage': 'Create and manage the amenity catalogue',
 
+  'experiences.view': 'View all events, tours, hotels and cleaning services, including unpublished',
+  'experiences.approve': 'Approve, reject and moderate events, tours, hotels and cleaning services',
+  'vacation_zones.manage': 'Create, edit and publish vacation zones (destinations)',
+
   'bookings.view': 'View all bookings and their price breakdowns',
   'payments.view': 'View payments and transactions',
   'payments.refund': 'Review and process refunds',

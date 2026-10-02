@@ -16,6 +16,7 @@ import { Prisma, type ParticipantRole } from '../../generated/prisma/client';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import { StorageService } from '../../infrastructure/storage/storage.service';
 import type { AuthContext } from '../auth/auth.types';
+import { PUBLIC_EXPERIENCE_WHERE } from '../experiences/experience.selects';
 import { CONVERSATION_INCLUDE, toConversationSummary } from './chat.mapper';
 import { ChatAccessService } from './chat-access.service';
 import { ChatEventsService } from './chat-events.service';
@@ -32,6 +33,8 @@ type ListQuery = z.output<typeof listConversationsQuerySchema>;
  * Who may start one:
  *   PROPERTY — a customer, about a published listing, with its agent
  *   BOOKING  — the booking's customer or its agent, with each other
+ *   EXPERIENCE — a customer, about a public event/tour/hotel/cleaning
+ *               listing, with its agent (no purchase is involved)
  * Agents cannot open conversations with arbitrary customers.
  */
 @Injectable()
@@ -65,6 +68,25 @@ export class ConversationsService {
       participants = [
         { userId: me.id, role: 'CUSTOMER' },
         { userId: property.agentProfile.userId, role: 'AGENT' },
+      ];
+    } else if (input.contextType === 'EXPERIENCE') {
+      if (me.accountType !== AccountType.CUSTOMER) {
+        throw Errors.forbidden('Only customers can message an agent about a listing.');
+      }
+      const listing = await this.prisma.experience.findFirst({
+        where: { ...PUBLIC_EXPERIENCE_WHERE, id: input.experienceId },
+        select: { id: true, agentProfile: { select: { userId: true } } },
+      });
+      if (!listing) throw Errors.notFound('Listing');
+      contextKey = `experience:${listing.id}:customer:${me.id}`;
+      data = {
+        contextType: 'EXPERIENCE',
+        contextKey,
+        experience: { connect: { id: listing.id } },
+      };
+      participants = [
+        { userId: me.id, role: 'CUSTOMER' },
+        { userId: listing.agentProfile.userId, role: 'AGENT' },
       ];
     } else {
       const booking = await this.prisma.booking.findUnique({
@@ -124,6 +146,7 @@ export class ConversationsService {
               {
                 OR: [
                   { property: { title: search } },
+                  { experience: { title: search } },
                   { booking: { reference: search } },
                   { booking: { property: { title: search } } },
                   {

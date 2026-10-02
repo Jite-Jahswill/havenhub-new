@@ -12,6 +12,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import { api } from '@/lib/api/client';
+import { experiencePath } from '@/lib/experiences';
 import { useRealtimeEvent, useReconnect, type RealtimeStatus } from '@/lib/realtime';
 import { ChatAvatar } from './chat-avatar';
 import { contextLine, counterpart, dayLabel, newClientKey, sameDay } from './chat-utils';
@@ -302,7 +303,9 @@ export function ConversationThread({
   const contextHref =
     ctx.type === 'PROPERTY'
       ? `/properties/${ctx.property.slug}`
-      : `/${area}/bookings/${ctx.booking.id}`;
+      : ctx.type === 'EXPERIENCE'
+        ? experiencePath(ctx.experience.kind, ctx.experience.slug)
+        : `/${area}/bookings/${ctx.booking.id}`;
   const closed = conversation.status === 'CLOSED';
 
   return (

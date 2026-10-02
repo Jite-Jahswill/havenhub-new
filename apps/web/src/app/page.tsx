@@ -3,12 +3,36 @@ import { Search } from 'lucide-react';
 import Link from 'next/link';
 
 const OFFERINGS = [
-  { title: 'Stay', description: 'Short stays and serviced apartments, booked by the night.' },
-  { title: 'Rent', description: 'Monthly and yearly homes with transparent pricing.' },
-  { title: 'Buy', description: 'Houses, land and commercial spaces from verified agents.' },
-  { title: 'Hotels', description: 'Rooms and suites across Nigeria’s favourite cities.' },
-  { title: 'Events', description: 'Tickets for concerts, festivals and celebrations.' },
-  { title: 'Experiences', description: 'Tours, zoos, cultural sites and vacation zones.' },
+  {
+    title: 'Stay',
+    description: 'Short stays and serviced apartments, booked by the night.',
+    href: '/properties?listingType=RENT&pricingPeriod=DAILY',
+  },
+  {
+    title: 'Rent',
+    description: 'Monthly and yearly homes with transparent pricing.',
+    href: '/properties?listingType=RENT',
+  },
+  {
+    title: 'Buy',
+    description: 'Houses, land and commercial spaces from verified agents.',
+    href: '/properties?listingType=SALE',
+  },
+  {
+    title: 'Hotels',
+    description: 'Rooms and suites across Nigeria’s favourite cities.',
+    href: '/hotels',
+  },
+  {
+    title: 'Events',
+    description: 'Concerts, festivals and celebrations near you.',
+    href: '/events',
+  },
+  {
+    title: 'Experiences',
+    description: 'Tours, cleaning services and vacation destinations.',
+    href: '/experiences',
+  },
 ];
 
 export default function HomePage() {
@@ -77,9 +101,16 @@ export default function HomePage() {
             {OFFERINGS.map((item) => (
               <li
                 key={item.title}
-                className="rounded-card border border-border bg-surface p-7 shadow-card"
+                className="relative rounded-card border border-border bg-surface p-7 shadow-card transition-colors hover:bg-surface-secondary"
               >
-                <h3 className="text-lg font-semibold text-text">{item.title}</h3>
+                <h3 className="text-lg font-semibold text-text">
+                  <Link
+                    href={item.href}
+                    className="after:absolute after:inset-0 after:rounded-card focus-visible:outline-none"
+                  >
+                    {item.title}
+                  </Link>
+                </h3>
                 <p className="mt-2 leading-relaxed text-text-secondary">{item.description}</p>
               </li>
             ))}

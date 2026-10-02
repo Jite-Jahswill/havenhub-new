@@ -32,7 +32,12 @@ import { useState, type FormEvent, type ReactNode } from 'react';
 import { ApiErrorAlert } from '@/components/subscriptions/upgrade-prompt';
 import { api } from '@/lib/api/client';
 import { formText } from '@/lib/form';
-import { AMENITY_CATEGORY_LABELS, CLEANING_LABELS, PROPERTY_TYPE_LABELS } from '@/lib/labels';
+import {
+  AMENITY_CATEGORY_LABELS,
+  CLEANING_LABELS,
+  NIGERIAN_STATES,
+  PROPERTY_TYPE_LABELS,
+} from '@/lib/labels';
 import { useApiAction } from '@/lib/use-api-action';
 
 const LocationMap = dynamic(
@@ -42,46 +47,6 @@ const LocationMap = dynamic(
     loading: () => <div className="size-full animate-pulse bg-surface-secondary" />,
   },
 );
-
-const NIGERIAN_STATES = [
-  'Abia',
-  'Adamawa',
-  'Akwa Ibom',
-  'Anambra',
-  'Bauchi',
-  'Bayelsa',
-  'Benue',
-  'Borno',
-  'Cross River',
-  'Delta',
-  'Ebonyi',
-  'Edo',
-  'Ekiti',
-  'Enugu',
-  'FCT',
-  'Gombe',
-  'Imo',
-  'Jigawa',
-  'Kaduna',
-  'Kano',
-  'Katsina',
-  'Kebbi',
-  'Kogi',
-  'Kwara',
-  'Lagos',
-  'Nasarawa',
-  'Niger',
-  'Ogun',
-  'Ondo',
-  'Osun',
-  'Oyo',
-  'Plateau',
-  'Rivers',
-  'Sokoto',
-  'Taraba',
-  'Yobe',
-  'Zamfara',
-];
 
 const PERIODS: [PricingPeriod, string][] = [
   ['DAILY', 'Per night (short stay)'],

@@ -53,25 +53,27 @@ model User {
   createdAt       DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt       DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  sessions            Session[]
-  verificationTokens  VerificationToken[]
-  roles               UserRole[]                @relation("UserRoles")
-  rolesAssigned       UserRole[]                @relation("UserRolesAssignedBy")
-  agentProfile        AgentProfile?             @relation("AgentProfileUser")
-  agentsReviewed      AgentProfile[]            @relation("AgentProfileReviewer")
-  auditLogs           AuditLog[]
-  propertiesReviewed  Property[]                @relation("PropertyReviewer")
-  favorites           PropertyFavorite[]
-  bookings            Booking[]                 @relation("BookingCustomer")
-  pricingConfigs      PricingConfig[]
-  refundsReviewed     Refund[]                  @relation("RefundReviewer")
-  plansCreated        SubscriptionPlan[]        @relation("SubscriptionPlanCreator")
-  conversations       ConversationParticipant[]
-  messagesSent        Message[]                 @relation("MessageSender")
-  messagesDeleted     Message[]                 @relation("MessageDeleter")
-  conversationsClosed Conversation[]            @relation("ConversationCloser")
-  attachmentsUploaded MessageAttachment[]
-  messageReactions    MessageReaction[]
+  sessions             Session[]
+  verificationTokens   VerificationToken[]
+  roles                UserRole[]                @relation("UserRoles")
+  rolesAssigned        UserRole[]                @relation("UserRolesAssignedBy")
+  agentProfile         AgentProfile?             @relation("AgentProfileUser")
+  agentsReviewed       AgentProfile[]            @relation("AgentProfileReviewer")
+  auditLogs            AuditLog[]
+  propertiesReviewed   Property[]                @relation("PropertyReviewer")
+  favorites            PropertyFavorite[]
+  bookings             Booking[]                 @relation("BookingCustomer")
+  pricingConfigs       PricingConfig[]
+  refundsReviewed      Refund[]                  @relation("RefundReviewer")
+  plansCreated         SubscriptionPlan[]        @relation("SubscriptionPlanCreator")
+  conversations        ConversationParticipant[]
+  messagesSent         Message[]                 @relation("MessageSender")
+  messagesDeleted      Message[]                 @relation("MessageDeleter")
+  conversationsClosed  Conversation[]            @relation("ConversationCloser")
+  attachmentsUploaded  MessageAttachment[]
+  experiencesReviewed  Experience[]              @relation("ExperienceReviewer")
+  vacationZonesCreated VacationZone[]
+  messageReactions     MessageReaction[]
 
   @@index([accountType, status])
   @@index([createdAt])
@@ -267,6 +269,7 @@ model AgentProfile {
   earnings             AgentEarning[]
   subscriptions        AgentSubscription[]
   subscriptionPayments SubscriptionPayment[]
+  experiences          Experience[]
 
   @@index([verificationStatus, verificationSubmittedAt])
   @@map("agent_profiles")
@@ -507,7 +510,8 @@ model Amenity {
   createdAt DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  properties PropertyAmenity[]
+  properties  PropertyAmenity[]
+  experiences ExperienceAmenity[]
 
   @@index([isActive, category, sortOrder])
   @@map("amenities")
@@ -985,11 +989,12 @@ model SubscriptionPayment {
 // ─── Phase 5: communication ──────────────────────────────────────────────────
 
 /// What a conversation is about. Each type has its own nullable foreign key
-/// on Conversation (no polymorphic ids): Phase 6 adds EVENT/TOUR/HOTEL/…
-/// with a new column and enum value, without touching existing rows.
+/// on Conversation (no polymorphic ids). Phase 6 added EXPERIENCE (events,
+/// tours, hotels, cleaning) with one new column, without touching existing rows.
 enum ConversationContextType {
   PROPERTY
   BOOKING
+  EXPERIENCE
 }
 
 enum ConversationStatus {
@@ -1026,6 +1031,7 @@ model Conversation {
   contextType    ConversationContextType @map("context_type")
   propertyId     String?                 @map("property_id") @db.Uuid
   bookingId      String?                 @map("booking_id") @db.Uuid
+  experienceId   String?                 @map("experience_id") @db.Uuid
   /// Deterministic identity for get-or-create (e.g. "property:<id>:customer:<id>").
   contextKey     String                  @unique @map("context_key") @db.VarChar(160)
   status         ConversationStatus      @default(OPEN)
@@ -1041,6 +1047,7 @@ model Conversation {
 
   property     Property?                 @relation(fields: [propertyId], references: [id], onDelete: Restrict)
   booking      Booking?                  @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  experience   Experience?               @relation(fields: [experienceId], references: [id], onDelete: Restrict)
   closedBy     User?                     @relation("ConversationCloser", fields: [closedById], references: [id], onDelete: SetNull)
   lastMessage  Message?                  @relation("ConversationLastMessage", fields: [lastMessageId], references: [id], onDelete: SetNull)
   participants ConversationParticipant[]
@@ -1050,6 +1057,7 @@ model Conversation {
   @@index([lastActivityAt(sort: Desc), id])
   @@index([propertyId])
   @@index([bookingId])
+  @@index([experienceId])
   @@map("conversations")
 }
 
@@ -1166,4 +1174,330 @@ model MessageReaction {
   @@id([messageId, userId])
   @@index([messageId, emoji])
   @@map("message_reactions")
+}
+
+// ─── Phase 6: events & experiences (catalogue only) ──────────────────────────
+//
+// Listings only: nothing here takes payment. Ticket types, tour dates, hotel
+// room prices and availability are catalogue information; purchasing comes in
+// a later phase once its business rules are defined.
+
+enum ExperienceKind {
+  EVENT
+  TOUR
+  HOTEL
+  CLEANING
+}
+
+/// Same lifecycle (and values) as PropertyStatus; moderated the same way.
+enum ExperienceStatus {
+  DRAFT
+  PENDING_REVIEW
+  PUBLISHED
+  REJECTED
+  SUSPENDED
+  ARCHIVED
+}
+
+enum TicketTypeKind {
+  REGULAR
+  VIP
+  VVIP
+  EARLY_BIRD
+  GROUP
+}
+
+enum TourCategory {
+  ZOO_TOUR
+  CITY_TOUR
+  CULTURAL_EXPERIENCE
+  ADVENTURE_ACTIVITY
+  TOURIST_ATTRACTION
+  GUIDED_TOUR
+}
+
+enum Weekday {
+  MON
+  TUE
+  WED
+  THU
+  FRI
+  SAT
+  SUN
+}
+
+/// The record behind every event, tour, hotel and cleaning service:
+/// ownership, lifecycle, moderation, location and media. Kind-specific
+/// details live in the 1:1 tables below.
+model Experience {
+  id             String           @id @default(uuid(7)) @db.Uuid
+  kind           ExperienceKind
+  agentProfileId String           @map("agent_profile_id") @db.Uuid
+  slug           String           @unique @db.VarChar(160)
+  status         ExperienceStatus @default(DRAFT)
+  title          String           @db.VarChar(120)
+  description    String?          @db.VarChar(5000)
+
+  addressLine String?  @map("address_line") @db.VarChar(240)
+  city        String?  @db.VarChar(100)
+  state       String?  @db.VarChar(60)
+  latitude    Decimal? @db.Decimal(9, 6)
+  longitude   Decimal? @db.Decimal(9, 6)
+
+  moderationNote String?   @map("moderation_note") @db.VarChar(1000)
+  submittedAt    DateTime? @map("submitted_at") @db.Timestamptz(3)
+  reviewedAt     DateTime? @map("reviewed_at") @db.Timestamptz(3)
+  reviewerId     String?   @map("reviewer_id") @db.Uuid
+  publishedAt    DateTime? @map("published_at") @db.Timestamptz(3)
+  archivedAt     DateTime? @map("archived_at") @db.Timestamptz(3)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  agentProfile  AgentProfile             @relation(fields: [agentProfileId], references: [id], onDelete: Restrict)
+  reviewer      User?                    @relation("ExperienceReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
+  event         Event?
+  tour          Tour?
+  hotel         Hotel?
+  cleaning      CleaningService?
+  images        ExperienceImage[]
+  videos        ExperienceVideo[]
+  amenities     ExperienceAmenity[]
+  zones         VacationZoneExperience[]
+  conversations Conversation[]
+
+  @@index([agentProfileId, kind, status])
+  @@index([kind, status, publishedAt(sort: Desc)])
+  @@index([kind, status, state, city])
+  @@map("experiences")
+}
+
+model ExperienceImage {
+  id           String   @id @default(uuid(7)) @db.Uuid
+  experienceId String   @map("experience_id") @db.Uuid
+  storageKey   String   @map("storage_key") @db.VarChar(300)
+  thumbnailKey String   @map("thumbnail_key") @db.VarChar(300)
+  width        Int
+  height       Int
+  bytes        Int
+  altText      String?  @map("alt_text") @db.VarChar(200)
+  sortOrder    Int      @default(0) @map("sort_order")
+  isPrimary    Boolean  @default(false) @map("is_primary")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  experience Experience @relation(fields: [experienceId], references: [id], onDelete: Cascade)
+
+  @@index([experienceId, sortOrder])
+  @@map("experience_images")
+}
+
+model ExperienceVideo {
+  id           String        @id @default(uuid(7)) @db.Uuid
+  experienceId String        @map("experience_id") @db.Uuid
+  provider     VideoProvider
+  externalId   String        @map("external_id") @db.VarChar(40)
+  title        String?       @db.VarChar(120)
+  sortOrder    Int           @default(0) @map("sort_order")
+  createdAt    DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  experience Experience @relation(fields: [experienceId], references: [id], onDelete: Cascade)
+
+  @@unique([experienceId, provider, externalId])
+  @@map("experience_videos")
+}
+
+model ExperienceAmenity {
+  experienceId String @map("experience_id") @db.Uuid
+  amenityId    String @map("amenity_id") @db.Uuid
+
+  experience Experience @relation(fields: [experienceId], references: [id], onDelete: Cascade)
+  amenity    Amenity    @relation(fields: [amenityId], references: [id], onDelete: Restrict)
+
+  @@id([experienceId, amenityId])
+  @@index([amenityId])
+  @@map("experience_amenities")
+}
+
+/// §22. Start and end are instants (displayed in Nigerian time).
+model Event {
+  experienceId String    @id @map("experience_id") @db.Uuid
+  startsAt     DateTime? @map("starts_at") @db.Timestamptz(3)
+  endsAt       DateTime? @map("ends_at") @db.Timestamptz(3)
+  capacity     Int?
+  organizer    String?   @db.VarChar(160)
+  terms        String?   @db.VarChar(5000)
+  hospitality  String?   @db.VarChar(2000)
+
+  experience  Experience        @relation(fields: [experienceId], references: [id], onDelete: Cascade)
+  ticketTypes EventTicketType[]
+
+  @@index([startsAt])
+  @@map("events")
+}
+
+/// A ticket type and its listed price — catalogue only, not sold yet.
+model EventTicketType {
+  id          String         @id @default(uuid(7)) @db.Uuid
+  eventId     String         @map("event_id") @db.Uuid
+  kind        TicketTypeKind
+  name        String         @db.VarChar(80)
+  description String?        @db.VarChar(500)
+  priceKobo   BigInt         @map("price_kobo")
+  sortOrder   Int            @default(0) @map("sort_order")
+
+  event Event @relation(fields: [eventId], references: [experienceId], onDelete: Cascade)
+
+  @@unique([eventId, name])
+  @@map("event_ticket_types")
+}
+
+/// §24.
+model Tour {
+  experienceId String        @id @map("experience_id") @db.Uuid
+  category     TourCategory?
+  /// Listed price; `priceNote` says what it covers (e.g. "per person").
+  priceKobo    BigInt?       @map("price_kobo")
+  priceNote    String?       @map("price_note") @db.VarChar(120)
+  capacity     Int?
+
+  experience Experience @relation(fields: [experienceId], references: [id], onDelete: Cascade)
+  dates      TourDate[]
+
+  @@map("tours")
+}
+
+/// When a tour runs (its availability).
+model TourDate {
+  id       String   @id @default(uuid(7)) @db.Uuid
+  tourId   String   @map("tour_id") @db.Uuid
+  startsAt DateTime @map("starts_at") @db.Timestamptz(3)
+
+  tour Tour @relation(fields: [tourId], references: [experienceId], onDelete: Cascade)
+
+  @@unique([tourId, startsAt])
+  @@map("tour_dates")
+}
+
+/// §25. Hospitality, food and cleaning are described in text; each room has
+/// its own price and per-date availability (catalogue information only).
+model Hotel {
+  experienceId String  @id @map("experience_id") @db.Uuid
+  hospitality  String? @db.VarChar(2000)
+  food         String? @db.VarChar(2000)
+  cleaning     String? @db.VarChar(2000)
+
+  experience Experience      @relation(fields: [experienceId], references: [id], onDelete: Cascade)
+  roomTypes  HotelRoomType[]
+  rooms      HotelRoom[]
+
+  @@map("hotels")
+}
+
+model HotelRoomType {
+  id          String  @id @default(uuid(7)) @db.Uuid
+  hotelId     String  @map("hotel_id") @db.Uuid
+  name        String  @db.VarChar(80)
+  description String? @db.VarChar(1000)
+  maxGuests   Int?    @map("max_guests") @db.SmallInt
+  /// Listed nightly price for rooms of this type.
+  priceKobo   BigInt  @map("price_kobo")
+  sortOrder   Int     @default(0) @map("sort_order")
+
+  hotel Hotel       @relation(fields: [hotelId], references: [experienceId], onDelete: Cascade)
+  rooms HotelRoom[]
+
+  @@unique([hotelId, name])
+  @@map("hotel_room_types")
+}
+
+model HotelRoom {
+  id         String  @id @default(uuid(7)) @db.Uuid
+  hotelId    String  @map("hotel_id") @db.Uuid
+  roomTypeId String  @map("room_type_id") @db.Uuid
+  /// Room number or name.
+  label      String  @db.VarChar(40)
+  /// Overrides the room type's nightly price for this room.
+  priceKobo  BigInt? @map("price_kobo")
+  active     Boolean @default(true)
+
+  hotel        Hotel                   @relation(fields: [hotelId], references: [experienceId], onDelete: Cascade)
+  roomType     HotelRoomType           @relation(fields: [roomTypeId], references: [id], onDelete: Restrict)
+  availability HotelRoomAvailability[]
+
+  @@unique([hotelId, label])
+  @@index([roomTypeId])
+  @@map("hotel_rooms")
+}
+
+/// A date-specific override for one room: closed and/or a different nightly
+/// price. Dates without a row follow the room's defaults.
+model HotelRoomAvailability {
+  roomId    String   @map("room_id") @db.Uuid
+  date      DateTime @db.Date
+  available Boolean
+  priceKobo BigInt?  @map("price_kobo")
+
+  room HotelRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  @@id([roomId, date])
+  @@map("hotel_room_availability")
+}
+
+/// §14. Posting a cleaning service never requires a paid plan.
+model CleaningService {
+  experienceId     String    @id @map("experience_id") @db.Uuid
+  /// Listed price; `priceNote` says what it covers (e.g. "per visit").
+  priceKobo        BigInt?   @map("price_kobo")
+  priceNote        String?   @map("price_note") @db.VarChar(120)
+  serviceAreas     String[]  @default([]) @map("service_areas")
+  availableDays    Weekday[] @default([]) @map("available_days")
+  availabilityNote String?   @map("availability_note") @db.VarChar(300)
+
+  experience Experience @relation(fields: [experienceId], references: [id], onDelete: Cascade)
+
+  @@map("cleaning_services")
+}
+
+/// §23. Admin-managed destination content.
+model VacationZone {
+  id                String   @id @default(uuid(7)) @db.Uuid
+  slug              String   @unique @db.VarChar(80)
+  name              String   @db.VarChar(120)
+  state             String?  @db.VarChar(60)
+  description       String?  @db.VarChar(5000)
+  accommodation     String?  @db.VarChar(2000)
+  /// Indicative price range shown to visitors (not a charge).
+  priceRangeMinKobo BigInt?  @map("price_range_min_kobo")
+  priceRangeMaxKobo BigInt?  @map("price_range_max_kobo")
+  activities        String[] @default([])
+  offers            String?  @db.VarChar(2000)
+  hospitality       String?  @db.VarChar(2000)
+  nearbyAttractions String[] @default([]) @map("nearby_attractions")
+  published         Boolean  @default(false)
+  coverKey          String?  @map("cover_key") @db.VarChar(300)
+  coverThumbKey     String?  @map("cover_thumb_key") @db.VarChar(300)
+  coverBytes        Int?     @map("cover_bytes")
+  sortOrder         Int      @default(0) @map("sort_order")
+  createdById       String?  @map("created_by_id") @db.Uuid
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  createdBy   User?                    @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  experiences VacationZoneExperience[]
+
+  @@index([published, sortOrder])
+  @@map("vacation_zones")
+}
+
+/// Published tours and hotels an administrator features in a destination.
+model VacationZoneExperience {
+  zoneId       String @map("zone_id") @db.Uuid
+  experienceId String @map("experience_id") @db.Uuid
+  sortOrder    Int    @default(0) @map("sort_order")
+
+  zone       VacationZone @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+  experience Experience   @relation(fields: [experienceId], references: [id], onDelete: Cascade)
+
+  @@id([zoneId, experienceId])
+  @@index([experienceId])
+  @@map("vacation_zone_experiences")
 }

@@ -19,7 +19,11 @@ export function PlanComparison({
   /** Href for choosing a plan, or null when it cannot be chosen. */
   actionFor: (plan: SubscriptionPlanView) => { href: string; label: string } | null;
 }) {
-  const rows = ENTITLEMENTS.filter((e) => plans.some((p) => p.entitlements[e.key] !== 0));
+  // Allowances the platform does not enforce (cleaning services are free to
+  // post) would only mislead here, so they are left out.
+  const rows = ENTITLEMENTS.filter(
+    (e) => e.enforced && plans.some((p) => p.entitlements[e.key] !== 0),
+  );
   return (
     <>
       <div className="grid gap-5 sm:grid-cols-2 lg:hidden">
@@ -62,9 +66,6 @@ export function PlanComparison({
               <tr key={e.key} className="border-b border-border">
                 <th scope="row" className="px-6 py-3.5 text-left font-medium text-text-secondary">
                   {e.label}
-                  {!e.enforced && (
-                    <span className="block text-xs text-text-muted">Coming soon</span>
-                  )}
                 </th>
                 {plans.map((plan) => (
                   <td key={plan.id} className="px-6 py-3.5 text-text tabular-nums">

@@ -217,7 +217,7 @@ export function PlanForm({ plan }: { plan?: AdminSubscriptionPlanView }) {
             <div key={e.key} className="flex flex-col gap-2">
               <Field
                 label={`${e.label}${e.unit === 'MB' ? ' (MB)' : ''}`}
-                hint={e.enforced ? undefined : 'For a feature that is not live yet'}
+                hint={e.enforced ? undefined : 'Not enforced: cleaners never pay to post'}
                 error={limitError(e.key)}
               >
                 {(a) => (
