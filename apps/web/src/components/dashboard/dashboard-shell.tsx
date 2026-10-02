@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import type { ReactNode } from 'react';
 
+import { UnreadMessagesBadge } from '@/components/chat/unread-badge';
 import { visibleNav, type NavItem } from '@/lib/navigation';
 
 import { SignOutButton } from '../auth/sign-out-button';
@@ -76,6 +77,7 @@ export function DashboardShell({ user, children }: { user: AuthUser; children: R
                         strokeWidth={1.8}
                       />
                       <span>{item.label}</span>
+                      {item.unreadBadge && <UnreadMessagesBadge />}
                       {item.phase !== undefined && (
                         <span className="ml-auto hidden text-[11px] font-medium text-text-muted lg:inline">
                           Soon

@@ -1,7 +1,20 @@
-import { DeleteObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import type { Readable } from 'node:stream';
+
+import {
+  DeleteObjectCommand,
+  GetObjectCommand,
+  NoSuchKey,
+  PutObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
 
 import type { Env } from '../../../config/env';
-import { assertSafeKey, type StorageDriver } from '../storage.types';
+import {
+  PRIVATE_PREFIX,
+  assertSafeKey,
+  type StorageDriver,
+  type StoredObject,
+} from '../storage.types';
 
 /**
  * Any S3-compatible store (AWS S3, Cloudflare R2, Backblaze B2, MinIO…).
@@ -36,9 +49,27 @@ export class S3StorageDriver implements StorageDriver {
         Key: key,
         Body: body,
         ContentType: contentType,
-        CacheControl: 'public, max-age=31536000, immutable',
+        CacheControl: key.startsWith(PRIVATE_PREFIX)
+          ? 'private, no-store'
+          : 'public, max-age=31536000, immutable',
       }),
     );
+  }
+
+  async read(key: string): Promise<StoredObject | null> {
+    assertSafeKey(key);
+    try {
+      const res = await this.client.send(new GetObjectCommand({ Bucket: this.bucket, Key: key }));
+      if (!res.Body) return null;
+      return {
+        body: res.Body as Readable,
+        contentType: res.ContentType ?? 'application/octet-stream',
+        size: res.ContentLength ?? 0,
+      };
+    } catch (error) {
+      if (error instanceof NoSuchKey) return null;
+      throw error;
+    }
   }
 
   async delete(key: string): Promise<void> {

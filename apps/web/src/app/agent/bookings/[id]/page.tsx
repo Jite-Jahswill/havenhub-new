@@ -8,6 +8,7 @@ import { CancelBooking } from '@/components/bookings/booking-actions';
 import { MoneyRows } from '@/components/bookings/money-rows';
 import { PriceBreakdown } from '@/components/bookings/price-breakdown';
 import { Item, StayDetails } from '@/components/bookings/stay-details';
+import { StartConversationButton } from '@/components/chat/start-conversation-button';
 import { PageHeader } from '@/components/dashboard/dashboard-shell';
 import {
   BookingStatusBadge,
@@ -83,6 +84,11 @@ export default async function AgentBookingPage({ params }: PageProps<'/agent/boo
           </Card>
         </div>
         <aside className="flex min-w-0 flex-col gap-6">
+          <StartConversationButton
+            context={{ contextType: 'BOOKING', bookingId: b.id }}
+            area="agent"
+            label="Message the customer"
+          />
           <Card>
             <CardHeader
               title="Your earnings"

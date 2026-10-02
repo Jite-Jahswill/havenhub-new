@@ -110,6 +110,10 @@ const envSchema = z
     SCHEDULED_JOB_LOCK_TTL_SECONDS: z.coerce.number().int().min(5).max(3600).default(120),
     /** Interval of the subscription sweep (term expiry/start, reminders); 0 disables it (tests). */
     SUBSCRIPTION_SWEEP_INTERVAL_SECONDS: z.coerce.number().int().min(0).max(86400).default(300),
+    /** Chat sweep: unread-message email digests and unsent-attachment cleanup; 0 disables it (tests). */
+    CHAT_SWEEP_INTERVAL_SECONDS: z.coerce.number().int().min(0).max(3600).default(60),
+    /** How long a message stays unread before the recipient is emailed about it. */
+    CHAT_EMAIL_DELAY_SECONDS: z.coerce.number().int().min(0).max(86400).default(600),
   })
   .superRefine((env, ctx) => {
     if (env.STORAGE_DRIVER === 's3') {

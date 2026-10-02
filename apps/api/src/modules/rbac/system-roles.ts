@@ -25,12 +25,18 @@ export const SYSTEM_ROLES: SystemRoleDefinition[] = [
     key: 'admin',
     name: 'Admin',
     description:
-      'Day-to-day platform administration without role, settings, commission/VAT or plan pricing management.',
+      'Day-to-day platform administration without role, settings, commission/VAT, plan pricing or private conversation access.',
     permissions: PERMISSION_KEYS.filter(
       (p) =>
-        !['roles.manage', 'settings.manage', 'payments.settings', 'subscriptions.plans'].includes(
-          p,
-        ),
+        ![
+          'roles.manage',
+          'settings.manage',
+          'payments.settings',
+          'subscriptions.plans',
+          // Reading private conversations is limited to support roles.
+          'conversations.view',
+          'messages.moderate',
+        ].includes(p),
     ),
   },
   {
@@ -78,6 +84,8 @@ export const SYSTEM_ROLES: SystemRoleDefinition[] = [
       'agents.view',
       'bookings.view',
       'subscriptions.view',
+      'conversations.view',
+      'messages.moderate',
     ],
   },
   {

@@ -30,6 +30,16 @@ export class ImageProcessor {
     return { large, thumbnail };
   }
 
+  /** Chat photos: any size, re-encoded for display plus a thumbnail. */
+  async chatRenditions(input: Buffer): Promise<{ display: Rendition; thumbnail: Rendition }> {
+    await this.inspect(input, { minWidth: 1, minHeight: 1 });
+    const [display, thumbnail] = await Promise.all([
+      this.render(input, 1600, 80),
+      this.render(input, 480, 72),
+    ]);
+    return { display, thumbnail };
+  }
+
   async avatar(input: Buffer): Promise<Rendition> {
     await this.inspect(input);
     const { data, info } = await sharp(input, { limitInputPixels: MAX_INPUT_PIXELS })
@@ -40,7 +50,10 @@ export class ImageProcessor {
     return { buffer: data, width: info.width, height: info.height };
   }
 
-  private async inspect(input: Buffer): Promise<void> {
+  private async inspect(
+    input: Buffer,
+    min: { minWidth: number; minHeight: number } = { minWidth: 320, minHeight: 240 },
+  ): Promise<void> {
     if (input.length === 0) throw invalidFile('The file is empty.');
     if (input.length > MAX_IMAGE_BYTES) throw invalidFile('Images must be 10 MB or smaller.');
     let meta: Metadata;
@@ -53,7 +66,9 @@ export class ImageProcessor {
     if (!format || !ACCEPTED_FORMATS.has(format)) {
       throw invalidFile('Upload a JPEG, PNG, WebP or AVIF image.');
     }
-    if (width < 320 || height < 240) throw invalidFile('Images must be at least 320 × 240 pixels.');
+    if (width < min.minWidth || height < min.minHeight) {
+      throw invalidFile(`Images must be at least ${min.minWidth} × ${min.minHeight} pixels.`);
+    }
   }
 
   private async render(input: Buffer, size: number, quality: number): Promise<Rendition> {

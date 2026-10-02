@@ -29,6 +29,8 @@ export const PASSWORD = 'a-very-long-password-1';
 export interface TestContext {
   app: INestApplication;
   http: () => TestAgent;
+  /** Origin of the listening test server (for Socket.IO clients). */
+  baseUrl: string;
   mail: MemoryMailTransport;
   prisma: PrismaClient;
   env: Env;
@@ -53,6 +55,7 @@ export async function createTestContext(overrides: Partial<Env> = {}): Promise<T
   // shared server, which breaks requests built before an awaited helper call.
   await app.listen(0, '127.0.0.1');
   const server = app.getHttpServer() as import('node:http').Server;
+  const { port } = server.address() as import('node:net').AddressInfo;
 
   const prisma = app.get(PrismaService);
   const redis = app.get(RedisService);
@@ -60,12 +63,13 @@ export async function createTestContext(overrides: Partial<Env> = {}): Promise<T
   return {
     app,
     http: () => request(server),
+    baseUrl: `http://127.0.0.1:${port}`,
     mail,
     prisma,
     env,
     reset: async () => {
       await prisma.$executeRawUnsafe(
-        'TRUNCATE users, sessions, verification_tokens, user_roles, agent_profiles, payout_accounts, audit_logs, properties, property_images, property_videos, property_amenities, property_favorites, property_view_daily, pricing_configs, bookings, booking_line_items, payments, refunds, ledger_entries, agent_earnings, subscription_plans, subscription_plan_entitlements, agent_subscriptions, subscription_payments CASCADE',
+        'TRUNCATE users, sessions, verification_tokens, user_roles, agent_profiles, payout_accounts, audit_logs, properties, property_images, property_videos, property_amenities, property_favorites, property_view_daily, pricing_configs, bookings, booking_line_items, payments, refunds, ledger_entries, agent_earnings, subscription_plans, subscription_plan_entitlements, agent_subscriptions, subscription_payments, conversations, conversation_participants, messages, message_revisions, message_attachments, message_reactions CASCADE',
       );
       await seedDefaultPlan(prisma);
       await redis.client.flushdb();

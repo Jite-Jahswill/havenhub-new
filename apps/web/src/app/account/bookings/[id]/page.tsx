@@ -7,6 +7,7 @@ import { notFound } from 'next/navigation';
 import { CancelBooking, PayButton, PaymentReturn } from '@/components/bookings/booking-actions';
 import { PriceBreakdown } from '@/components/bookings/price-breakdown';
 import { StayDetails } from '@/components/bookings/stay-details';
+import { StartConversationButton } from '@/components/chat/start-conversation-button';
 import { PageHeader } from '@/components/dashboard/dashboard-shell';
 import {
   BookingStatusBadge,
@@ -103,6 +104,11 @@ export default async function CustomerBookingPage({
         </div>
 
         <aside className="flex min-w-0 flex-col gap-6">
+          <StartConversationButton
+            context={{ contextType: 'BOOKING', bookingId: b.id }}
+            area="account"
+            label="Message the agent"
+          />
           {b.canPay && (
             <Card>
               <CardHeader

@@ -20,6 +20,7 @@ import { notFound } from 'next/navigation';
 import { cache, type ReactNode } from 'react';
 
 import { BookingWidget } from '@/components/bookings/booking-widget';
+import { StartConversationButton } from '@/components/chat/start-conversation-button';
 import { LocationMapLazy } from '@/components/map/location-map-lazy';
 import { AgentAvatar } from '@/components/properties/agent-avatar';
 import { FavoriteButton } from '@/components/properties/favorite-button';
@@ -275,6 +276,18 @@ export default async function PropertyPage({ params }: PageProps<'/properties/[s
               <Alert>Purchase enquiries and secure payments are coming soon to HavenHub.</Alert>
             ) : (
               <BookingWidget property={property} viewer={viewer} />
+            )}
+            {viewer !== 'other' && (
+              <StartConversationButton
+                context={{ contextType: 'PROPERTY', propertyId: property.id }}
+                area="account"
+                label="Message the agent"
+                guestHref={
+                  viewer === 'guest'
+                    ? `/login?next=${encodeURIComponent(`/properties/${property.slug}`)}`
+                    : undefined
+                }
+              />
             )}
           </Card>
         </aside>

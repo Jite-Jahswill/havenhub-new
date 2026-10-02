@@ -4,7 +4,7 @@ import type { Response } from 'express';
 import { Errors } from '../../common/errors/app.exception';
 import { Public } from '../../modules/auth/decorators/auth.decorators';
 import { StorageService } from './storage.service';
-import { SAFE_STORAGE_KEY } from './storage.types';
+import { isPublicKey } from './storage.types';
 
 /**
  * Serves files for the local storage driver: `GET /api/media/<key>`.
@@ -18,7 +18,8 @@ export class MediaController {
   @Get('*key')
   async serve(@Param('key') key: string | string[], @Res() res: Response): Promise<void> {
     const path = Array.isArray(key) ? key.join('/') : key;
-    if (!SAFE_STORAGE_KEY.test(path) || !this.storage.driver.read) throw Errors.notFound('File');
+    // Private objects (chat/) are never served here; with S3 this route always 404s.
+    if (!isPublicKey(path) || this.storage.driver.name !== 'local') throw Errors.notFound('File');
     const file = await this.storage.driver.read(path);
     if (!file) throw Errors.notFound('File');
 

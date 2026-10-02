@@ -53,19 +53,25 @@ model User {
   createdAt       DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt       DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  sessions           Session[]
-  verificationTokens VerificationToken[]
-  roles              UserRole[]          @relation("UserRoles")
-  rolesAssigned      UserRole[]          @relation("UserRolesAssignedBy")
-  agentProfile       AgentProfile?       @relation("AgentProfileUser")
-  agentsReviewed     AgentProfile[]      @relation("AgentProfileReviewer")
-  auditLogs          AuditLog[]
-  propertiesReviewed Property[]          @relation("PropertyReviewer")
-  favorites          PropertyFavorite[]
-  bookings           Booking[]           @relation("BookingCustomer")
-  pricingConfigs     PricingConfig[]
-  refundsReviewed    Refund[]            @relation("RefundReviewer")
-  plansCreated       SubscriptionPlan[]  @relation("SubscriptionPlanCreator")
+  sessions            Session[]
+  verificationTokens  VerificationToken[]
+  roles               UserRole[]                @relation("UserRoles")
+  rolesAssigned       UserRole[]                @relation("UserRolesAssignedBy")
+  agentProfile        AgentProfile?             @relation("AgentProfileUser")
+  agentsReviewed      AgentProfile[]            @relation("AgentProfileReviewer")
+  auditLogs           AuditLog[]
+  propertiesReviewed  Property[]                @relation("PropertyReviewer")
+  favorites           PropertyFavorite[]
+  bookings            Booking[]                 @relation("BookingCustomer")
+  pricingConfigs      PricingConfig[]
+  refundsReviewed     Refund[]                  @relation("RefundReviewer")
+  plansCreated        SubscriptionPlan[]        @relation("SubscriptionPlanCreator")
+  conversations       ConversationParticipant[]
+  messagesSent        Message[]                 @relation("MessageSender")
+  messagesDeleted     Message[]                 @relation("MessageDeleter")
+  conversationsClosed Conversation[]            @relation("ConversationCloser")
+  attachmentsUploaded MessageAttachment[]
+  messageReactions    MessageReaction[]
 
   @@index([accountType, status])
   @@index([createdAt])
@@ -418,14 +424,15 @@ model Property {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  agentProfile AgentProfile        @relation(fields: [agentProfileId], references: [id], onDelete: Restrict)
-  reviewer     User?               @relation("PropertyReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
-  images       PropertyImage[]
-  videos       PropertyVideo[]
-  amenities    PropertyAmenity[]
-  favorites    PropertyFavorite[]
-  dailyViews   PropertyViewDaily[]
-  bookings     Booking[]
+  agentProfile  AgentProfile        @relation(fields: [agentProfileId], references: [id], onDelete: Restrict)
+  reviewer      User?               @relation("PropertyReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
+  images        PropertyImage[]
+  videos        PropertyVideo[]
+  amenities     PropertyAmenity[]
+  favorites     PropertyFavorite[]
+  dailyViews    PropertyViewDaily[]
+  bookings      Booking[]
+  conversations Conversation[]
 
   @@index([agentProfileId, status])
   @@index([agentProfileId, featuredAt])
@@ -640,6 +647,7 @@ model Booking {
   refunds       Refund[]
   ledgerEntries LedgerEntry[]
   earning       AgentEarning?
+  conversations Conversation[]
 
   @@index([customerId, createdAt(sort: Desc)])
   @@index([agentProfileId, createdAt(sort: Desc)])
@@ -972,4 +980,190 @@ model SubscriptionPayment {
   @@index([agentProfileId, createdAt])
   @@index([status, createdAt])
   @@map("subscription_payments")
+}
+
+// ─── Phase 5: communication ──────────────────────────────────────────────────
+
+/// What a conversation is about. Each type has its own nullable foreign key
+/// on Conversation (no polymorphic ids): Phase 6 adds EVENT/TOUR/HOTEL/…
+/// with a new column and enum value, without touching existing rows.
+enum ConversationContextType {
+  PROPERTY
+  BOOKING
+}
+
+enum ConversationStatus {
+  OPEN
+  /// Closed by a moderator: readable, but no new messages.
+  CLOSED
+}
+
+enum ParticipantRole {
+  CUSTOMER
+  AGENT
+  ADMIN
+  SYSTEM
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  VIDEO
+  AUDIO
+  FILE
+  SYSTEM
+}
+
+enum AttachmentKind {
+  IMAGE
+  VIDEO
+  AUDIO
+  FILE
+}
+
+model Conversation {
+  id             String                  @id @default(uuid(7)) @db.Uuid
+  contextType    ConversationContextType @map("context_type")
+  propertyId     String?                 @map("property_id") @db.Uuid
+  bookingId      String?                 @map("booking_id") @db.Uuid
+  /// Deterministic identity for get-or-create (e.g. "property:<id>:customer:<id>").
+  contextKey     String                  @unique @map("context_key") @db.VarChar(160)
+  status         ConversationStatus      @default(OPEN)
+  closedAt       DateTime?               @map("closed_at") @db.Timestamptz(3)
+  closedById     String?                 @map("closed_by_id") @db.Uuid
+  closedReason   String?                 @map("closed_reason") @db.VarChar(500)
+  /// Highest message seq allocated; incremented under the row lock.
+  lastSeq        Int                     @default(0) @map("last_seq")
+  lastMessageId  String?                 @unique @map("last_message_id") @db.Uuid
+  lastActivityAt DateTime                @default(now()) @map("last_activity_at") @db.Timestamptz(3)
+  createdAt      DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime                @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  property     Property?                 @relation(fields: [propertyId], references: [id], onDelete: Restrict)
+  booking      Booking?                  @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  closedBy     User?                     @relation("ConversationCloser", fields: [closedById], references: [id], onDelete: SetNull)
+  lastMessage  Message?                  @relation("ConversationLastMessage", fields: [lastMessageId], references: [id], onDelete: SetNull)
+  participants ConversationParticipant[]
+  messages     Message[]                 @relation("ConversationMessages")
+  attachments  MessageAttachment[]
+
+  @@index([lastActivityAt(sort: Desc), id])
+  @@index([propertyId])
+  @@index([bookingId])
+  @@map("conversations")
+}
+
+model ConversationParticipant {
+  conversationId  String          @map("conversation_id") @db.Uuid
+  userId          String          @map("user_id") @db.Uuid
+  role            ParticipantRole
+  /// Read cursor: every message with seq <= lastReadSeq has been read.
+  lastReadSeq     Int             @default(0) @map("last_read_seq")
+  lastReadAt      DateTime?       @map("last_read_at") @db.Timestamptz(3)
+  /// Highest seq already covered by an email digest (no repeat emails).
+  lastNotifiedSeq Int             @default(0) @map("last_notified_seq")
+  archivedAt      DateTime?       @map("archived_at") @db.Timestamptz(3)
+  joinedAt        DateTime        @default(now()) @map("joined_at") @db.Timestamptz(3)
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@id([conversationId, userId])
+  @@index([userId, archivedAt])
+  @@map("conversation_participants")
+}
+
+/// Messages are never hard-deleted: deletion is a soft flag and the content is
+/// redacted from every API response; edits keep their previous text in
+/// MessageRevision for moderation.
+model Message {
+  id             String      @id @default(uuid(7)) @db.Uuid
+  conversationId String      @map("conversation_id") @db.Uuid
+  /// Position in the conversation (1, 2, 3…): stable order and cursors.
+  seq            Int
+  senderId       String?     @map("sender_id") @db.Uuid
+  type           MessageType
+  body           String?     @db.VarChar(4000)
+  replyToId      String?     @map("reply_to_id") @db.Uuid
+  /// Client-generated idempotency key; unique per sender.
+  clientKey      String?     @map("client_key") @db.VarChar(64)
+  /// Structured data for SYSTEM messages only.
+  metadata       Json?
+  editedAt       DateTime?   @map("edited_at") @db.Timestamptz(3)
+  deletedAt      DateTime?   @map("deleted_at") @db.Timestamptz(3)
+  deletedById    String?     @map("deleted_by_id") @db.Uuid
+  createdAt      DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  conversation Conversation        @relation("ConversationMessages", fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User?               @relation("MessageSender", fields: [senderId], references: [id], onDelete: Restrict)
+  deletedBy    User?               @relation("MessageDeleter", fields: [deletedById], references: [id], onDelete: SetNull)
+  replyTo      Message?            @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: Restrict)
+  replies      Message[]           @relation("MessageReplies")
+  lastOf       Conversation?       @relation("ConversationLastMessage")
+  attachments  MessageAttachment[]
+  reactions    MessageReaction[]
+  revisions    MessageRevision[]
+
+  @@unique([conversationId, seq])
+  @@unique([senderId, clientKey])
+  @@index([replyToId])
+  @@map("messages")
+}
+
+model MessageRevision {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  messageId String   @map("message_id") @db.Uuid
+  /// The text as it was before this edit.
+  body      String?  @db.VarChar(4000)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([messageId, createdAt])
+  @@map("message_revisions")
+}
+
+/// Uploaded before the message is sent, then attached to it. Files live in
+/// private storage under `chat/`; clients only ever see API download URLs.
+model MessageAttachment {
+  id             String         @id @default(uuid(7)) @db.Uuid
+  conversationId String         @map("conversation_id") @db.Uuid
+  uploaderId     String         @map("uploader_id") @db.Uuid
+  messageId      String?        @map("message_id") @db.Uuid
+  kind           AttachmentKind
+  storageKey     String         @unique @map("storage_key") @db.VarChar(300)
+  thumbnailKey   String?        @map("thumbnail_key") @db.VarChar(300)
+  contentType    String         @map("content_type") @db.VarChar(100)
+  /// Sanitised display name; never used as a storage path.
+  fileName       String         @map("file_name") @db.VarChar(160)
+  bytes          Int
+  width          Int?
+  height         Int?
+  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  uploader     User         @relation(fields: [uploaderId], references: [id], onDelete: Restrict)
+  message      Message?     @relation(fields: [messageId], references: [id], onDelete: Restrict)
+
+  @@index([messageId])
+  @@index([conversationId, uploaderId, messageId])
+  @@index([createdAt])
+  @@map("message_attachments")
+}
+
+/// One reaction per user per message (changing it replaces it).
+model MessageReaction {
+  messageId String   @map("message_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  /// One of the allowed reactions (see @havenhub/shared MESSAGE_REACTIONS).
+  emoji     String   @db.VarChar(16)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@id([messageId, userId])
+  @@index([messageId, emoji])
+  @@map("message_reactions")
 }

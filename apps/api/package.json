@@ -22,6 +22,7 @@
     "@node-rs/argon2": "^2.2.1",
     "@prisma/adapter-pg": "~7.10.0",
     "@prisma/client": "~7.10.0",
+    "@socket.io/redis-adapter": "^8.3.0",
     "cookie-parser": "^1.4.7",
     "dotenv": "^17.0.0",
     "helmet": "^8.0.0",
@@ -31,6 +32,7 @@
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
     "sharp": "^0.35.5",
+    "socket.io": "^4.8.4",
     "zod": "^4.6.5"
   },
   "devDependencies": {
@@ -45,6 +47,7 @@
     "@types/pg": "^8.23.1",
     "@types/supertest": "^6.0.0",
     "pg": "^8.23.1",
+    "socket.io-client": "^4.8.4",
     "supertest": "^7.1.0",
     "tsx": "^4.23.15",
     "typescript": "~6.0.3",

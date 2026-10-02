@@ -18,6 +18,7 @@ import {
   Map,
   Megaphone,
   MessageSquare,
+  MessagesSquare,
   Package,
   Percent,
   Search,
@@ -45,6 +46,8 @@ export interface NavItem {
   icon: LucideIcon;
   /** Set for modules that arrive in a later phase; shown with a "Soon" tag. */
   phase?: number;
+  /** Shows the live unread-message count. */
+  unreadBadge?: boolean;
   description?: string;
   /** Admin items are hidden when the admin lacks this permission. The API enforces it regardless. */
   permission?: Permission;
@@ -56,13 +59,7 @@ export const CUSTOMER_NAV: NavItem[] = [
   { href: '/account', label: 'Profile', icon: User },
   { href: '/account/bookings', label: 'Bookings', icon: CalendarCheck },
   { href: '/account/favorites', label: 'Favourites', icon: Heart },
-  {
-    href: '/account/messages',
-    label: 'Messages',
-    icon: MessageSquare,
-    phase: 5,
-    description: 'Chat with agents, hosts and HavenHub support.',
-  },
+  { href: '/account/messages', label: 'Messages', icon: MessageSquare, unreadBadge: true },
   { href: '/account/payments', label: 'Payments', icon: CreditCard },
   {
     href: '/account/notifications',
@@ -85,13 +82,7 @@ export const AGENT_NAV: NavItem[] = [
     phase: 6,
     description: 'Create events and sell tickets.',
   },
-  {
-    href: '/agent/messages',
-    label: 'Messages',
-    icon: MessageSquare,
-    phase: 5,
-    description: 'Conversations with your customers.',
-  },
+  { href: '/agent/messages', label: 'Messages', icon: MessageSquare, unreadBadge: true },
   { href: '/agent/earnings', label: 'Earnings', icon: Wallet },
   {
     href: '/agent/analytics',
@@ -170,7 +161,14 @@ export const ADMIN_NAV: NavItem[] = [
   { href: '/admin/email-marketing', label: 'Email Marketing', icon: Megaphone, phase: 7 },
   { href: '/admin/careers', label: 'Careers', icon: Briefcase, phase: 7 },
 
-  { href: '/admin/support', label: 'Support', icon: LifeBuoy, phase: 5, group: 'Platform' },
+  {
+    href: '/admin/conversations',
+    label: 'Conversations',
+    icon: MessagesSquare,
+    permission: 'conversations.view',
+    group: 'Platform',
+  },
+  { href: '/admin/support', label: 'Support', icon: LifeBuoy, phase: 5 },
   {
     href: '/admin/settings',
     label: 'Settings',

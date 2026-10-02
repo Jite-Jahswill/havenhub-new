@@ -98,3 +98,44 @@ export async function apiUpload<T>(path: string, file: File): Promise<ApiRespons
     return networkError;
   }
 }
+
+/**
+ * Multipart upload with progress (XMLHttpRequest — fetch cannot report
+ * upload progress). Same CSRF handling as `api`.
+ */
+export function apiUploadWithProgress<T>(
+  path: string,
+  file: File,
+  onProgress: (fraction: number) => void,
+  signal?: AbortSignal,
+): Promise<ApiResponse<T>> {
+  return new Promise((resolve) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `/api/v1${path}`);
+    xhr.withCredentials = true;
+    xhr.setRequestHeader('Accept', 'application/json');
+    const csrf = readCookie(AUTH_COOKIES.CSRF);
+    if (csrf) xhr.setRequestHeader(CSRF_HEADER, decodeURIComponent(csrf));
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) onProgress(e.loaded / e.total);
+    };
+    xhr.onload = () => {
+      if (xhr.status === 413) {
+        resolve({ success: false, code: 'INVALID_FILE', message: 'That file is too large.' });
+        return;
+      }
+      try {
+        resolve(JSON.parse(xhr.responseText) as ApiResponse<T>);
+      } catch {
+        resolve(networkError);
+      }
+    };
+    xhr.onerror = () => resolve(networkError);
+    xhr.onabort = () =>
+      resolve({ success: false, code: 'BAD_REQUEST', message: 'Upload cancelled.' });
+    signal?.addEventListener('abort', () => xhr.abort());
+    const body = new FormData();
+    body.append('file', file);
+    xhr.send(body);
+  });
+}

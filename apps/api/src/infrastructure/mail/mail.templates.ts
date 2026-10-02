@@ -46,6 +46,29 @@ function render(input: LayoutInput): MailMessage {
 }
 
 export const MailTemplates = {
+  // ── Messages (Phase 5) ──
+  /** One email per conversation per unread burst; no message content, for privacy. */
+  unreadMessages: (
+    to: string,
+    name: string,
+    from: string,
+    count: number,
+    about: string,
+    includesReply: boolean,
+    url: string,
+  ) =>
+    render({
+      to,
+      subject: `${from} sent you ${count === 1 ? 'a message' : `${count} messages`} on HavenHub`,
+      heading: `You have ${count === 1 ? 'a new message' : `${count} new messages`}, ${name}`,
+      paragraphs: [
+        `${from} wrote to you about ${about}${includesReply ? ', including a reply to your message' : ''}.`,
+        'Open the conversation on HavenHub to read and reply.',
+      ],
+      action: { label: 'Read messages', url },
+      footnote: 'We email you at most once per conversation until you read it.',
+    }),
+
   // ── Subscriptions (Phase 4) ──
   subscriptionStarted: (
     to: string,

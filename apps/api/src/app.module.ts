@@ -13,12 +13,14 @@ import { AmenitiesModule } from './modules/amenities/amenities.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { BookingsModule } from './modules/bookings/bookings.module';
+import { ChatModule } from './modules/chat/chat.module';
 import { FinanceModule } from './modules/finance/finance.module';
 import { HealthModule } from './modules/health/health.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { PlansModule } from './modules/plans/plans.module';
 import { PropertiesModule } from './modules/properties/properties.module';
 import { RbacModule } from './modules/rbac/rbac.module';
+import { RealtimeModule } from './modules/realtime/realtime.module';
 import { SubscriptionsModule } from './modules/subscriptions/subscriptions.module';
 import { UsersModule } from './modules/users/users.module';
 
@@ -48,6 +50,8 @@ import { UsersModule } from './modules/users/users.module';
     BookingsModule,
     PaymentsModule,
     SubscriptionsModule,
+    RealtimeModule,
+    ChatModule,
     HealthModule,
   ],
 })

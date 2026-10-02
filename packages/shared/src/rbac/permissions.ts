@@ -35,6 +35,9 @@ export const PERMISSIONS = {
   'subscriptions.manage': 'Cancel, suspend and reactivate agent subscriptions',
   'subscriptions.plans': 'Create and edit subscription plans, prices and limits',
 
+  'conversations.view': 'Read customer–agent conversations for support (every view is audited)',
+  'messages.moderate': 'Remove messages and close or reopen conversations',
+
   'blog.create': 'Create blog posts',
   'blog.edit': 'Edit blog posts',
   'blog.publish': 'Publish and unpublish blog posts',

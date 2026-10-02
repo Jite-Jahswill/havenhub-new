@@ -52,6 +52,12 @@ export const ErrorCode = {
   SUBSCRIPTION_CHANGE_SCHEDULED: 'SUBSCRIPTION_CHANGE_SCHEDULED',
   /** No default (free) plan is configured, so allowances cannot be resolved. */
   PLANS_NOT_CONFIGURED: 'PLANS_NOT_CONFIGURED',
+
+  // Communication
+  /** The conversation is closed by a moderator: no new messages. */
+  CONVERSATION_CLOSED: 'CONVERSATION_CLOSED',
+  /** The message can no longer be changed (deleted, system or past the edit window). */
+  MESSAGE_NOT_EDITABLE: 'MESSAGE_NOT_EDITABLE',
 } as const;
 
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];

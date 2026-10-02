@@ -231,6 +231,57 @@ One session system serves both client types; only the token transport differs.
 | Agent  | `GET agents/me/subscription`, `…/quote?planId`, `…/history`, `…/payments` · `POST …/checkout`, `…/payments/:reference/verify`, `…/cancel`, `…/resume` · `POST/DELETE agents/me/properties/:id/feature` · `GET/POST …/test-checkout/:reference` (test provider)  |
 | Admin  | `GET/POST admin/subscription-plans` · `GET/PATCH/DELETE admin/subscription-plans/:id` · `POST admin/subscription-plans/:id/status` · `GET admin/subscriptions`, `admin/subscriptions/stats`, `admin/subscriptions/:id` · `POST admin/subscriptions/:id/actions` |
 
+## Messaging (Phase 5)
+
+- **Conversations** (`conversations`, `conversation_participants`) are about one context: a listing
+  (`PROPERTY`, started by a customer with the listing's agent) or a booking (`BOOKING`, its customer
+  and agent). Each context type has its own nullable foreign key plus a CHECK constraint — no
+  polymorphic ids; Phase 6 adds a column and an enum value. A deterministic unique `contextKey` makes
+  "start a conversation" a race-safe get-or-create. Participants have a role, so admin/system
+  participants need no redesign. Archiving is per participant; a new message unarchives.
+- **Messages** get a per-conversation `seq` allocated under the conversation row lock: stable order,
+  cursor pagination (`?before=<seq>` older, `?after=<seq>` catch-up) and read cursors. Types: TEXT,
+  IMAGE, VIDEO, AUDIO, FILE, SYSTEM. Text is plain text (control/bidi characters stripped) and must be
+  rendered as text, never HTML. Replies reference a message in the same conversation; the quote is one
+  level deep and redacted if the original is deleted.
+- **Lifecycle:** authors edit text for 15 minutes (the previous text is kept in `message_revisions`);
+  authors delete any time. Deletion is soft (a trigger forbids hard deletes): content, files, quote and
+  reactions vanish from every participant response but stay available to moderators.
+- **Idempotency:** each send carries a client-generated `clientKey`; `(sender, clientKey)` is unique in
+  the database. A retry returns the original message (200, no duplicate event); concurrent duplicates
+  resolve to one row.
+- **Read state:** one `lastReadSeq` cursor per participant (monotonic in SQL). Unread = messages from
+  others above the cursor, not deleted — one indexed query, no per-message receipts. The other side's
+  cursor gives read receipts.
+- **Reactions:** one per user per message (primary key), from an allowlist in `@havenhub/shared`.
+- **Attachments:** uploaded first (`POST /conversations/:id/attachments`), then referenced when sending.
+  The type comes from the file's bytes (images re-encoded to WebP; MP4/MOV/WebM, MP3/M4A/OGG/WAV, PDF,
+  DOCX/XLSX/PPTX without macros, UTF-8 TXT/CSV) with per-kind size limits; client MIME types are
+  ignored. Files live under the private `chat/` storage prefix — the public media route refuses it, and
+  with S3 the prefix must stay out of any public-read policy — and are streamed only to participants
+  (`nosniff`, sandbox CSP, private cache). Unsent uploads are removed after 24 hours.
+- **Real-time:** Socket.IO on the API (`/realtime`) with the Redis adapter for multiple instances.
+  Browsers get a single-use 60 s ticket (`POST /realtime/ticket`) and connect to
+  `NEXT_PUBLIC_REALTIME_URL`; mobile clients pass their access token. Each socket joins only its own user
+  room; servers emit per-recipient views to participants. Sessions are re-checked every 30 s (revoked →
+  disconnected). Events: `conversation.created|updated`, `message.created|updated|deleted`,
+  `message.reaction.updated`, `message.read`, `typing.started|stopped` (typing is never stored). Every
+  payload has an `eventId`; messages are keyed by id/seq, so duplicates are harmless. The REST API is
+  the source of truth: clients re-sync with `?after=<seq>` on reconnect or on a seq gap.
+- **Notifications:** live events for in-app updates (including the dashboard unread badge); email is a
+  digest — one email per conversation per unread burst after `CHAT_EMAIL_DELAY_SECONDS`, without
+  message content, cancelled by reading. Reactions are never emailed. `ChatNotificationChannel` is the
+  hook for mobile push later.
+- **Access:** participant routes return 404 to non-participants (no id probing). Admins have no
+  participant access; support uses `/admin/conversations` with `conversations.view` (every view and
+  file download is audited) and `messages.moderate` (remove a message, close/reopen — with a reason,
+  audited). Both are granted to Super Admin and Support Admin only.
+
+| Area             | Routes (`/api/v1`)                                                                                                                                                                                                                                                                                                                                     |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Customer / agent | `GET/POST conversations` · `GET conversations/unread`, `conversations/:id` · `POST conversations/:id/read`, `…/archive` · `GET/POST conversations/:id/messages` · `POST conversations/:id/attachments` · `GET conversations/:id/attachments/:attachmentId` · `PATCH/DELETE messages/:id` · `PUT/DELETE messages/:id/reaction` · `POST realtime/ticket` |
+| Admin            | `GET admin/conversations`, `admin/conversations/:id`, `admin/conversations/:id/attachments/:attachmentId` · `POST admin/conversations/:id/status`, `admin/messages/:id/remove`                                                                                                                                                                         |
+
 ## Prerequisites
 
 - **Node.js 24 LTS** (`nvm use` reads `.nvmrc`)
@@ -292,28 +343,31 @@ running `pnpm services:up`, and update `DATABASE_URL` / `REDIS_URL` in `.env` to
 
 See `.env.example` for the full annotated list.
 
-| Variable                              | Used by     | Required | Description                                                              |
-| ------------------------------------- | ----------- | -------- | ------------------------------------------------------------------------ |
-| `DATABASE_URL`                        | API, Prisma | yes      | PostgreSQL connection string                                             |
-| `REDIS_URL`                           | API         | yes      | Redis (rate limiting; caching, queues and chat later)                    |
-| `FIELD_ENCRYPTION_KEY`                | API         | yes      | 32-byte base64 key encrypting NIN / account numbers                      |
-| `AUTH_SECRET`                         | API         | yes      | 32-byte base64 key signing CSRF tokens                                   |
-| `WEB_APP_URL`                         | API         | yes\*    | Web origin, for email links (\*defaults to `http://localhost:3000`)      |
-| `CORS_ORIGINS`                        | API         | no       | Allowed browser origins                                                  |
-| `SMTP_HOST`, `SMTP_*`                 | API         | prod     | SMTP delivery; required when `NODE_ENV=production`                       |
-| `REQUIRE_EMAIL_VERIFICATION`          | API         | no       | Require a verified email to sign in (default `true`)                     |
-| `ACCESS_TOKEN_TTL_MINUTES`            | API         | no       | Default 15                                                               |
-| `REFRESH_TOKEN_TTL_DAYS`              | API         | no       | Default 30                                                               |
-| `TRUST_PROXY`                         | API         | no       | Proxy hops for client IPs behind a load balancer                         |
-| `API_INTERNAL_URL`                    | Web         | yes\*    | Where the web server reaches the API (\*default `http://localhost:4000`) |
-| `NEXT_PUBLIC_SITE_URL`                | Web         | yes\*    | Canonical site URL                                                       |
-| `NEXT_PUBLIC_MAPBOX_TOKEN`            | Web         | prod     | Mapbox public token for map tiles (OpenStreetMap is used in development) |
-| `STORAGE_DRIVER`                      | API         | prod     | `local` (development only) or `s3`                                       |
-| `STORAGE_*`                           | API         | with s3  | Bucket, credentials, endpoint and public base URL                        |
-| `PAYMENT_PROVIDER`                    | API         | prod     | `test` (development only, simulated) or `paystack`                       |
-| `PAYSTACK_SECRET_KEY`                 | API         | paystack | Paystack secret key; also verifies webhook signatures                    |
-| `BOOKING_HOLD_MINUTES`                | API         | no       | How long unpaid bookings hold their dates (default 30)                   |
-| `SUBSCRIPTION_SWEEP_INTERVAL_SECONDS` | API         | no       | Subscription term/reminder sweep (default 300; 0 disables)               |
+| Variable                              | Used by     | Required | Description                                                                      |
+| ------------------------------------- | ----------- | -------- | -------------------------------------------------------------------------------- |
+| `DATABASE_URL`                        | API, Prisma | yes      | PostgreSQL connection string                                                     |
+| `REDIS_URL`                           | API         | yes      | Redis (rate limiting; caching, queues and chat later)                            |
+| `FIELD_ENCRYPTION_KEY`                | API         | yes      | 32-byte base64 key encrypting NIN / account numbers                              |
+| `AUTH_SECRET`                         | API         | yes      | 32-byte base64 key signing CSRF tokens                                           |
+| `WEB_APP_URL`                         | API         | yes\*    | Web origin, for email links (\*defaults to `http://localhost:3000`)              |
+| `CORS_ORIGINS`                        | API         | no       | Allowed browser origins                                                          |
+| `SMTP_HOST`, `SMTP_*`                 | API         | prod     | SMTP delivery; required when `NODE_ENV=production`                               |
+| `REQUIRE_EMAIL_VERIFICATION`          | API         | no       | Require a verified email to sign in (default `true`)                             |
+| `ACCESS_TOKEN_TTL_MINUTES`            | API         | no       | Default 15                                                                       |
+| `REFRESH_TOKEN_TTL_DAYS`              | API         | no       | Default 30                                                                       |
+| `TRUST_PROXY`                         | API         | no       | Proxy hops for client IPs behind a load balancer                                 |
+| `API_INTERNAL_URL`                    | Web         | yes\*    | Where the web server reaches the API (\*default `http://localhost:4000`)         |
+| `NEXT_PUBLIC_SITE_URL`                | Web         | yes\*    | Canonical site URL                                                               |
+| `NEXT_PUBLIC_MAPBOX_TOKEN`            | Web         | prod     | Mapbox public token for map tiles (OpenStreetMap is used in development)         |
+| `STORAGE_DRIVER`                      | API         | prod     | `local` (development only) or `s3`                                               |
+| `STORAGE_*`                           | API         | with s3  | Bucket, credentials, endpoint and public base URL                                |
+| `PAYMENT_PROVIDER`                    | API         | prod     | `test` (development only, simulated) or `paystack`                               |
+| `PAYSTACK_SECRET_KEY`                 | API         | paystack | Paystack secret key; also verifies webhook signatures                            |
+| `BOOKING_HOLD_MINUTES`                | API         | no       | How long unpaid bookings hold their dates (default 30)                           |
+| `SUBSCRIPTION_SWEEP_INTERVAL_SECONDS` | API         | no       | Subscription term/reminder sweep (default 300; 0 disables)                       |
+| `CHAT_SWEEP_INTERVAL_SECONDS`         | API         | no       | Chat email digests and unsent-upload cleanup (default 60; 0 disables)            |
+| `CHAT_EMAIL_DELAY_SECONDS`            | API         | no       | Unread time before a digest email (default 600)                                  |
+| `NEXT_PUBLIC_REALTIME_URL`            | Web         | prod     | Public API origin for the Socket.IO connection (default `http://localhost:4000`) |
 
 Web variables live in `apps/web/.env.example`. **Never commit `.env` files.**
 
@@ -336,8 +390,9 @@ Web variables live in `apps/web/.env.example`. **Never commit `.env` files.**
    — still to schedule: discount codes and gifting, agent withdrawals, reviews tied to completed bookings
 4. ~~Agent subscriptions: plans, entitlements, limits, paid terms, admin management~~
    — later: in-app notifications, automatic renewal (needs stored-card charging), subscription refunds
-5. Communication: chat (Socket.IO), notifications, support ← _next_
-6. Events, hotels, tours, vacation zones, cleaning
+5. ~~Communication: conversations, messages, attachments, reactions, real-time (Socket.IO), digests~~
+   — later: in-app notification centre, support tickets, mobile push, user blocking
+6. Events, hotels, tours, vacation zones, cleaning ← _next_
 7. CMS: homepage, blog, SEO, careers, help center, email marketing
 8. Advanced admin: RBAC management, analytics, moderation
 9. Production hardening
