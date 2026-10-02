@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Lint, typecheck, test & build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: havenhub
+          POSTGRES_PASSWORD: havenhub
+          POSTGRES_DB: havenhub
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U havenhub -d havenhub"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:8-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://havenhub:havenhub@localhost:5432/havenhub?schema=public
+      REDIS_URL: redis://localhost:6379
+      # CI-only throwaway keys; real values live in the deployment platform's secrets.
+      FIELD_ENCRYPTION_KEY: Y2ktb25seS1maWVsZC1lbmNyeXB0aW9uLWtleS0zMmI=
+      AUTH_SECRET: Y2ktb25seS1hdXRoLXNlY3JldC1rZXktMzItYnl0ZXM=
+      NEXT_TELEMETRY_DISABLED: 1
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm format:check
+      - run: pnpm lint
+      - run: pnpm typecheck
+      # Integration tests create, migrate and seed their own `havenhub_test` database.
+      - run: pnpm test
+      - run: pnpm db:deploy
+      - run: pnpm db:seed
+      - run: pnpm build
+
+      - name: Smoke-test API health endpoint
+        run: |
+          pnpm start:api &
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:4000/api/health; then exit 0; fi
+            sleep 1
+          done
+          echo "API did not become healthy" && exit 1

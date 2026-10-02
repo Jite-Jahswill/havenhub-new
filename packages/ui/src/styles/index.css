@@ -1,0 +1,30 @@
+@import './tokens.css';
+@import './theme.css';
+
+@layer base {
+  html {
+    background-color: var(--hh-background);
+    color: var(--hh-text);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    background-color: var(--hh-background);
+    color: var(--hh-text);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--hh-ring);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}

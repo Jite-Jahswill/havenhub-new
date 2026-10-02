@@ -1,0 +1,806 @@
+// HavenHub database schema.
+//
+// Models are added phase by phase. Phase 1: accounts, sessions, email tokens,
+// RBAC, agent profiles/payout accounts and the audit log.
+//
+// Conventions:
+//   - Primary keys: `String @id @default(uuid(7)) @db.Uuid` (time-ordered UUIDs)
+//   - Money: `Int` / `BigInt` in kobo — never Float/Decimal naira
+//   - Table names: snake_case plural via @@map; column names via @map
+//   - Timestamps: createdAt / updatedAt on every mutable table (timestamptz)
+//   - Sensitive values (NIN, bank account numbers) are stored only as
+//     AES-256-GCM ciphertext plus a non-reversible last-4 for display.
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../apps/api/src/generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Accounts ────────────────────────────────────────────────────────────────
+
+enum AccountType {
+  CUSTOMER
+  AGENT
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  BLOCKED
+}
+
+model User {
+  id              String      @id @default(uuid(7)) @db.Uuid
+  /// Always stored lower-cased and trimmed.
+  email           String      @unique @db.VarChar(254)
+  emailVerifiedAt DateTime?   @map("email_verified_at") @db.Timestamptz(3)
+  passwordHash    String      @map("password_hash")
+  fullName        String      @map("full_name") @db.VarChar(120)
+  /// E.164 format, e.g. +2348031234567
+  phone           String?     @db.VarChar(20)
+  /// Storage key of the profile photo; URLs are derived at read time.
+  avatarKey       String?     @map("avatar_key") @db.VarChar(300)
+  accountType     AccountType @map("account_type")
+  status          UserStatus  @default(ACTIVE)
+  statusReason    String?     @map("status_reason") @db.VarChar(500)
+  lastLoginAt     DateTime?   @map("last_login_at") @db.Timestamptz(3)
+  createdAt       DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  sessions           Session[]
+  verificationTokens VerificationToken[]
+  roles              UserRole[]          @relation("UserRoles")
+  rolesAssigned      UserRole[]          @relation("UserRolesAssignedBy")
+  agentProfile       AgentProfile?       @relation("AgentProfileUser")
+  agentsReviewed     AgentProfile[]      @relation("AgentProfileReviewer")
+  auditLogs          AuditLog[]
+  propertiesReviewed Property[]          @relation("PropertyReviewer")
+  favorites          PropertyFavorite[]
+  bookings           Booking[]           @relation("BookingCustomer")
+  pricingConfigs     PricingConfig[]
+  refundsReviewed    Refund[]            @relation("RefundReviewer")
+
+  @@index([accountType, status])
+  @@index([createdAt])
+  @@map("users")
+}
+
+// ─── Authentication ──────────────────────────────────────────────────────────
+
+enum ClientType {
+  WEB
+  TOKEN
+}
+
+/// One row per signed-in device. Both cookie (web) and bearer (mobile) clients
+/// use the same session; only the transport of the tokens differs. Tokens are
+/// `<sessionId>.<secret>`; only SHA-256 hashes of the secrets are stored.
+model Session {
+  id                       String     @id @default(uuid(7)) @db.Uuid
+  userId                   String     @map("user_id") @db.Uuid
+  clientType               ClientType @map("client_type")
+  accessTokenHash          String     @map("access_token_hash") @db.Char(64)
+  accessTokenExpiresAt     DateTime   @map("access_token_expires_at") @db.Timestamptz(3)
+  refreshTokenHash         String     @map("refresh_token_hash") @db.Char(64)
+  /// Kept after rotation to detect refresh-token reuse (theft).
+  previousRefreshTokenHash String?    @map("previous_refresh_token_hash") @db.Char(64)
+  /// When the refresh token last rotated; concurrent refreshes within a short
+  /// grace window are tolerated instead of being treated as token theft.
+  refreshRotatedAt         DateTime?  @map("refresh_rotated_at") @db.Timestamptz(3)
+  expiresAt                DateTime   @map("expires_at") @db.Timestamptz(3)
+  userAgent                String?    @map("user_agent") @db.VarChar(512)
+  ipAddress                String?    @map("ip_address") @db.VarChar(64)
+  lastUsedAt               DateTime   @default(now()) @map("last_used_at") @db.Timestamptz(3)
+  revokedAt                DateTime?  @map("revoked_at") @db.Timestamptz(3)
+  revokedReason            String?    @map("revoked_reason") @db.VarChar(60)
+  createdAt                DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+enum VerificationTokenType {
+  EMAIL_VERIFICATION
+  PASSWORD_RESET
+}
+
+/// Single-use tokens sent by email. Only the SHA-256 hash is stored.
+model VerificationToken {
+  id        String                @id @default(uuid(7)) @db.Uuid
+  userId    String                @map("user_id") @db.Uuid
+  type      VerificationTokenType
+  tokenHash String                @unique @map("token_hash") @db.Char(64)
+  expiresAt DateTime              @map("expires_at") @db.Timestamptz(3)
+  usedAt    DateTime?             @map("used_at") @db.Timestamptz(3)
+  createdAt DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, type])
+  @@map("verification_tokens")
+}
+
+// ─── RBAC ────────────────────────────────────────────────────────────────────
+
+model Role {
+  id          String   @id @default(uuid(7)) @db.Uuid
+  /// Stable identifier, e.g. "super_admin", "finance_admin".
+  key         String   @unique @db.VarChar(60)
+  name        String   @db.VarChar(100)
+  description String?  @db.VarChar(500)
+  /// System roles are managed by the seed and cannot be deleted.
+  isSystem    Boolean  @default(false) @map("is_system")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  permissions RolePermission[]
+  users       UserRole[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id          String   @id @default(uuid(7)) @db.Uuid
+  /// `<resource>.<action>`, e.g. "users.block". Catalogue lives in @havenhub/shared.
+  key         String   @unique @db.VarChar(100)
+  description String?  @db.VarChar(500)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  roles RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       String   @map("role_id") @db.Uuid
+  permissionId String   @map("permission_id") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@index([permissionId])
+  @@map("role_permissions")
+}
+
+model UserRole {
+  userId       String   @map("user_id") @db.Uuid
+  roleId       String   @map("role_id") @db.Uuid
+  assignedById String?  @map("assigned_by_id") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user       User  @relation("UserRoles", fields: [userId], references: [id], onDelete: Cascade)
+  role       Role  @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  assignedBy User? @relation("UserRolesAssignedBy", fields: [assignedById], references: [id], onDelete: SetNull)
+
+  @@id([userId, roleId])
+  @@index([roleId])
+  @@map("user_roles")
+}
+
+// ─── Agents ──────────────────────────────────────────────────────────────────
+
+enum AgentVerificationStatus {
+  PENDING
+  UNDER_REVIEW
+  VERIFIED
+  REJECTED
+  SUSPENDED
+  BLOCKED
+}
+
+enum Sex {
+  MALE
+  FEMALE
+}
+
+enum AgentServiceType {
+  PROPERTY_OWNER
+  LANDLORD
+  REAL_ESTATE_AGENT
+  HOTEL_OPERATOR
+  EVENT_ORGANIZER
+  TOUR_OPERATOR
+  CLEANER
+}
+
+enum IdDocumentType {
+  NIN_SLIP
+  INTERNATIONAL_PASSPORT
+  DRIVERS_LICENSE
+  VOTERS_CARD
+}
+
+model AgentProfile {
+  id           String             @id @default(uuid(7)) @db.Uuid
+  userId       String             @unique @map("user_id") @db.Uuid
+  businessName String?            @map("business_name") @db.VarChar(160)
+  bio          String?            @db.VarChar(1500)
+  sex          Sex
+  serviceTypes AgentServiceType[] @map("service_types")
+
+  addressLine String? @map("address_line") @db.VarChar(240)
+  city        String? @db.VarChar(100)
+  lga         String? @db.VarChar(100)
+  state       String? @db.VarChar(60)
+
+  // Identity — never exposed publicly. Encrypted at rest (AES-256-GCM).
+  ninCiphertext  String?         @map("nin_ciphertext")
+  /// HMAC-SHA256 of the NIN for duplicate detection without decryption.
+  ninFingerprint String?         @unique @map("nin_fingerprint") @db.Char(64)
+  ninLast4       String?         @map("nin_last4") @db.Char(4)
+  idDocumentType IdDocumentType? @map("id_document_type")
+
+  verificationStatus      AgentVerificationStatus @default(PENDING) @map("verification_status")
+  verificationNote        String?                 @map("verification_note") @db.VarChar(1000)
+  verificationSubmittedAt DateTime?               @map("verification_submitted_at") @db.Timestamptz(3)
+  verificationReviewedAt  DateTime?               @map("verification_reviewed_at") @db.Timestamptz(3)
+  verificationReviewerId  String?                 @map("verification_reviewer_id") @db.Uuid
+  verifiedAt              DateTime?               @map("verified_at") @db.Timestamptz(3)
+
+  onboardingDismissedAt DateTime? @map("onboarding_dismissed_at") @db.Timestamptz(3)
+  createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt             DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user                 User           @relation("AgentProfileUser", fields: [userId], references: [id], onDelete: Cascade)
+  verificationReviewer User?          @relation("AgentProfileReviewer", fields: [verificationReviewerId], references: [id], onDelete: SetNull)
+  payoutAccount        PayoutAccount?
+  properties           Property[]
+  bookings             Booking[]
+  earnings             AgentEarning[]
+
+  @@index([verificationStatus, verificationSubmittedAt])
+  @@map("agent_profiles")
+}
+
+/// Where an agent's earnings are paid. One per agent for now; Phase 3 adds
+/// provider-side verification (e.g. Paystack account resolution).
+model PayoutAccount {
+  id                      String    @id @default(uuid(7)) @db.Uuid
+  agentProfileId          String    @unique @map("agent_profile_id") @db.Uuid
+  bankName                String    @map("bank_name") @db.VarChar(100)
+  bankCode                String    @map("bank_code") @db.VarChar(10)
+  accountName             String    @map("account_name") @db.VarChar(160)
+  accountNumberCiphertext String    @map("account_number_ciphertext")
+  accountNumberLast4      String    @map("account_number_last4") @db.Char(4)
+  verifiedAt              DateTime? @map("verified_at") @db.Timestamptz(3)
+  createdAt               DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt               DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  agentProfile AgentProfile @relation(fields: [agentProfileId], references: [id], onDelete: Cascade)
+
+  @@map("payout_accounts")
+}
+
+// ─── Audit ───────────────────────────────────────────────────────────────────
+
+/// Append-only record of security-relevant and administrative actions.
+model AuditLog {
+  id           String   @id @default(uuid(7)) @db.Uuid
+  actorId      String?  @map("actor_id") @db.Uuid
+  /// e.g. "agent.verification.updated", "user.status.updated", "auth.login"
+  action       String   @db.VarChar(100)
+  resourceType String   @map("resource_type") @db.VarChar(60)
+  resourceId   String?  @map("resource_id") @db.VarChar(64)
+  /// Redacted snapshots — never contain secrets or sensitive identity data.
+  before       Json?
+  after        Json?
+  ipAddress    String?  @map("ip_address") @db.VarChar(64)
+  userAgent    String?  @map("user_agent") @db.VarChar(512)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([actorId, createdAt])
+  @@index([resourceType, resourceId])
+  @@index([action, createdAt])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// ─── Property marketplace (Phase 2) ─────────────────────────────────────────
+
+enum PropertyType {
+  APARTMENT
+  SELF_CONTAINED
+  HOUSE
+  DUPLEX
+  BUNGALOW
+  TERRACE
+  PENTHOUSE
+  LAND
+  SHOP
+  OFFICE
+  WAREHOUSE
+}
+
+enum ListingType {
+  RENT
+  SALE
+}
+
+enum PricingPeriod {
+  DAILY
+  MONTHLY
+  YEARLY
+  SALE
+}
+
+/// One lifecycle including moderation (spec §47). Only PUBLISHED properties of
+/// VERIFIED agents with ACTIVE accounts are publicly visible.
+enum PropertyStatus {
+  DRAFT
+  PENDING_REVIEW
+  PUBLISHED
+  REJECTED
+  SUSPENDED
+  ARCHIVED
+}
+
+enum CleaningOption {
+  INCLUDED
+  AVAILABLE_FOR_FEE
+  CUSTOMER_MUST_CLEAN
+  NOT_AVAILABLE
+}
+
+enum Currency {
+  NGN
+}
+
+model Property {
+  id             String         @id @default(uuid(7)) @db.Uuid
+  agentProfileId String         @map("agent_profile_id") @db.Uuid
+  /// Stable once published, so links and search rankings survive title edits.
+  slug           String         @unique @db.VarChar(160)
+  status         PropertyStatus @default(DRAFT)
+
+  title         String         @db.VarChar(120)
+  description   String?        @db.VarChar(5000)
+  propertyType  PropertyType   @map("property_type")
+  listingType   ListingType    @map("listing_type")
+  pricingPeriod PricingPeriod? @map("pricing_period")
+
+  // Location
+  addressLine String?  @map("address_line") @db.VarChar(240)
+  city        String?  @db.VarChar(100)
+  lga         String?  @db.VarChar(100)
+  state       String?  @db.VarChar(60)
+  /// ISO 3166-1 alpha-2
+  country     String   @default("NG") @db.Char(2)
+  latitude    Decimal? @db.Decimal(9, 6)
+  longitude   Decimal? @db.Decimal(9, 6)
+
+  // Details
+  sizeSqm       Int?    @map("size_sqm")
+  bedrooms      Int?    @db.SmallInt
+  bathrooms     Int?    @db.SmallInt
+  toilets       Int?    @db.SmallInt
+  maxGuests     Int?    @map("max_guests") @db.SmallInt
+  parkingSpaces Int?    @map("parking_spaces") @db.SmallInt
+  furnished     Boolean @default(false)
+  serviced      Boolean @default(false)
+
+  // Pricing — integer kobo. BigInt because sale prices exceed 32-bit kobo.
+  priceKobo       BigInt?         @map("price_kobo")
+  currency        Currency        @default(NGN)
+  cautionFeeKobo  BigInt?         @map("caution_fee_kobo")
+  /// Display discount (1–90%). The discount engine arrives with payments.
+  discountPercent Int?            @map("discount_percent") @db.SmallInt
+  cleaningOption  CleaningOption? @map("cleaning_option")
+  cleaningFeeKobo BigInt?         @map("cleaning_fee_kobo")
+  availableFrom   DateTime?       @map("available_from") @db.Date
+
+  // Moderation
+  moderationNote String?   @map("moderation_note") @db.VarChar(1000)
+  submittedAt    DateTime? @map("submitted_at") @db.Timestamptz(3)
+  reviewedAt     DateTime? @map("reviewed_at") @db.Timestamptz(3)
+  reviewerId     String?   @map("reviewer_id") @db.Uuid
+  publishedAt    DateTime? @map("published_at") @db.Timestamptz(3)
+  archivedAt     DateTime? @map("archived_at") @db.Timestamptz(3)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  agentProfile AgentProfile        @relation(fields: [agentProfileId], references: [id], onDelete: Restrict)
+  reviewer     User?               @relation("PropertyReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
+  images       PropertyImage[]
+  videos       PropertyVideo[]
+  amenities    PropertyAmenity[]
+  favorites    PropertyFavorite[]
+  dailyViews   PropertyViewDaily[]
+  bookings     Booking[]
+
+  @@index([agentProfileId, status])
+  @@index([status, publishedAt(sort: Desc)])
+  @@index([status, listingType, pricingPeriod])
+  @@index([status, propertyType])
+  @@index([status, state, city])
+  @@index([status, priceKobo])
+  @@index([latitude, longitude])
+  @@index([createdAt])
+  @@map("properties")
+}
+
+/// Stored once per upload as two renditions (large + thumbnail) in object storage.
+model PropertyImage {
+  id           String   @id @default(uuid(7)) @db.Uuid
+  propertyId   String   @map("property_id") @db.Uuid
+  storageKey   String   @map("storage_key") @db.VarChar(300)
+  thumbnailKey String   @map("thumbnail_key") @db.VarChar(300)
+  width        Int
+  height       Int
+  /// Size of the stored large rendition, for storage quotas.
+  bytes        Int
+  altText      String?  @map("alt_text") @db.VarChar(200)
+  sortOrder    Int      @default(0) @map("sort_order")
+  isPrimary    Boolean  @default(false) @map("is_primary")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId, sortOrder])
+  @@map("property_images")
+}
+
+enum VideoProvider {
+  YOUTUBE
+  VIMEO
+}
+
+/// Videos are linked from YouTube/Vimeo in Phase 2 (no transcoding pipeline yet).
+model PropertyVideo {
+  id         String        @id @default(uuid(7)) @db.Uuid
+  propertyId String        @map("property_id") @db.Uuid
+  provider   VideoProvider
+  externalId String        @map("external_id") @db.VarChar(40)
+  title      String?       @db.VarChar(120)
+  sortOrder  Int           @default(0) @map("sort_order")
+  createdAt  DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([propertyId, provider, externalId])
+  @@map("property_videos")
+}
+
+enum AmenityCategory {
+  ESSENTIALS
+  FEATURES
+  SAFETY
+  HOSPITALITY
+}
+
+/// Admin-managed catalogue; agents can only choose active amenities.
+model Amenity {
+  id        String          @id @default(uuid(7)) @db.Uuid
+  slug      String          @unique @db.VarChar(60)
+  name      String          @db.VarChar(60)
+  category  AmenityCategory
+  icon      String?         @db.VarChar(40)
+  isActive  Boolean         @default(true) @map("is_active")
+  sortOrder Int             @default(0) @map("sort_order")
+  createdAt DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  properties PropertyAmenity[]
+
+  @@index([isActive, category, sortOrder])
+  @@map("amenities")
+}
+
+model PropertyAmenity {
+  propertyId String   @map("property_id") @db.Uuid
+  amenityId  String   @map("amenity_id") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  amenity  Amenity  @relation(fields: [amenityId], references: [id], onDelete: Restrict)
+
+  @@id([propertyId, amenityId])
+  @@index([amenityId])
+  @@map("property_amenities")
+}
+
+model PropertyFavorite {
+  userId     String   @map("user_id") @db.Uuid
+  propertyId String   @map("property_id") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@id([userId, propertyId])
+  @@index([propertyId])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("property_favorites")
+}
+
+/// Daily view counters: cheap to write, easy to chart, no per-visitor data stored.
+model PropertyViewDaily {
+  propertyId String   @map("property_id") @db.Uuid
+  day        DateTime @db.Date
+  views      Int      @default(0)
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@id([propertyId, day])
+  @@map("property_view_daily")
+}
+
+// ─── Bookings & payments (Phase 3) ──────────────────────────────────────────
+
+/// Commission, VAT and fee rates (spec §29). Rows are immutable versions; the
+/// newest one applies to new bookings and each booking keeps the one it used.
+model PricingConfig {
+  id                 String   @id @default(uuid(7)) @db.Uuid
+  version            Int      @unique
+  /// Rates in basis points (100 = 1%).
+  serviceFeeBps      Int      @map("service_fee_bps")
+  agentCommissionBps Int      @map("agent_commission_bps")
+  vatBps             Int      @map("vat_bps")
+  vatOnServiceFee    Boolean  @map("vat_on_service_fee")
+  vatOnStay          Boolean  @map("vat_on_stay")
+  note               String?  @db.VarChar(500)
+  createdById        String?  @map("created_by_id") @db.Uuid
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  createdBy User?     @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  bookings  Booking[]
+
+  @@map("pricing_configs")
+}
+
+enum BookingStatus {
+  AWAITING_PAYMENT
+  CONFIRMED
+  CANCELLED
+  EXPIRED
+  COMPLETED
+}
+
+enum CancelledBy {
+  CUSTOMER
+  AGENT
+  ADMIN
+  SYSTEM
+}
+
+/// A reservation of a rental property for [startDate, endDate). Every amount
+/// is calculated by the API at creation and frozen here: later price or fee
+/// changes never alter an existing booking. Overlaps are prevented by the
+/// `bookings_no_overlap` exclusion constraint (see migration), not only by code.
+model Booking {
+  id             String        @id @default(uuid(7)) @db.Uuid
+  /// Human-friendly reference shown to customers, e.g. "HH-7KQ2M9XD".
+  reference      String        @unique @db.VarChar(20)
+  customerId     String        @map("customer_id") @db.Uuid
+  propertyId     String        @map("property_id") @db.Uuid
+  /// The property's owner when the booking was made.
+  agentProfileId String        @map("agent_profile_id") @db.Uuid
+  status         BookingStatus @default(AWAITING_PAYMENT)
+
+  pricingPeriod    PricingPeriod @map("pricing_period")
+  startDate        DateTime      @map("start_date") @db.Date
+  /// Exclusive: the check-out day.
+  endDate          DateTime      @map("end_date") @db.Date
+  quantity         Int
+  guests           Int?          @db.SmallInt
+  cleaningSelected Boolean       @default(false) @map("cleaning_selected")
+
+  // Frozen financial summary — integer kobo.
+  currency            Currency @default(NGN)
+  stayKobo            BigInt   @map("stay_kobo")
+  cleaningKobo        BigInt   @map("cleaning_kobo")
+  cautionKobo         BigInt   @map("caution_kobo")
+  serviceFeeKobo      BigInt   @map("service_fee_kobo")
+  vatKobo             BigInt   @map("vat_kobo")
+  totalKobo           BigInt   @map("total_kobo")
+  agentCommissionKobo BigInt   @map("agent_commission_kobo")
+  agentPayoutKobo     BigInt   @map("agent_payout_kobo")
+  pricingConfigId     String   @map("pricing_config_id") @db.Uuid
+  /// Title, address, unit price, discount and cleaning terms at booking time.
+  propertySnapshot    Json     @map("property_snapshot")
+
+  /// Dates are held for an unpaid booking until this moment.
+  holdExpiresAt      DateTime?    @map("hold_expires_at") @db.Timestamptz(3)
+  confirmedAt        DateTime?    @map("confirmed_at") @db.Timestamptz(3)
+  completedAt        DateTime?    @map("completed_at") @db.Timestamptz(3)
+  expiredAt          DateTime?    @map("expired_at") @db.Timestamptz(3)
+  cancelledAt        DateTime?    @map("cancelled_at") @db.Timestamptz(3)
+  cancelledBy        CancelledBy? @map("cancelled_by")
+  cancellationReason String?      @map("cancellation_reason") @db.VarChar(500)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  customer      User              @relation("BookingCustomer", fields: [customerId], references: [id], onDelete: Restrict)
+  property      Property          @relation(fields: [propertyId], references: [id], onDelete: Restrict)
+  agentProfile  AgentProfile      @relation(fields: [agentProfileId], references: [id], onDelete: Restrict)
+  pricingConfig PricingConfig     @relation(fields: [pricingConfigId], references: [id], onDelete: Restrict)
+  lines         BookingLineItem[]
+  payments      Payment[]
+  refunds       Refund[]
+  ledgerEntries LedgerEntry[]
+  earning       AgentEarning?
+
+  @@index([customerId, createdAt(sort: Desc)])
+  @@index([agentProfileId, createdAt(sort: Desc)])
+  @@index([propertyId, status, startDate])
+  @@index([status, holdExpiresAt])
+  @@index([status, endDate])
+  @@index([createdAt])
+  @@map("bookings")
+}
+
+enum PriceLineKind {
+  RENT
+  LISTING_DISCOUNT
+  CLEANING_FEE
+  CAUTION_FEE
+  SERVICE_FEE
+  VAT
+}
+
+/// The customer-facing price breakdown, frozen at booking time. Lines sum to
+/// `Booking.totalKobo`; discounts are negative.
+model BookingLineItem {
+  id             String        @id @default(uuid(7)) @db.Uuid
+  bookingId      String        @map("booking_id") @db.Uuid
+  kind           PriceLineKind
+  label          String        @db.VarChar(120)
+  quantity       Int?
+  unitAmountKobo BigInt?       @map("unit_amount_kobo")
+  amountKobo     BigInt        @map("amount_kobo")
+  sortOrder      Int           @map("sort_order")
+
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@unique([bookingId, kind])
+  @@map("booking_line_items")
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  REFUNDED
+}
+
+enum PaymentProviderName {
+  PAYSTACK
+  TEST
+}
+
+/// One payment attempt. A booking may have several (retries); only a
+/// server-verified SUCCESS confirms it.
+model Payment {
+  id                    String              @id @default(uuid(7)) @db.Uuid
+  bookingId             String              @map("booking_id") @db.Uuid
+  provider              PaymentProviderName
+  /// Our reference, sent to the provider; unique across all attempts.
+  reference             String              @unique @db.VarChar(64)
+  amountKobo            BigInt              @map("amount_kobo")
+  currency              Currency            @default(NGN)
+  status                PaymentStatus       @default(PENDING)
+  providerTransactionId String?             @map("provider_transaction_id") @db.VarChar(64)
+  failureReason         String?             @map("failure_reason") @db.VarChar(300)
+  paidAt                DateTime?           @map("paid_at") @db.Timestamptz(3)
+  verifiedAt            DateTime?           @map("verified_at") @db.Timestamptz(3)
+  createdAt             DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt             DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  booking       Booking       @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  refund        Refund?
+  ledgerEntries LedgerEntry[]
+
+  @@index([bookingId, createdAt])
+  @@index([status, createdAt])
+  @@map("payments")
+}
+
+enum RefundStatus {
+  REQUESTED
+  PROCESSING
+  COMPLETED
+  REJECTED
+  FAILED
+}
+
+/// At most one refund per payment, so money can never be returned twice.
+model Refund {
+  id               String       @id @default(uuid(7)) @db.Uuid
+  bookingId        String       @map("booking_id") @db.Uuid
+  paymentId        String       @unique @map("payment_id") @db.Uuid
+  amountKobo       BigInt       @map("amount_kobo")
+  status           RefundStatus @default(REQUESTED)
+  reason           String       @db.VarChar(500)
+  requestedBy      CancelledBy  @map("requested_by")
+  reviewNote       String?      @map("review_note") @db.VarChar(500)
+  reviewedById     String?      @map("reviewed_by_id") @db.Uuid
+  reviewedAt       DateTime?    @map("reviewed_at") @db.Timestamptz(3)
+  providerRefundId String?      @map("provider_refund_id") @db.VarChar(64)
+  failureReason    String?      @map("failure_reason") @db.VarChar(300)
+  completedAt      DateTime?    @map("completed_at") @db.Timestamptz(3)
+  createdAt        DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  booking       Booking       @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  payment       Payment       @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  reviewedBy    User?         @relation("RefundReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  ledgerEntries LedgerEntry[]
+
+  @@index([status, createdAt])
+  @@index([bookingId])
+  @@map("refunds")
+}
+
+enum LedgerEntryType {
+  PLATFORM_SERVICE_FEE
+  PLATFORM_COMMISSION
+  VAT_PAYABLE
+  AGENT_RENT_PAYABLE
+  AGENT_CLEANING_PAYABLE
+  CAUTION_HELD
+  UNALLOCATED
+}
+
+/// Immutable allocation of captured money. A payment's entries sum to its
+/// amount; a refund writes the exact negations. `sourceKey` + `type` is
+/// unique, so replayed webhooks can never record anything twice.
+model LedgerEntry {
+  id         String          @id @default(uuid(7)) @db.Uuid
+  /// "payment:<id>" or "refund:<id>".
+  sourceKey  String          @map("source_key") @db.VarChar(80)
+  type       LedgerEntryType
+  amountKobo BigInt          @map("amount_kobo")
+  bookingId  String          @map("booking_id") @db.Uuid
+  paymentId  String?         @map("payment_id") @db.Uuid
+  refundId   String?         @map("refund_id") @db.Uuid
+  createdAt  DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  booking Booking  @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  payment Payment? @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  refund  Refund?  @relation(fields: [refundId], references: [id], onDelete: Restrict)
+
+  @@unique([sourceKey, type])
+  @@index([bookingId])
+  @@index([type, createdAt])
+  @@map("ledger_entries")
+}
+
+enum AgentEarningStatus {
+  PENDING
+  AVAILABLE
+  REVERSED
+}
+
+/// The agent's share of one paid booking. Becoming AVAILABLE makes it
+/// payable; withdrawals (a later phase) are the only way it is paid out.
+model AgentEarning {
+  id             String             @id @default(uuid(7)) @db.Uuid
+  bookingId      String             @unique @map("booking_id") @db.Uuid
+  agentProfileId String             @map("agent_profile_id") @db.Uuid
+  amountKobo     BigInt             @map("amount_kobo")
+  status         AgentEarningStatus @default(PENDING)
+  availableAt    DateTime?          @map("available_at") @db.Timestamptz(3)
+  reversedAt     DateTime?          @map("reversed_at") @db.Timestamptz(3)
+  createdAt      DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  booking      Booking      @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  agentProfile AgentProfile @relation(fields: [agentProfileId], references: [id], onDelete: Restrict)
+
+  @@index([agentProfileId, status])
+  @@map("agent_earnings")
+}

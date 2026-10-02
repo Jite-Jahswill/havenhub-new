@@ -1,0 +1,85 @@
+/*
+ * HavenHub design tokens.
+ *
+ * Components never reference raw colours — only these semantic tokens,
+ * exposed to Tailwind via `theme.css`. Dark mode is a separately tuned
+ * palette, not an inversion. The active theme is set on <html data-theme>.
+ *
+ * Brand: primary #D82227 · dark #222222 · white #FFFFFF · light gray #F5F5F5
+ */
+
+:root,
+[data-theme='light'] {
+  color-scheme: light;
+
+  --hh-primary: #d82227;
+  --hh-primary-hover: #b91c21;
+  --hh-primary-foreground: #ffffff;
+  --hh-primary-subtle: #fdecec;
+  /* Primary used as text (links etc.) — tuned for contrast per theme */
+  --hh-primary-text: #c41e23;
+
+  --hh-background: #ffffff;
+  --hh-surface: #ffffff;
+  --hh-surface-secondary: #f5f5f5;
+  --hh-surface-inverse: #222222;
+  --hh-footer: #222222;
+  --hh-footer-foreground: #ffffff;
+
+  --hh-text: #222222;
+  --hh-text-secondary: #5c5c5c;
+  --hh-text-muted: #767676;
+  --hh-text-inverse: #ffffff;
+
+  --hh-border: #e8e8e8;
+  --hh-border-strong: #d4d4d4;
+  --hh-ring: #d82227;
+
+  --hh-success: #1e7f4a;
+  --hh-success-subtle: #e8f5ee;
+  --hh-warning: #a15c00;
+  --hh-warning-subtle: #fdf3e3;
+  --hh-error: #b3261e;
+  --hh-error-subtle: #fbeceb;
+
+  --hh-shadow-sm: 0 1px 2px rgb(34 34 34 / 0.06);
+  --hh-shadow-md: 0 4px 16px rgb(34 34 34 / 0.08);
+  --hh-shadow-lg: 0 12px 40px rgb(34 34 34 / 0.12);
+}
+
+[data-theme='dark'] {
+  color-scheme: dark;
+
+  --hh-primary: #d82227;
+  --hh-primary-hover: #e8474c;
+  --hh-primary-foreground: #ffffff;
+  --hh-primary-subtle: #3a1416;
+  --hh-primary-text: #f2666a;
+
+  --hh-background: #121212;
+  --hh-surface: #1b1b1b;
+  --hh-surface-secondary: #242424;
+  --hh-surface-inverse: #f5f5f5;
+  --hh-footer: #0b0b0b;
+  --hh-footer-foreground: #f5f5f5;
+
+  --hh-text: #f5f5f5;
+  --hh-text-secondary: #b3b3b3;
+  --hh-text-muted: #8f8f8f;
+  --hh-text-inverse: #222222;
+
+  --hh-border: #2c2c2c;
+  --hh-border-strong: #3d3d3d;
+  --hh-ring: #f2666a;
+
+  --hh-success: #4cc283;
+  --hh-success-subtle: #12291d;
+  --hh-warning: #f0a942;
+  --hh-warning-subtle: #2e2210;
+  --hh-error: #f2726b;
+  --hh-error-subtle: #331716;
+
+  --hh-shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+  --hh-shadow-md: 0 4px 16px rgb(0 0 0 / 0.45);
+  --hh-shadow-lg: 0 12px 40px rgb(0 0 0 / 0.55);
+}

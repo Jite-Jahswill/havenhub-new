@@ -1,0 +1,45 @@
+/*
+ * Maps HavenHub tokens onto Tailwind v4 utilities, e.g. `bg-primary`,
+ * `text-text-secondary`, `border-border`, `shadow-card`.
+ * Import after `tailwindcss` in the consuming app's stylesheet.
+ */
+
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+@theme inline {
+  --color-primary: var(--hh-primary);
+  --color-primary-hover: var(--hh-primary-hover);
+  --color-primary-foreground: var(--hh-primary-foreground);
+  --color-primary-subtle: var(--hh-primary-subtle);
+  --color-primary-text: var(--hh-primary-text);
+
+  --color-background: var(--hh-background);
+  --color-surface: var(--hh-surface);
+  --color-surface-secondary: var(--hh-surface-secondary);
+  --color-surface-inverse: var(--hh-surface-inverse);
+  --color-footer: var(--hh-footer);
+  --color-footer-foreground: var(--hh-footer-foreground);
+
+  --color-text: var(--hh-text);
+  --color-text-secondary: var(--hh-text-secondary);
+  --color-text-muted: var(--hh-text-muted);
+  --color-text-inverse: var(--hh-text-inverse);
+
+  --color-border: var(--hh-border);
+  --color-border-strong: var(--hh-border-strong);
+  --color-ring: var(--hh-ring);
+
+  --color-success: var(--hh-success);
+  --color-success-subtle: var(--hh-success-subtle);
+  --color-warning: var(--hh-warning);
+  --color-warning-subtle: var(--hh-warning-subtle);
+  --color-error: var(--hh-error);
+  --color-error-subtle: var(--hh-error-subtle);
+
+  --shadow-card: var(--hh-shadow-sm);
+  --shadow-raised: var(--hh-shadow-md);
+  --shadow-overlay: var(--hh-shadow-lg);
+
+  --radius-card: 1rem;
+  --radius-control: 0.75rem;
+}

@@ -1,0 +1,13 @@
+packages:
+  - apps/*
+  - packages/*
+
+# Packages allowed to run install scripts (pnpm blocks them by default).
+onlyBuiltDependencies:
+  - '@nestjs/core'
+  - '@prisma/engines'
+  - '@swc/core'
+  - esbuild
+  - prisma
+  - sharp
+  - unrs-resolver

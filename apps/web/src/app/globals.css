@@ -1,0 +1,37 @@
+@import 'tailwindcss';
+@import '@havenhub/ui/styles.css';
+
+/* Let Tailwind detect classes used inside the shared UI package. */
+@source '../../../../packages/ui/src';
+
+@theme inline {
+  --font-sans: var(--font-jakarta), ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Price pins on the results map. Colours come from the design tokens. */
+.hh-map-pin {
+  border-radius: 9999px;
+  border: 1px solid var(--hh-border-strong);
+  background: var(--hh-surface);
+  color: var(--hh-text);
+  padding: 4px 10px;
+  font:
+    600 12px/1.2 var(--font-jakarta),
+    system-ui,
+    sans-serif;
+  box-shadow: var(--hh-shadow-md);
+  cursor: pointer;
+  transition:
+    transform 120ms ease,
+    background-color 120ms ease;
+}
+.hh-map-pin:hover,
+.hh-map-pin[data-active='true'] {
+  background: var(--hh-surface-inverse);
+  color: var(--hh-text-inverse);
+  transform: scale(1.08);
+}
+.hh-map-pin:focus-visible {
+  outline: 2px solid var(--hh-ring);
+  outline-offset: 2px;
+}
