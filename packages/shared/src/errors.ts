@@ -44,6 +44,14 @@ export const ErrorCode = {
   BOOKING_HOLD_EXPIRED: 'BOOKING_HOLD_EXPIRED',
   PAYMENT_VERIFICATION_FAILED: 'PAYMENT_VERIFICATION_FAILED',
   PAYMENT_PROVIDER_ERROR: 'PAYMENT_PROVIDER_ERROR',
+
+  // Subscriptions
+  /** The plan does not exist or is not offered. */
+  PLAN_NOT_AVAILABLE: 'PLAN_NOT_AVAILABLE',
+  /** A plan change is already paid for and waiting to start. */
+  SUBSCRIPTION_CHANGE_SCHEDULED: 'SUBSCRIPTION_CHANGE_SCHEDULED',
+  /** No default (free) plan is configured, so allowances cannot be resolved. */
+  PLANS_NOT_CONFIGURED: 'PLANS_NOT_CONFIGURED',
 } as const;
 
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];

@@ -1,8 +1,9 @@
 'use client';
 
-import { parseVideoUrl, type AgentPropertyView, type PlanLimitsView } from '@havenhub/shared';
+import { ErrorCode, parseVideoUrl, type AgentPropertyView } from '@havenhub/shared';
 import { Alert, Button, Card, CardBody, CardHeader, Field, Input, Spinner, cn } from '@havenhub/ui';
 import { ArrowLeft, ArrowRight, ImagePlus, Star, Trash2, X } from 'lucide-react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useRef, useState, type FormEvent } from 'react';
 
@@ -10,7 +11,8 @@ import { Photo } from '@/components/properties/photo';
 import { api, apiUpload } from '@/lib/api/client';
 import { formText } from '@/lib/form';
 
-type Limits = Pick<PlanLimitsView, 'maxImagesPerProperty' | 'maxVideosPerProperty'>;
+/** Plan allowances for display; null = unlimited. The API enforces them regardless. */
+type Limits = { images: number | null; videos: number | null };
 
 export function MediaManager({
   property,
@@ -24,18 +26,23 @@ export function MediaManager({
   const router = useRouter();
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ text: string; upgrade: boolean } | null>(null);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const base = `/agents/me/properties/${property.id}`;
   const images = property.images;
-  const remaining = limits.maxImagesPerProperty - images.length;
+  const remaining =
+    limits.images === null ? Number.POSITIVE_INFINITY : limits.images - images.length;
 
-  async function call(key: string, request: () => Promise<{ success: boolean; message?: string }>) {
+  async function call(
+    key: string,
+    request: () => Promise<{ success: boolean; message?: string; code?: string }>,
+  ) {
     setBusy(key);
     setError(null);
     const res = await request();
     setBusy(null);
-    if (!res.success) setError(res.message ?? 'Something went wrong.');
+    if (!res.success)
+      setError({ text: res.message ?? 'Something went wrong.', upgrade: isLimit(res.code) });
     router.refresh();
   }
 
@@ -47,7 +54,7 @@ export function MediaManager({
     for (const [index, file] of list.entries()) {
       const res = await apiUpload<AgentPropertyView>(`${base}/images`, file);
       if (!res.success) {
-        setError(`${file.name}: ${res.message}`);
+        setError({ text: `${file.name}: ${res.message}`, upgrade: isLimit(res.code) });
         break;
       }
       setProgress({ done: index + 1, total: list.length });
@@ -68,12 +75,15 @@ export function MediaManager({
     <Card id="media" className="scroll-mt-28">
       <CardHeader
         title="Photos & video"
-        description={`Up to ${limits.maxImagesPerProperty} photos (JPEG, PNG, WebP; max 10 MB each) and ${limits.maxVideosPerProperty} video link on your plan. Photo location data is removed automatically.`}
+        description={`${limits.images === null ? 'Unlimited' : `Up to ${limits.images}`} photos (JPEG, PNG, WebP; max 10 MB each) and ${limits.videos === null ? 'unlimited video links' : `${limits.videos} video ${limits.videos === 1 ? 'link' : 'links'}`} on your plan. Photo location data is removed automatically.`}
       />
       <CardBody className="flex flex-col gap-6">
         {error && (
           <Alert tone="error" className="flex items-start justify-between gap-3">
-            <span>{error}</span>
+            <span>
+              {error.text}
+              {error.upgrade && <UpgradeLink />}
+            </span>
             <button type="button" onClick={() => setError(null)} aria-label="Dismiss">
               <X aria-hidden className="size-4" />
             </button>
@@ -163,7 +173,7 @@ export function MediaManager({
                 ) : (
                   <>
                     <ImagePlus aria-hidden className="size-6" strokeWidth={1.6} />
-                    Add photos ({remaining} left)
+                    Add photos{Number.isFinite(remaining) ? ` (${remaining} left)` : ''}
                   </>
                 )}
               </button>
@@ -184,10 +194,16 @@ export function MediaManager({
             Add at least one photo before submitting for review.
           </p>
         )}
+        {!locked && remaining <= 0 && (
+          <p className="text-sm text-text-secondary">
+            You have used all {limits.images} photos your plan allows for this property.{' '}
+            <UpgradeLink />
+          </p>
+        )}
 
         <VideoSection
           property={property}
-          limit={limits.maxVideosPerProperty}
+          limit={limits.videos}
           locked={locked}
           onChange={() => router.refresh()}
         />
@@ -203,11 +219,12 @@ function VideoSection({
   onChange,
 }: {
   property: AgentPropertyView;
-  limit: number;
+  limit: number | null;
   locked: boolean;
   onChange: () => void;
 }) {
   const [error, setError] = useState<string | null>(null);
+  const [upgrade, setUpgrade] = useState(false);
   const [pending, setPending] = useState(false);
   const base = `/agents/me/properties/${property.id}/videos`;
 
@@ -222,6 +239,7 @@ function VideoSection({
     setPending(true);
     const res = await api('POST', base, { url });
     setPending(false);
+    setUpgrade(!res.success && isLimit(res.code));
     if (!res.success) setError(res.message);
     else {
       setError(null);
@@ -255,7 +273,17 @@ function VideoSection({
           )}
         </div>
       ))}
-      {!locked && property.videos.length < limit && (
+      {upgrade && (
+        <p className="text-sm text-text-secondary">
+          <UpgradeLink />
+        </p>
+      )}
+      {!locked && limit !== null && property.videos.length >= limit && (
+        <p className="text-sm text-text-secondary">
+          Your plan allows {limit} {limit === 1 ? 'video' : 'videos'} per property. <UpgradeLink />
+        </p>
+      )}
+      {!locked && (limit === null || property.videos.length < limit) && (
         <form onSubmit={add} noValidate className="flex flex-col gap-2 sm:flex-row sm:items-end">
           <Field label="YouTube or Vimeo link" error={error ?? undefined} className="flex-1">
             {(a) => <Input {...a} name="url" type="url" placeholder="https://youtu.be/…" />}
@@ -289,5 +317,18 @@ function IconButton({
     >
       {children}
     </button>
+  );
+}
+
+const isLimit = (code: string | undefined) => code === ErrorCode.PLAN_LIMIT_REACHED;
+
+function UpgradeLink() {
+  return (
+    <Link
+      href="/agent/subscription/plans"
+      className="ml-1 font-semibold whitespace-nowrap underline underline-offset-4"
+    >
+      View plans
+    </Link>
   );
 }

@@ -263,35 +263,37 @@ export class AgentsService {
     return this.onboarding(userId);
   }
 
+  /**
+   * Compact plan summary (kept for existing clients; the full view is
+   * `GET /agents/me/subscription`). Limits come from the plan in force.
+   */
   async planUsage(userId: string): Promise<AgentPlanUsageView> {
     const profile = await this.findOwn(userId);
-    const [limits, properties] = await Promise.all([
-      this.plans.limitsFor(profile.id),
-      this.prisma.property.count({
-        where: { agentProfileId: profile.id, status: { in: COUNTED_STATUSES } },
-      }),
-    ]);
+    const { plan, limits } = await this.plans.effectivePlan(profile.id);
+    const properties = await this.prisma.property.count({
+      where: { agentProfileId: profile.id, status: { in: COUNTED_STATUSES } },
+    });
     return {
-      planName: limits.planName,
-      isDefaultPlan: limits.isDefaultPlan,
+      planName: plan.name,
+      isDefaultPlan: plan.isDefault,
       usage: [
         {
           key: 'properties',
           label: 'Active properties',
           used: properties,
-          limit: limits.maxProperties,
+          limit: limits.PROPERTY_COUNT,
         },
         {
           key: 'images',
           label: 'Images per property',
           used: null,
-          limit: limits.maxImagesPerProperty,
+          limit: limits.IMAGES_PER_PROPERTY,
         },
         {
           key: 'videos',
           label: 'Videos per property',
           used: null,
-          limit: limits.maxVideosPerProperty,
+          limit: limits.VIDEOS_PER_PROPERTY,
         },
       ],
     };

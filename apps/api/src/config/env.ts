@@ -108,6 +108,8 @@ const envSchema = z
      * runs). Bounds how long a crashed instance can hold a job back.
      */
     SCHEDULED_JOB_LOCK_TTL_SECONDS: z.coerce.number().int().min(5).max(3600).default(120),
+    /** Interval of the subscription sweep (term expiry/start, reminders); 0 disables it (tests). */
+    SUBSCRIPTION_SWEEP_INTERVAL_SECONDS: z.coerce.number().int().min(0).max(86400).default(300),
   })
   .superRefine((env, ctx) => {
     if (env.STORAGE_DRIVER === 's3') {

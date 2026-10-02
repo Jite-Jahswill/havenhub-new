@@ -112,6 +112,25 @@ export class AgentPropertiesController {
     return ok(await this.properties.archive(auth.user.id, id, requestMeta(req)));
   }
 
+  @Post(':id/feature')
+  @HttpCode(HttpStatus.OK)
+  async feature(
+    @CurrentAuth() auth: AuthContext,
+    @Param('id', uuid) id: string,
+    @Req() req: Request,
+  ) {
+    return ok(await this.properties.feature(auth.user.id, id, requestMeta(req)));
+  }
+
+  @Delete(':id/feature')
+  async unfeature(
+    @CurrentAuth() auth: AuthContext,
+    @Param('id', uuid) id: string,
+    @Req() req: Request,
+  ) {
+    return ok(await this.properties.unfeature(auth.user.id, id, requestMeta(req)));
+  }
+
   @Post(':id/restore')
   @HttpCode(HttpStatus.OK)
   async restore(

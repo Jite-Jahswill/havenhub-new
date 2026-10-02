@@ -1,10 +1,12 @@
 import type {
   AgentEarningStatus,
+  AgentSubscriptionStatus,
   AgentVerificationStatus,
   BookingStatus,
   PaymentStatus,
   PropertyStatus,
   RefundStatus,
+  SubscriptionPlanStatus,
   UserStatus,
 } from '@havenhub/shared';
 import { Badge, type BadgeProps } from '@havenhub/ui';
@@ -13,8 +15,10 @@ import {
   BOOKING_STATUS_LABELS,
   EARNING_STATUS_LABELS,
   PAYMENT_STATUS_LABELS,
+  PLAN_STATUS_LABELS,
   PROPERTY_STATUS_LABELS,
   REFUND_STATUS_LABELS,
+  SUBSCRIPTION_STATUS_LABELS,
 } from '@/lib/labels';
 
 const VERIFICATION: Record<AgentVerificationStatus, { label: string; tone: BadgeProps['tone'] }> = {
@@ -100,4 +104,26 @@ const EARNING_TONES: Record<AgentEarningStatus, BadgeProps['tone']> = {
 
 export function EarningStatusBadge({ status }: { status: AgentEarningStatus }) {
   return <Badge tone={EARNING_TONES[status]}>{EARNING_STATUS_LABELS[status]}</Badge>;
+}
+
+const SUBSCRIPTION_TONES: Record<AgentSubscriptionStatus, BadgeProps['tone']> = {
+  PENDING: 'primary',
+  ACTIVE: 'success',
+  CANCELLED: 'neutral',
+  EXPIRED: 'neutral',
+  SUSPENDED: 'error',
+};
+
+export function SubscriptionStatusBadge({ status }: { status: AgentSubscriptionStatus }) {
+  return <Badge tone={SUBSCRIPTION_TONES[status]}>{SUBSCRIPTION_STATUS_LABELS[status]}</Badge>;
+}
+
+const PLAN_TONES: Record<SubscriptionPlanStatus, BadgeProps['tone']> = {
+  ACTIVE: 'success',
+  INACTIVE: 'warning',
+  ARCHIVED: 'neutral',
+};
+
+export function PlanStatusBadge({ status }: { status: SubscriptionPlanStatus }) {
+  return <Badge tone={PLAN_TONES[status]}>{PLAN_STATUS_LABELS[status]}</Badge>;
 }

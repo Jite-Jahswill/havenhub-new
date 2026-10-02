@@ -31,6 +31,10 @@ export const PERMISSIONS = {
   'payments.withdrawals': 'Review and process agent withdrawals',
   'payments.settings': 'Configure commission, VAT and platform fees',
 
+  'subscriptions.view': 'View agent subscriptions, subscription payments and metrics',
+  'subscriptions.manage': 'Cancel, suspend and reactivate agent subscriptions',
+  'subscriptions.plans': 'Create and edit subscription plans, prices and limits',
+
   'blog.create': 'Create blog posts',
   'blog.edit': 'Edit blog posts',
   'blog.publish': 'Publish and unpublish blog posts',

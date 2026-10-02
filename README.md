@@ -184,6 +184,53 @@ One session system serves both client types; only the token transport differs.
 | Agent    | `GET agents/me/bookings`, `agents/me/bookings/:id`, `agents/me/earnings` · `POST agents/me/bookings/:id/cancel`                                                                                              |
 | Admin    | `GET admin/bookings`, `admin/bookings/:id` · `POST admin/bookings/:id/cancel` · `GET admin/payments`, `admin/refunds` · `POST admin/refunds/:id/review` · `GET/POST admin/finance/pricing`                   |
 
+## Agent subscriptions (Phase 4)
+
+- **Plans** (`subscription_plans`) are database records managed at `/admin/plans`: name, price per
+  interval (`MONTHLY` / `YEARLY`), tier rank, status (`ACTIVE` offered, `INACTIVE` hidden, `ARCHIVED`
+  retired) and selling points. Plans that were ever paid for cannot be deleted, only archived.
+- **Entitlements** (`subscription_plan_entitlements`, one row per plan and key): `PROPERTY_COUNT`,
+  `IMAGES_PER_PROPERTY`, `VIDEOS_PER_PROPERTY`, `FEATURED_PROPERTY_COUNT`, `STORAGE_MB`, plus
+  `EVENT_COUNT`, `TOUR_COUNT`, `CLEANING_SERVICE_COUNT`, `HOTEL_COUNT` for features not built yet
+  (configurable now; their modules call `PlanLimitsService.assertWithinAllowance`). `0` = not
+  included, `null` = unlimited. Limit changes apply to every subscriber immediately.
+- **Free plan:** exactly one default plan (price 0, no interval), created by `pnpm db:seed` with
+  1 property / 10 photos / 1 video per property and never overwritten afterwards. Agents without a
+  paid term are on it. No limit is hardcoded in application code.
+- **Terms** (`agent_subscriptions`): one row per paid term, never deleted (trigger) and with its plan
+  and price frozen. At most one `ACTIVE` term per agent (partial unique index). The plan in force is
+  computed from term dates on every request, so limits never wait for a background job.
+- **Billing rules** (`subscription-billing.ts`, shown to the agent before paying): first plan starts
+  now; same plan = renewal queued after the current term; higher rank = upgrade, starts now and ends
+  the current term (no proration, unused time is not credited); lower or equal rank = downgrade,
+  starts when the current term ends. No automatic renewal (an expiry reminder is emailed 3 days
+  before). Cancel at period end (undoable) or immediately (no refund).
+- **Downgrades and expiry never delete or hide anything.** Over-limit agents keep their listings
+  and media but cannot add more; featured slots beyond the new allowance are released.
+- **Enforcement** (`PlanLimitsService`): property create/restore, image upload (count + stored
+  bytes), video add and featuring check the plan in force inside a transaction after locking the
+  agent row (lock order: agent, then property), so concurrent requests cannot exceed a limit.
+  Errors are `403 PLAN_LIMIT_REACHED` with `details.entitlement`, `limit`, `used`, `planName`.
+- **Payments** use the same `PaymentProvider` abstraction as bookings, in `subscription_payments`
+  (reference `HHS-…`; amount, plan and reference frozen by trigger). The amount comes from the plan
+  record. A term is created only after server-side verification (reference, amount, currency) under a
+  row lock; redirects, webhooks and retries settle a payment exactly once. The Paystack webhook routes
+  `HHS-` references to subscriptions. Payments that complete late or in two tabs queue terms rather
+  than overlap.
+- **Sweep:** `SUBSCRIPTION_SWEEP_INTERVAL_SECONDS` (default 300) ends finished terms, starts queued
+  ones and sends reminders, under the same Redis leases as the booking sweep.
+- **Notifications** (email): activated/scheduled, payment failed, expiring, ended/cancelled/suspended,
+  plan limit reached (at most once a day per allowance).
+- **RBAC:** `subscriptions.view` (lists, detail, metrics), `subscriptions.manage` (cancel, suspend,
+  reactivate — reason required, audited), `subscriptions.plans` (create/edit plans and limits).
+  Finance Admin has all three; Admin has view + manage; Support Admin has view.
+
+| Area   | Routes (`/api/v1`)                                                                                                                                                                                                                                              |
+| ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Public | `GET subscriptions/plans`                                                                                                                                                                                                                                       |
+| Agent  | `GET agents/me/subscription`, `…/quote?planId`, `…/history`, `…/payments` · `POST …/checkout`, `…/payments/:reference/verify`, `…/cancel`, `…/resume` · `POST/DELETE agents/me/properties/:id/feature` · `GET/POST …/test-checkout/:reference` (test provider)  |
+| Admin  | `GET/POST admin/subscription-plans` · `GET/PATCH/DELETE admin/subscription-plans/:id` · `POST admin/subscription-plans/:id/status` · `GET admin/subscriptions`, `admin/subscriptions/stats`, `admin/subscriptions/:id` · `POST admin/subscriptions/:id/actions` |
+
 ## Prerequisites
 
 - **Node.js 24 LTS** (`nvm use` reads `.nvmrc`)
@@ -245,27 +292,28 @@ running `pnpm services:up`, and update `DATABASE_URL` / `REDIS_URL` in `.env` to
 
 See `.env.example` for the full annotated list.
 
-| Variable                     | Used by     | Required | Description                                                              |
-| ---------------------------- | ----------- | -------- | ------------------------------------------------------------------------ |
-| `DATABASE_URL`               | API, Prisma | yes      | PostgreSQL connection string                                             |
-| `REDIS_URL`                  | API         | yes      | Redis (rate limiting; caching, queues and chat later)                    |
-| `FIELD_ENCRYPTION_KEY`       | API         | yes      | 32-byte base64 key encrypting NIN / account numbers                      |
-| `AUTH_SECRET`                | API         | yes      | 32-byte base64 key signing CSRF tokens                                   |
-| `WEB_APP_URL`                | API         | yes\*    | Web origin, for email links (\*defaults to `http://localhost:3000`)      |
-| `CORS_ORIGINS`               | API         | no       | Allowed browser origins                                                  |
-| `SMTP_HOST`, `SMTP_*`        | API         | prod     | SMTP delivery; required when `NODE_ENV=production`                       |
-| `REQUIRE_EMAIL_VERIFICATION` | API         | no       | Require a verified email to sign in (default `true`)                     |
-| `ACCESS_TOKEN_TTL_MINUTES`   | API         | no       | Default 15                                                               |
-| `REFRESH_TOKEN_TTL_DAYS`     | API         | no       | Default 30                                                               |
-| `TRUST_PROXY`                | API         | no       | Proxy hops for client IPs behind a load balancer                         |
-| `API_INTERNAL_URL`           | Web         | yes\*    | Where the web server reaches the API (\*default `http://localhost:4000`) |
-| `NEXT_PUBLIC_SITE_URL`       | Web         | yes\*    | Canonical site URL                                                       |
-| `NEXT_PUBLIC_MAPBOX_TOKEN`   | Web         | prod     | Mapbox public token for map tiles (OpenStreetMap is used in development) |
-| `STORAGE_DRIVER`             | API         | prod     | `local` (development only) or `s3`                                       |
-| `STORAGE_*`                  | API         | with s3  | Bucket, credentials, endpoint and public base URL                        |
-| `PAYMENT_PROVIDER`           | API         | prod     | `test` (development only, simulated) or `paystack`                       |
-| `PAYSTACK_SECRET_KEY`        | API         | paystack | Paystack secret key; also verifies webhook signatures                    |
-| `BOOKING_HOLD_MINUTES`       | API         | no       | How long unpaid bookings hold their dates (default 30)                   |
+| Variable                              | Used by     | Required | Description                                                              |
+| ------------------------------------- | ----------- | -------- | ------------------------------------------------------------------------ |
+| `DATABASE_URL`                        | API, Prisma | yes      | PostgreSQL connection string                                             |
+| `REDIS_URL`                           | API         | yes      | Redis (rate limiting; caching, queues and chat later)                    |
+| `FIELD_ENCRYPTION_KEY`                | API         | yes      | 32-byte base64 key encrypting NIN / account numbers                      |
+| `AUTH_SECRET`                         | API         | yes      | 32-byte base64 key signing CSRF tokens                                   |
+| `WEB_APP_URL`                         | API         | yes\*    | Web origin, for email links (\*defaults to `http://localhost:3000`)      |
+| `CORS_ORIGINS`                        | API         | no       | Allowed browser origins                                                  |
+| `SMTP_HOST`, `SMTP_*`                 | API         | prod     | SMTP delivery; required when `NODE_ENV=production`                       |
+| `REQUIRE_EMAIL_VERIFICATION`          | API         | no       | Require a verified email to sign in (default `true`)                     |
+| `ACCESS_TOKEN_TTL_MINUTES`            | API         | no       | Default 15                                                               |
+| `REFRESH_TOKEN_TTL_DAYS`              | API         | no       | Default 30                                                               |
+| `TRUST_PROXY`                         | API         | no       | Proxy hops for client IPs behind a load balancer                         |
+| `API_INTERNAL_URL`                    | Web         | yes\*    | Where the web server reaches the API (\*default `http://localhost:4000`) |
+| `NEXT_PUBLIC_SITE_URL`                | Web         | yes\*    | Canonical site URL                                                       |
+| `NEXT_PUBLIC_MAPBOX_TOKEN`            | Web         | prod     | Mapbox public token for map tiles (OpenStreetMap is used in development) |
+| `STORAGE_DRIVER`                      | API         | prod     | `local` (development only) or `s3`                                       |
+| `STORAGE_*`                           | API         | with s3  | Bucket, credentials, endpoint and public base URL                        |
+| `PAYMENT_PROVIDER`                    | API         | prod     | `test` (development only, simulated) or `paystack`                       |
+| `PAYSTACK_SECRET_KEY`                 | API         | paystack | Paystack secret key; also verifies webhook signatures                    |
+| `BOOKING_HOLD_MINUTES`                | API         | no       | How long unpaid bookings hold their dates (default 30)                   |
+| `SUBSCRIPTION_SWEEP_INTERVAL_SECONDS` | API         | no       | Subscription term/reminder sweep (default 300; 0 disables)               |
 
 Web variables live in `apps/web/.env.example`. **Never commit `.env` files.**
 
@@ -286,8 +334,9 @@ Web variables live in `apps/web/.env.example`. **Never commit `.env` files.**
 2. ~~Property marketplace: listings, moderation, media, amenities, search, map, details, favourites~~
 3. ~~Booking and payments foundation: availability, pricing engine, Paystack abstraction, ledger, refunds~~
    — still to schedule: discount codes and gifting, agent withdrawals, reviews tied to completed bookings
-4. Agent subscriptions ← _next_
-5. Communication: chat (Socket.IO), notifications, support
+4. ~~Agent subscriptions: plans, entitlements, limits, paid terms, admin management~~
+   — later: in-app notifications, automatic renewal (needs stored-card charging), subscription refunds
+5. Communication: chat (Socket.IO), notifications, support ← _next_
 6. Events, hotels, tours, vacation zones, cleaning
 7. CMS: homepage, blog, SEO, careers, help center, email marketing
 8. Advanced admin: RBAC management, analytics, moderation

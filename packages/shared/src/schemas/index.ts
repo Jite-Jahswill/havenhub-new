@@ -6,4 +6,5 @@ export * from './booking.js';
 export * from './fields.js';
 export * from './health.js';
 export * from './property.js';
+export * from './subscription.js';
 export * from './user.js';

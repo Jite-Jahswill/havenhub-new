@@ -110,6 +110,7 @@ describe('property search', () => {
         'city',
         'coverImage',
         'discountPercent',
+        'featured',
         'id',
         'latitude',
         'listingType',

@@ -65,6 +65,7 @@ model User {
   bookings           Booking[]           @relation("BookingCustomer")
   pricingConfigs     PricingConfig[]
   refundsReviewed    Refund[]            @relation("RefundReviewer")
+  plansCreated       SubscriptionPlan[]  @relation("SubscriptionPlanCreator")
 
   @@index([accountType, status])
   @@index([createdAt])
@@ -252,12 +253,14 @@ model AgentProfile {
   createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt             DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  user                 User           @relation("AgentProfileUser", fields: [userId], references: [id], onDelete: Cascade)
-  verificationReviewer User?          @relation("AgentProfileReviewer", fields: [verificationReviewerId], references: [id], onDelete: SetNull)
+  user                 User                  @relation("AgentProfileUser", fields: [userId], references: [id], onDelete: Cascade)
+  verificationReviewer User?                 @relation("AgentProfileReviewer", fields: [verificationReviewerId], references: [id], onDelete: SetNull)
   payoutAccount        PayoutAccount?
   properties           Property[]
   bookings             Booking[]
   earnings             AgentEarning[]
+  subscriptions        AgentSubscription[]
+  subscriptionPayments SubscriptionPayment[]
 
   @@index([verificationStatus, verificationSubmittedAt])
   @@map("agent_profiles")
@@ -408,6 +411,9 @@ model Property {
   reviewerId     String?   @map("reviewer_id") @db.Uuid
   publishedAt    DateTime? @map("published_at") @db.Timestamptz(3)
   archivedAt     DateTime? @map("archived_at") @db.Timestamptz(3)
+  /// Set while the agent features the listing; bounded by their plan's
+  /// FEATURED_PROPERTY_COUNT entitlement.
+  featuredAt     DateTime? @map("featured_at") @db.Timestamptz(3)
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
@@ -422,6 +428,7 @@ model Property {
   bookings     Booking[]
 
   @@index([agentProfileId, status])
+  @@index([agentProfileId, featuredAt])
   @@index([status, publishedAt(sort: Desc)])
   @@index([status, listingType, pricingPeriod])
   @@index([status, propertyType])
@@ -803,4 +810,166 @@ model AgentEarning {
 
   @@index([agentProfileId, status])
   @@map("agent_earnings")
+}
+
+// ─── Phase 4: agent subscriptions ────────────────────────────────────────────
+
+enum BillingInterval {
+  MONTHLY
+  YEARLY
+}
+
+enum SubscriptionPlanStatus {
+  /// Offered to agents.
+  ACTIVE
+  /// Not offered; existing subscribers keep it until their term ends.
+  INACTIVE
+  /// Retired. Kept for history; never offered again.
+  ARCHIVED
+}
+
+/// What a plan limits. A missing entitlement row means "not included" (0);
+/// a row with a null limit means unlimited.
+enum EntitlementKey {
+  PROPERTY_COUNT
+  IMAGES_PER_PROPERTY
+  VIDEOS_PER_PROPERTY
+  FEATURED_PROPERTY_COUNT
+  STORAGE_MB
+  EVENT_COUNT
+  TOUR_COUNT
+  CLEANING_SERVICE_COUNT
+  HOTEL_COUNT
+}
+
+enum AgentSubscriptionStatus {
+  /// Paid for; starts when the agent's current term ends.
+  PENDING
+  ACTIVE
+  /// Ended early (agent/admin cancellation, or replaced by an upgrade).
+  CANCELLED
+  /// Term ran out.
+  EXPIRED
+  /// Paused by an administrator; the agent falls back to the default plan.
+  SUSPENDED
+}
+
+enum SubscriptionChangeType {
+  NEW
+  RENEWAL
+  UPGRADE
+  DOWNGRADE
+}
+
+/// Admin-managed plan. Exactly one plan is the free default (price 0, no
+/// interval) that every agent without a paid term is on.
+model SubscriptionPlan {
+  id              String                 @id @default(uuid(7)) @db.Uuid
+  slug            String                 @unique @db.VarChar(60)
+  name            String                 @db.VarChar(60)
+  description     String?                @db.VarChar(500)
+  status          SubscriptionPlanStatus @default(ACTIVE)
+  isDefault       Boolean                @default(false) @map("is_default")
+  /// Price per billing interval, in kobo. 0 only for the default plan.
+  priceKobo       BigInt                 @default(0) @map("price_kobo")
+  currency        Currency               @default(NGN)
+  /// Null only for the default (free) plan.
+  billingInterval BillingInterval?       @map("billing_interval")
+  /// Tier order: a higher rank is an upgrade, lower or equal a downgrade.
+  rank            Int                    @default(0)
+  /// Short selling points shown on the comparison page.
+  features        String[]               @default([])
+  createdById     String?                @map("created_by_id") @db.Uuid
+  createdAt       DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime               @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  createdBy     User?                         @relation("SubscriptionPlanCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  entitlements  SubscriptionPlanEntitlement[]
+  subscriptions AgentSubscription[]
+  payments      SubscriptionPayment[]
+
+  @@index([status, rank])
+  @@map("subscription_plans")
+}
+
+model SubscriptionPlanEntitlement {
+  planId String         @map("plan_id") @db.Uuid
+  key    EntitlementKey
+  /// Null = unlimited.
+  limit  Int?
+
+  plan SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@id([planId, key])
+  @@map("subscription_plan_entitlements")
+}
+
+/// One paid term of one plan. Rows are history: they change status but are
+/// never deleted (enforced by trigger). At most one ACTIVE row per agent.
+model AgentSubscription {
+  id                 String                  @id @default(uuid(7)) @db.Uuid
+  agentProfileId     String                  @map("agent_profile_id") @db.Uuid
+  planId             String                  @map("plan_id") @db.Uuid
+  status             AgentSubscriptionStatus
+  changeType         SubscriptionChangeType  @map("change_type")
+  /// What the agent paid for this term (frozen; plan prices may change).
+  priceKobo          BigInt                  @map("price_kobo")
+  currency           Currency                @default(NGN)
+  billingInterval    BillingInterval         @map("billing_interval")
+  currentPeriodStart DateTime                @map("current_period_start") @db.Timestamptz(3)
+  currentPeriodEnd   DateTime                @map("current_period_end") @db.Timestamptz(3)
+  startedAt          DateTime?               @map("started_at") @db.Timestamptz(3)
+  /// The agent asked to stop at the end of the current period.
+  cancelAtPeriodEnd  Boolean                 @default(false) @map("cancel_at_period_end")
+  cancelledAt        DateTime?               @map("cancelled_at") @db.Timestamptz(3)
+  endedAt            DateTime?               @map("ended_at") @db.Timestamptz(3)
+  endReason          String?                 @map("end_reason") @db.VarChar(200)
+  suspendedAt        DateTime?               @map("suspended_at") @db.Timestamptz(3)
+  expiryReminderAt   DateTime?               @map("expiry_reminder_at") @db.Timestamptz(3)
+  createdAt          DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime                @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  agentProfile AgentProfile          @relation(fields: [agentProfileId], references: [id], onDelete: Restrict)
+  plan         SubscriptionPlan      @relation(fields: [planId], references: [id], onDelete: Restrict)
+  payments     SubscriptionPayment[]
+
+  @@index([agentProfileId, status])
+  @@index([status, currentPeriodEnd])
+  @@index([planId, status])
+  @@map("agent_subscriptions")
+}
+
+/// A payment attempt for a subscription term, through the same provider
+/// abstraction as bookings. Amount, plan and reference are frozen at
+/// checkout (trigger-enforced); the term is created only after the provider
+/// verifies the payment server-side.
+model SubscriptionPayment {
+  id                    String              @id @default(uuid(7)) @db.Uuid
+  agentProfileId        String              @map("agent_profile_id") @db.Uuid
+  planId                String              @map("plan_id") @db.Uuid
+  /// The term this payment bought; set when the payment is applied.
+  subscriptionId        String?             @map("subscription_id") @db.Uuid
+  provider              PaymentProviderName
+  /// "HHS-…", unique across all attempts.
+  reference             String              @unique @db.VarChar(64)
+  amountKobo            BigInt              @map("amount_kobo")
+  currency              Currency            @default(NGN)
+  billingInterval       BillingInterval     @map("billing_interval")
+  /// Plan name at checkout, for receipts if the plan is renamed later.
+  planName              String              @map("plan_name") @db.VarChar(60)
+  status                PaymentStatus       @default(PENDING)
+  providerTransactionId String?             @map("provider_transaction_id") @db.VarChar(64)
+  failureReason         String?             @map("failure_reason") @db.VarChar(300)
+  paidAt                DateTime?           @map("paid_at") @db.Timestamptz(3)
+  verifiedAt            DateTime?           @map("verified_at") @db.Timestamptz(3)
+  createdAt             DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt             DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  agentProfile AgentProfile       @relation(fields: [agentProfileId], references: [id], onDelete: Restrict)
+  plan         SubscriptionPlan   @relation(fields: [planId], references: [id], onDelete: Restrict)
+  subscription AgentSubscription? @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
+
+  @@index([agentProfileId, createdAt])
+  @@index([status, createdAt])
+  @@map("subscription_payments")
 }

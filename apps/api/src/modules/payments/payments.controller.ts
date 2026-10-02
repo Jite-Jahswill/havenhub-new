@@ -31,6 +31,7 @@ import {
 import { InvalidWebhookSignature } from '../finance/providers/payment-provider';
 import { PaymentProviders } from '../finance/providers/payment-providers.service';
 import { RefundsService } from '../finance/refunds.service';
+import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 import { PaymentsService } from './payments.service';
 
 const REFERENCE = /^HHP-[0-9a-f]{24}$/;
@@ -112,6 +113,7 @@ export class PaymentWebhooksController {
     private readonly providers: PaymentProviders,
     private readonly payments: PaymentsService,
     private readonly refunds: RefundsService,
+    private readonly subscriptions: SubscriptionsService,
   ) {}
 
   @Post('paystack')
@@ -133,7 +135,12 @@ export class PaymentWebhooksController {
     if (!event) return ok({ received: true });
 
     try {
-      if (event.type === 'charge.success') await this.payments.settle(event.reference);
+      // Subscription payments ("HHS-…") and booking payments ("HHP-…") share
+      // one provider account and webhook; the reference says which it is.
+      if (event.type === 'charge.success') {
+        if (event.reference.startsWith('HHS-')) await this.subscriptions.settle(event.reference);
+        else await this.payments.settle(event.reference);
+      }
       if (event.type === 'refund.processed')
         await this.refunds.completeByPaymentReference(event.reference);
       if (event.type === 'refund.failed') {

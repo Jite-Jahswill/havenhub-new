@@ -32,6 +32,7 @@ export function resolveTestEnv(): Record<string, string> {
     PAYMENT_PROVIDER: 'test',
     PAYSTACK_SECRET_KEY: 'sk_test_havenhub_webhook_secret',
     BOOKING_SWEEP_INTERVAL_SECONDS: '0',
+    SUBSCRIPTION_SWEEP_INTERVAL_SECONDS: '0',
   };
 }
 

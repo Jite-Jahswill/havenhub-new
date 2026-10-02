@@ -149,8 +149,13 @@ export const ADMIN_NAV: NavItem[] = [
     permission: 'payments.view',
     group: 'Finance',
   },
-  { href: '/admin/subscriptions', label: 'Subscriptions', icon: Package, phase: 4 },
-  { href: '/admin/plans', label: 'Plans', icon: CalendarDays, phase: 4 },
+  {
+    href: '/admin/subscriptions',
+    label: 'Subscriptions',
+    icon: Package,
+    permission: 'subscriptions.view',
+  },
+  { href: '/admin/plans', label: 'Plans', icon: CalendarDays, permission: 'subscriptions.view' },
   { href: '/admin/discounts', label: 'Discounts', icon: Percent, phase: 3 },
 
   {

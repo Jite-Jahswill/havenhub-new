@@ -1,4 +1,8 @@
 import type {
+  AgentSubscriptionStatus,
+  BillingInterval,
+  SubscriptionChangeType,
+  SubscriptionPlanStatus,
   AgentEarningStatus,
   AgentServiceType,
   BookingStatus,
@@ -172,4 +176,31 @@ export const CANCELLED_BY_LABELS: Record<CancelledBy, string> = {
   AGENT: 'the agent',
   ADMIN: 'HavenHub',
   SYSTEM: 'HavenHub',
+};
+
+// ── Subscriptions ──
+export const SUBSCRIPTION_STATUS_LABELS: Record<AgentSubscriptionStatus, string> = {
+  PENDING: 'Scheduled',
+  ACTIVE: 'Active',
+  CANCELLED: 'Cancelled',
+  EXPIRED: 'Expired',
+  SUSPENDED: 'Suspended',
+};
+
+export const PLAN_STATUS_LABELS: Record<SubscriptionPlanStatus, string> = {
+  ACTIVE: 'Offered',
+  INACTIVE: 'Not offered',
+  ARCHIVED: 'Archived',
+};
+
+export const INTERVAL_LABELS: Record<BillingInterval, string> = {
+  MONTHLY: 'Monthly',
+  YEARLY: 'Yearly',
+};
+
+export const CHANGE_TYPE_LABELS: Record<SubscriptionChangeType, string> = {
+  NEW: 'New subscription',
+  RENEWAL: 'Renewal',
+  UPGRADE: 'Upgrade',
+  DOWNGRADE: 'Downgrade',
 };

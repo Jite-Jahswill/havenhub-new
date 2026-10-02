@@ -1,12 +1,17 @@
 import type { AgentPlanUsageView } from '@havenhub/shared';
 import { Badge, Card, CardBody, CardHeader } from '@havenhub/ui';
+import Link from 'next/link';
 
 export function PlanCard({ plan }: { plan: AgentPlanUsageView }) {
   return (
     <Card>
       <CardHeader
         title="Your plan"
-        description="Paid plans with more listings arrive soon."
+        description={
+          <Link href="/agent/subscription" className="font-medium underline underline-offset-4">
+            {plan.isDefaultPlan ? 'Upgrade for more listings' : 'Manage subscription'}
+          </Link>
+        }
         action={<Badge tone="primary">{plan.planName}</Badge>}
       />
       <CardBody className="flex flex-col gap-5">

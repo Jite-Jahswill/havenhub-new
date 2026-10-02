@@ -38,6 +38,7 @@ export const PROPERTY_CARD_SELECT = {
   maxGuests: true,
   sizeSqm: true,
   publishedAt: true,
+  featuredAt: true,
   images: {
     where: { isPrimary: true },
     take: 1,

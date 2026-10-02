@@ -46,6 +46,107 @@ function render(input: LayoutInput): MailMessage {
 }
 
 export const MailTemplates = {
+  // ── Subscriptions (Phase 4) ──
+  subscriptionStarted: (
+    to: string,
+    name: string,
+    planName: string,
+    periodEnd: string,
+    url: string,
+    upgrade: boolean,
+  ) =>
+    render({
+      to,
+      subject: upgrade
+        ? `You're now on HavenHub ${planName}`
+        : `Your HavenHub ${planName} plan is active`,
+      heading: `Welcome to ${planName}, ${name}`,
+      paragraphs: [
+        'Your payment was verified and your plan is active now.',
+        `This term runs until ${periodEnd}. Your new limits apply immediately.`,
+      ],
+      action: { label: 'View your subscription', url },
+    }),
+
+  subscriptionScheduled: (
+    to: string,
+    name: string,
+    planName: string,
+    startsOn: string,
+    url: string,
+  ) =>
+    render({
+      to,
+      subject: `Your HavenHub ${planName} plan is confirmed`,
+      heading: `Payment received, ${name}`,
+      paragraphs: [
+        `Your ${planName} plan is paid for and starts on ${startsOn}, when your current term ends.`,
+      ],
+      action: { label: 'View your subscription', url },
+    }),
+
+  subscriptionPaymentFailed: (to: string, name: string, planName: string, url: string) =>
+    render({
+      to,
+      subject: 'Your HavenHub subscription payment did not go through',
+      heading: `Payment unsuccessful, ${name}`,
+      paragraphs: [
+        `We could not complete your payment for the ${planName} plan, and you have not been charged by HavenHub.`,
+        'Your current plan is unchanged. You can try again at any time.',
+      ],
+      action: { label: 'Choose a plan', url },
+    }),
+
+  subscriptionExpiring: (to: string, name: string, planName: string, endsOn: string, url: string) =>
+    render({
+      to,
+      subject: `Your HavenHub ${planName} plan ends on ${endsOn}`,
+      heading: `Your plan ends soon, ${name}`,
+      paragraphs: [
+        `Your ${planName} term ends on ${endsOn}. Plans do not renew automatically.`,
+        'Renew before then to keep your limits. Your listings and data are never deleted if a plan ends.',
+      ],
+      action: { label: 'Renew your plan', url },
+    }),
+
+  subscriptionEnded: (
+    to: string,
+    name: string,
+    planName: string,
+    reason: string,
+    fallbackPlan: string,
+    url: string,
+  ) =>
+    render({
+      to,
+      subject: `Your HavenHub ${planName} plan has ended`,
+      heading: `Your ${planName} plan has ended, ${name}`,
+      paragraphs: [
+        reason,
+        `You are now on the ${fallbackPlan} plan. Nothing has been deleted: listings above your new limits stay as they are, but you cannot add more until you are within your plan or upgrade.`,
+      ],
+      action: { label: 'See plans', url },
+    }),
+
+  planLimitReached: (
+    to: string,
+    name: string,
+    planName: string,
+    allowance: string,
+    limit: number,
+    url: string,
+  ) =>
+    render({
+      to,
+      subject: 'You have reached a limit on your HavenHub plan',
+      heading: `You've reached a plan limit, ${name}`,
+      paragraphs: [
+        `Your ${planName} plan includes ${limit} for "${allowance}", and you have reached it.`,
+        'Upgrade your plan to add more.',
+      ],
+      action: { label: 'View plans', url },
+    }),
+
   verifyEmail: (to: string, name: string, url: string, hours: number) =>
     render({
       to,

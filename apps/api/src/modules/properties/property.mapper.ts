@@ -84,6 +84,7 @@ export function toPropertyCard(row: PropertyCardRow, urls: Urls): PropertyCard {
       displayName: agentDisplayName(row.agentProfile),
       verified: true,
     },
+    featured: row.featuredAt !== null,
     publishedAt: row.publishedAt!.toISOString(),
   };
 }
@@ -132,6 +133,7 @@ export function toAgentPropertyView(
     videos: row.videos.map(toVideoView),
     missingForSubmission: missingForSubmission(row, row.images.length),
     stats: { views, favorites: row._count.favorites },
+    featured: row.featuredAt !== null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -152,6 +154,7 @@ export function toAgentPropertyListItem(
     | 'city'
     | 'state'
     | 'updatedAt'
+    | 'featuredAt'
   > & { images: { thumbnailKey: string }[]; _count: { favorites: number } },
   views: number,
   urls: Urls,
@@ -171,6 +174,7 @@ export function toAgentPropertyListItem(
     state: row.state,
     coverImage: cover ? { thumbnailUrl: urls.url(cover.thumbnailKey) } : null,
     stats: { views, favorites: row._count.favorites },
+    featured: row.featuredAt !== null,
     updatedAt: row.updatedAt.toISOString(),
   };
 }

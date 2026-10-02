@@ -25,6 +25,7 @@ import { BookingStateService } from '../bookings/booking-state.service';
 import { LedgerService } from '../finance/ledger.service';
 import {
   PaymentProviderError,
+  verificationMismatch,
   type ProviderVerification,
 } from '../finance/providers/payment-provider';
 import { PaymentProviders } from '../finance/providers/payment-providers.service';
@@ -180,7 +181,7 @@ export class PaymentsService {
         await this.markFailed(tx, current, verification.message ?? 'Payment was not completed');
         return;
       }
-      const mismatch = mismatchOf(current, verification);
+      const mismatch = verificationMismatch(current, verification);
       if (mismatch) {
         // Money may have moved, but not as agreed: never confirm; flag for review.
         await this.markFailed(
@@ -323,15 +324,6 @@ export class PaymentsService {
   private assertTestCheckout() {
     if (!this.providers.testProviderEnabled) throw Errors.notFound('Page');
   }
-}
-
-function mismatchOf(payment: Payment, v: ProviderVerification): string | null {
-  if (v.reference !== payment.reference) return 'reference';
-  if (v.amountKobo !== payment.amountKobo)
-    return `amount (expected ${payment.amountKobo}, got ${v.amountKobo})`;
-  if (v.currency !== payment.currency)
-    return `currency (expected ${payment.currency}, got ${v.currency})`;
-  return null;
 }
 
 const providerUnavailable = () =>

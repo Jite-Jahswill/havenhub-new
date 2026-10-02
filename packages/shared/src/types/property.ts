@@ -73,6 +73,8 @@ export interface PropertyCard {
   sizeSqm: number | null;
   coverImage: { url: string; thumbnailUrl: string; altText: string | null } | null;
   agent: { id: string; displayName: string; verified: true };
+  /** Featured by its agent (within their plan's featured allowance). */
+  featured: boolean;
   publishedAt: string;
 }
 
@@ -149,6 +151,8 @@ export interface AgentPropertyView {
   /** Fields still needed before the property can be submitted for review. */
   missingForSubmission: string[];
   stats: { views: number; favorites: number };
+  /** Featured (counts against the plan's featured allowance). */
+  featured: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -167,6 +171,7 @@ export interface AgentPropertyListItem {
   state: string | null;
   coverImage: { thumbnailUrl: string } | null;
   stats: { views: number; favorites: number };
+  featured: boolean;
   updatedAt: string;
 }
 
@@ -197,12 +202,4 @@ export interface AdminPropertyDetail extends AgentPropertyView {
   };
   amenities: AmenityView[];
   reviewedAt: string | null;
-}
-
-export interface PlanLimitsView {
-  planName: string;
-  isDefaultPlan: boolean;
-  maxProperties: number;
-  maxImagesPerProperty: number;
-  maxVideosPerProperty: number;
 }

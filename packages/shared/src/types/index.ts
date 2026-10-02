@@ -177,3 +177,4 @@ export type { IdDocumentType };
 
 export * from './booking.js';
 export * from './property.js';
+export * from './subscription.js';

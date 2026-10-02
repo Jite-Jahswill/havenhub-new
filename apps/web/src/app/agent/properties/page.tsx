@@ -32,7 +32,9 @@ export default async function AgentPropertiesPage() {
         }
         action={
           atLimit ? (
-            <span className="text-sm text-text-secondary">Archive a listing to add another.</span>
+            <Link href="/agent/subscription/plans" className={buttonClasses()}>
+              Upgrade to add more
+            </Link>
           ) : (
             <Link href="/agent/properties/new" className={buttonClasses()}>
               <Plus aria-hidden className="size-4" /> Add property

@@ -25,21 +25,27 @@ export const SYSTEM_ROLES: SystemRoleDefinition[] = [
     key: 'admin',
     name: 'Admin',
     description:
-      'Day-to-day platform administration without role, settings or commission/VAT management.',
+      'Day-to-day platform administration without role, settings, commission/VAT or plan pricing management.',
     permissions: PERMISSION_KEYS.filter(
-      (p) => !['roles.manage', 'settings.manage', 'payments.settings'].includes(p),
+      (p) =>
+        !['roles.manage', 'settings.manage', 'payments.settings', 'subscriptions.plans'].includes(
+          p,
+        ),
     ),
   },
   {
     key: 'finance_admin',
     name: 'Finance Admin',
-    description: 'Payments, refunds and agent withdrawals.',
+    description: 'Payments, refunds, agent withdrawals and subscription plans.',
     permissions: [
       'bookings.view',
       'payments.view',
       'payments.refund',
       'payments.withdrawals',
       'payments.settings',
+      'subscriptions.view',
+      'subscriptions.manage',
+      'subscriptions.plans',
       'users.view',
       'agents.view',
       'audit.view',
@@ -65,7 +71,14 @@ export const SYSTEM_ROLES: SystemRoleDefinition[] = [
     key: 'support_admin',
     name: 'Support Admin',
     description: 'Customer and agent support.',
-    permissions: ['users.view', 'users.update', 'users.block', 'agents.view', 'bookings.view'],
+    permissions: [
+      'users.view',
+      'users.update',
+      'users.block',
+      'agents.view',
+      'bookings.view',
+      'subscriptions.view',
+    ],
   },
   {
     key: 'content_manager',

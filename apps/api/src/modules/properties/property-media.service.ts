@@ -55,7 +55,7 @@ export class PropertyMediaService {
 
     try {
       const property = await this.prisma.$transaction(async (tx) => {
-        await this.plans.assertCanAddImage(tx, agent.id, propertyId);
+        await this.plans.assertCanAddImage(tx, agent.id, propertyId, large.buffer.length);
         const current = await this.access.owned(agent.id, propertyId, tx);
         this.access.assertEditable(current.status);
         const isFirst = current.images.length === 0;

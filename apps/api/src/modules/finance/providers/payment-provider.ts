@@ -60,5 +60,21 @@ export type ProviderWebhookEvent =
 
 export class InvalidWebhookSignature extends Error {}
 
+/**
+ * Why a provider's verification does not match what we asked for, or null.
+ * Money that moved differently from what was agreed is never accepted.
+ */
+export function verificationMismatch(
+  expected: { reference: string; amountKobo: bigint; currency: string },
+  v: ProviderVerification,
+): string | null {
+  if (v.reference !== expected.reference) return 'reference';
+  if (v.amountKobo !== expected.amountKobo)
+    return `amount (expected ${expected.amountKobo}, got ${v.amountKobo})`;
+  if (v.currency !== expected.currency)
+    return `currency (expected ${expected.currency}, got ${v.currency})`;
+  return null;
+}
+
 /** A provider call that failed for reasons other than the payment itself. */
 export class PaymentProviderError extends Error {}

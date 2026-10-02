@@ -2,7 +2,7 @@ import { formatKobo, type TestCheckoutView } from '@havenhub/shared';
 import { Alert, Card, Container } from '@havenhub/ui';
 import { FlaskConical } from 'lucide-react';
 import type { Metadata } from 'next';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 
 import { TestCheckoutActions } from '@/components/bookings/test-checkout-actions';
 import { serverApi } from '@/lib/api/server';
@@ -19,6 +19,10 @@ export default async function TestCheckoutPage({
 }: PageProps<'/payments/test-checkout'>) {
   const sp = await searchParams;
   const reference = typeof sp.reference === 'string' ? sp.reference : '';
+  // The test provider has one checkout URL; agent subscription payments have their own page.
+  if (reference.startsWith('HHS-')) {
+    redirect(`/agent/subscription/test-checkout?reference=${encodeURIComponent(reference)}`);
+  }
   await requireUser(
     'CUSTOMER',
     `/payments/test-checkout?reference=${encodeURIComponent(reference)}`,

@@ -19,6 +19,7 @@ import { PaymentsModule } from './modules/payments/payments.module';
 import { PlansModule } from './modules/plans/plans.module';
 import { PropertiesModule } from './modules/properties/properties.module';
 import { RbacModule } from './modules/rbac/rbac.module';
+import { SubscriptionsModule } from './modules/subscriptions/subscriptions.module';
 import { UsersModule } from './modules/users/users.module';
 
 /**
@@ -46,6 +47,7 @@ import { UsersModule } from './modules/users/users.module';
     FinanceModule,
     BookingsModule,
     PaymentsModule,
+    SubscriptionsModule,
     HealthModule,
   ],
 })

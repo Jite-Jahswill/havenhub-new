@@ -29,6 +29,7 @@ import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { useState, type FormEvent, type ReactNode } from 'react';
 
+import { ApiErrorAlert } from '@/components/subscriptions/upgrade-prompt';
 import { api } from '@/lib/api/client';
 import { formText } from '@/lib/form';
 import { AMENITY_CATEGORY_LABELS, CLEANING_LABELS, PROPERTY_TYPE_LABELS } from '@/lib/labels';
@@ -546,9 +547,7 @@ export function PropertyForm({
 
       {!locked && (
         <div className="sticky bottom-0 z-10 -mx-4 flex flex-col gap-3 border-t border-border bg-background/95 px-4 py-4 backdrop-blur sm:mx-0 sm:rounded-card sm:border sm:px-6">
-          {error && error.code !== ErrorCode.VALIDATION_ERROR && (
-            <Alert tone="error">{error.message}</Alert>
-          )}
+          {error && error.code !== ErrorCode.VALIDATION_ERROR && <ApiErrorAlert error={error} />}
           {error?.code === ErrorCode.VALIDATION_ERROR && (
             <Alert tone="error">Please fix the highlighted fields.</Alert>
           )}

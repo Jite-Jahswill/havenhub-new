@@ -7,6 +7,7 @@ import { Client } from 'pg';
 import { PrismaClient } from '../../src/generated/prisma/client';
 import { seedDefaultAmenities } from '../../src/modules/amenities/default-amenities';
 import { syncRbac } from '../../src/modules/rbac/rbac-sync';
+import { seedDefaultPlan } from '../../src/modules/subscriptions/default-plan';
 import { resolveTestEnv } from './test-env';
 
 /** Creates (if needed), migrates and seeds the test database once per run. */
@@ -40,6 +41,7 @@ export default async function globalSetup(): Promise<void> {
   try {
     await syncRbac(prisma);
     await seedDefaultAmenities(prisma);
+    await seedDefaultPlan(prisma);
   } finally {
     await prisma.$disconnect();
   }

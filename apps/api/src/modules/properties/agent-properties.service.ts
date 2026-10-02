@@ -56,6 +56,7 @@ export class AgentPropertiesService {
         city: true,
         state: true,
         updatedAt: true,
+        featuredAt: true,
         images: { where: { isPrimary: true }, take: 1, select: { thumbnailKey: true } },
         _count: { select: { favorites: true } },
       },
@@ -243,7 +244,8 @@ export class AgentPropertiesService {
             'Suspended properties cannot be archived. Please contact support.',
           );
         }
-        return { status: PropertyStatus.ARCHIVED, archivedAt: new Date() };
+        // An archived listing never holds a featured slot.
+        return { status: PropertyStatus.ARCHIVED, archivedAt: new Date(), featuredAt: null };
       },
       'property.archived',
     );
@@ -268,6 +270,45 @@ export class AgentPropertiesService {
     );
   }
 
+  /**
+   * Features a published listing, within the plan's featured allowance
+   * (checked under the agent lock, so parallel requests cannot exceed it).
+   */
+  async feature(userId: string, propertyId: string, meta: RequestMeta): Promise<AgentPropertyView> {
+    const agent = await this.access.agentFor(userId);
+    this.access.assertCanManage(agent);
+    return this.transition(
+      userId,
+      agent,
+      propertyId,
+      meta,
+      async (current, tx) => {
+        if (current.featuredAt) return {};
+        if (current.status !== PropertyStatus.PUBLISHED)
+          throw invalidTransition('Only published properties can be featured.');
+        await this.plans.assertCanFeature(tx, agent.id);
+        return { featuredAt: new Date() };
+      },
+      'property.featured',
+    );
+  }
+
+  async unfeature(
+    userId: string,
+    propertyId: string,
+    meta: RequestMeta,
+  ): Promise<AgentPropertyView> {
+    const agent = await this.access.agentFor(userId);
+    return this.transition(
+      userId,
+      agent,
+      propertyId,
+      meta,
+      () => ({ featuredAt: null }),
+      'property.unfeatured',
+    );
+  }
+
   private async transition(
     userId: string,
     agent: AgentProfile,
@@ -277,6 +318,8 @@ export class AgentPropertiesService {
     action: string,
   ): Promise<AgentPropertyView> {
     const property = await this.prisma.$transaction(async (tx) => {
+      // Lock order everywhere: agent, then property (plan checks lock the agent).
+      await tx.$queryRaw`SELECT id FROM agent_profiles WHERE id = ${agent.id}::uuid FOR UPDATE`;
       await tx.$queryRaw`SELECT id FROM properties WHERE id = ${propertyId}::uuid AND agent_profile_id = ${agent.id}::uuid FOR UPDATE`;
       const current = await this.access.owned(agent.id, propertyId, tx);
       const data = await decide(current, tx);

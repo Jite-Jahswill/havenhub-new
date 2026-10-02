@@ -20,6 +20,7 @@ import { MemoryMailTransport } from '../../src/infrastructure/mail/transports/me
 import { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
 import { RedisService } from '../../src/infrastructure/redis/redis.service';
 import { PasswordService } from '../../src/modules/auth/password.service';
+import { seedDefaultPlan } from '../../src/modules/subscriptions/default-plan';
 import { setupApp } from '../../src/setup-app';
 
 export const WEB_ORIGIN = 'http://localhost:3000';
@@ -64,8 +65,9 @@ export async function createTestContext(overrides: Partial<Env> = {}): Promise<T
     env,
     reset: async () => {
       await prisma.$executeRawUnsafe(
-        'TRUNCATE users, sessions, verification_tokens, user_roles, agent_profiles, payout_accounts, audit_logs, properties, property_images, property_videos, property_amenities, property_favorites, property_view_daily, pricing_configs, bookings, booking_line_items, payments, refunds, ledger_entries, agent_earnings CASCADE',
+        'TRUNCATE users, sessions, verification_tokens, user_roles, agent_profiles, payout_accounts, audit_logs, properties, property_images, property_videos, property_amenities, property_favorites, property_view_daily, pricing_configs, bookings, booking_line_items, payments, refunds, ledger_entries, agent_earnings, subscription_plans, subscription_plan_entitlements, agent_subscriptions, subscription_payments CASCADE',
       );
+      await seedDefaultPlan(prisma);
       await redis.client.flushdb();
       mail.clear();
     },

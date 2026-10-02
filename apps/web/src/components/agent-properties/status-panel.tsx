@@ -29,7 +29,11 @@ export function StatusPanel({
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
-  const [error, setError] = useState<{ message: string; missing?: string[] } | null>(null);
+  const [error, setError] = useState<{
+    message: string;
+    code?: string;
+    missing?: string[];
+  } | null>(null);
 
   async function act(action: 'submit' | 'withdraw' | 'archive' | 'restore') {
     if (
@@ -44,6 +48,7 @@ export function StatusPanel({
     if (!res.success)
       setError({
         message: res.message,
+        code: res.code,
         missing: (res.details as { missing?: string[] } | undefined)?.missing,
       });
     router.refresh();
@@ -92,6 +97,11 @@ export function StatusPanel({
             {error.message}
             {error.missing &&
               ` Still needed: ${error.missing.map((m) => PROPERTY_FIELD_LABELS[m] ?? m).join(', ')}.`}
+            {error.code === 'PLAN_LIMIT_REACHED' && (
+              <Link href="/agent/subscription/plans" className="ml-1 font-semibold underline">
+                View plans
+              </Link>
+            )}
           </Alert>
         )}
 

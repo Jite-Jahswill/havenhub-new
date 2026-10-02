@@ -12,6 +12,11 @@ describe('enum parity between @havenhub/shared and Prisma', () => {
     ['Sex', shared.Sex, db.Sex],
     ['AgentServiceType', shared.AgentServiceType, db.AgentServiceType],
     ['IdDocumentType', shared.IdDocumentType, db.IdDocumentType],
+    ['BillingInterval', shared.BillingInterval, db.BillingInterval],
+    ['SubscriptionPlanStatus', shared.SubscriptionPlanStatus, db.SubscriptionPlanStatus],
+    ['AgentSubscriptionStatus', shared.AgentSubscriptionStatus, db.AgentSubscriptionStatus],
+    ['SubscriptionChangeType', shared.SubscriptionChangeType, db.SubscriptionChangeType],
+    ['EntitlementKey', shared.EntitlementKey, db.EntitlementKey],
   ])('%s', (_, sharedEnum, dbEnum) => {
     expect(Object.values(sharedEnum).sort()).toEqual(Object.values(dbEnum).sort());
   });
