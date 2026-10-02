@@ -50,7 +50,9 @@ export function RegisterForm({ variant }: { variant: 'customer' | 'agent' }) {
   }
 
   return (
-    <form onSubmit={onSubmit} noValidate className="flex flex-col gap-5">
+    // method="post": a native submission (before JavaScript loads) keeps the
+    // password in the request body — never in the URL or logs.
+    <form method="post" onSubmit={onSubmit} noValidate className="flex flex-col gap-5">
       {error && error.code !== ErrorCode.VALIDATION_ERROR && (
         <Alert tone="error">{error.message}</Alert>
       )}

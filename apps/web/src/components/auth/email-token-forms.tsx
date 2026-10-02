@@ -84,7 +84,9 @@ export function RequestEmailForm({
 
   if (done) return <Alert tone="success">{doneMessage}</Alert>;
   return (
-    <form onSubmit={onSubmit} noValidate className="flex flex-col gap-5">
+    // method="post": a native submission (before JavaScript loads) keeps the
+    // email address in the request body — never in the URL or logs.
+    <form method="post" onSubmit={onSubmit} noValidate className="flex flex-col gap-5">
       {error && error.code !== ErrorCode.VALIDATION_ERROR && (
         <Alert tone="error">{error.message}</Alert>
       )}
@@ -137,7 +139,9 @@ export function ResetPasswordForm({ token }: { token: string | undefined }) {
   }
   const tokenProblem = error && (error.code === ErrorCode.INVALID_TOKEN || fieldErrors.token);
   return (
-    <form onSubmit={onSubmit} noValidate className="flex flex-col gap-5">
+    // method="post": a native submission (before JavaScript loads) keeps the
+    // password in the request body — never in the URL or logs.
+    <form method="post" onSubmit={onSubmit} noValidate className="flex flex-col gap-5">
       {tokenProblem && (
         <Alert tone="error">
           This reset link is invalid or has expired.{' '}
