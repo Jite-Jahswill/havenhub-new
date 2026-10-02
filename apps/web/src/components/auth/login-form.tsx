@@ -34,7 +34,9 @@ export function LoginForm({ next }: { next?: string }) {
   }
 
   return (
-    <form onSubmit={onSubmit} noValidate className="flex flex-col gap-5">
+    // method="post": if the form is ever submitted natively (before JavaScript
+    // loads), credentials go in the request body — never in the URL or logs.
+    <form method="post" onSubmit={onSubmit} noValidate className="flex flex-col gap-5">
       {error && error.code !== ErrorCode.VALIDATION_ERROR && (
         <Alert tone={error.code === ErrorCode.EMAIL_NOT_VERIFIED ? 'warning' : 'error'}>
           {error.message}
