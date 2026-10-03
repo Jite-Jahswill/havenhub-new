@@ -39,4 +39,22 @@ describe('system roles', () => {
     expect(holders('careers.applications')).toEqual([SUPER_ADMIN_ROLE]);
     expect(holders('support.respond').sort()).toEqual([SUPER_ADMIN_ROLE, 'support_admin'].sort());
   });
+
+  it('map the Phase 8 permissions explicitly', () => {
+    const holders = (p: string) =>
+      SYSTEM_ROLES.filter((r) => (resolveRolePermissions(r) as string[]).includes(p))
+        .map((r) => r.key)
+        .sort();
+    // SMTP credentials and maintenance mode: Super Admin only (not the general Admin).
+    expect(holders('settings.smtp')).toEqual([SUPER_ADMIN_ROLE]);
+    expect(holders('settings.maintenance')).toEqual([SUPER_ADMIN_ROLE]);
+    expect(holders('settings.manage')).toEqual([SUPER_ADMIN_ROLE]);
+    expect(holders('analytics.financial')).toEqual(
+      ['admin', 'finance_admin', SUPER_ADMIN_ROLE].sort(),
+    );
+    expect(holders('analytics.view')).toEqual(
+      ['admin', 'finance_admin', 'operations_manager', SUPER_ADMIN_ROLE].sort(),
+    );
+    expect(holders('audit.view')).toEqual(['admin', 'finance_admin', SUPER_ADMIN_ROLE].sort());
+  });
 });

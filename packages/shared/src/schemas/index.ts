@@ -8,6 +8,7 @@ export * from './cms.js';
 export * from './experience.js';
 export * from './fields.js';
 export * from './health.js';
+export * from './platform.js';
 export * from './property.js';
 export * from './subscription.js';
 export * from './user.js';

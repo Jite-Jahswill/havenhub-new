@@ -16,6 +16,7 @@ import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import { StorageService } from '../../infrastructure/storage/storage.service';
 import { AuditService } from '../audit/audit.service';
 import { PlanLimitsService } from '../plans/plan-limits.service';
+import { ModerationPolicyService } from '../platform/moderation-policy.service';
 import { PropertyAccessService } from './property-access.service';
 import { AGENT_SUBMITTABLE, missingForSubmission } from './property-lifecycle';
 import { toAgentPropertyListItem, toAgentPropertyView } from './property.mapper';
@@ -36,6 +37,7 @@ export class AgentPropertiesService {
     private readonly plans: PlanLimitsService,
     private readonly audit: AuditService,
     private readonly storage: StorageService,
+    private readonly policy: ModerationPolicyService,
   ) {}
 
   async list(userId: string): Promise<AgentPropertyListItem[]> {
@@ -115,8 +117,9 @@ export class AgentPropertiesService {
   }
 
   /**
-   * Updates content. Editing a published listing sends it back to review, so
-   * nothing reaches the public without moderation.
+   * Updates content. While properties require review (the moderation
+   * policy), editing a published listing sends it back to review, so nothing
+   * reaches the public without moderation.
    */
   async update(
     userId: string,
@@ -140,7 +143,7 @@ export class AgentPropertiesService {
       if (input.title && input.title !== current.title && !current.publishedAt) {
         data.slug = propertySlug(input.title);
       }
-      if (wasPublished) {
+      if (wasPublished && (await this.policy.requiresReview('PROPERTY', tx))) {
         data.status = PropertyStatus.PENDING_REVIEW;
         data.submittedAt = new Date();
         data.moderationNote = null;
@@ -184,7 +187,7 @@ export class AgentPropertiesService {
       agent,
       propertyId,
       meta,
-      (current) => {
+      async (current, tx) => {
         if (!AGENT_SUBMITTABLE.includes(current.status))
           throw invalidTransition('This property cannot be submitted now.');
         const missing = missingForSubmission(current, current.images.length);
@@ -196,13 +199,22 @@ export class AgentPropertiesService {
             { missing },
           );
         }
-        return {
-          status: PropertyStatus.PENDING_REVIEW,
-          submittedAt: new Date(),
-          moderationNote: null,
-        };
+        const now = new Date();
+        if (!(await this.policy.requiresReview('PROPERTY', tx))) {
+          // Moderation policy: properties are published without admin review.
+          return {
+            status: PropertyStatus.PUBLISHED,
+            submittedAt: now,
+            moderationNote: null,
+            publishedAt: current.publishedAt ?? now,
+          };
+        }
+        return { status: PropertyStatus.PENDING_REVIEW, submittedAt: now, moderationNote: null };
       },
-      'property.submitted',
+      (updated) =>
+        updated.status === PropertyStatus.PUBLISHED
+          ? 'property.published_without_review'
+          : 'property.submitted',
     );
   }
 
@@ -315,7 +327,7 @@ export class AgentPropertiesService {
     propertyId: string,
     meta: RequestMeta,
     decide: (current: AgentPropertyRow, tx: Tx) => Columns | Promise<Columns>,
-    action: string,
+    action: string | ((updated: AgentPropertyRow) => string),
   ): Promise<AgentPropertyView> {
     const property = await this.prisma.$transaction(async (tx) => {
       // Lock order everywhere: agent, then property (plan checks lock the agent).
@@ -331,7 +343,7 @@ export class AgentPropertiesService {
       await this.audit.record(
         {
           actorId: userId,
-          action,
+          action: typeof action === 'string' ? action : action(updated),
           resourceType: 'property',
           resourceId: propertyId,
           before: { status: current.status },

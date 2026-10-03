@@ -58,6 +58,8 @@ export interface NavItem {
   description?: string;
   /** Admin items are hidden when the admin lacks this permission. The API enforces it regardless. */
   permission?: Permission;
+  /** Alternative to `permission`: shown when the admin holds any of these. */
+  anyPermission?: Permission[];
   /** Optional section heading shown above this item in the sidebar. */
   group?: string;
 }
@@ -85,20 +87,28 @@ export const AGENT_NAV: NavItem[] = [
   { href: '/agent/experiences', label: 'Experiences', icon: Ticket },
   { href: '/agent/messages', label: 'Messages', icon: MessageSquare, unreadBadge: true },
   { href: '/agent/earnings', label: 'Earnings', icon: Wallet },
-  {
-    href: '/agent/analytics',
-    label: 'Analytics',
-    icon: BarChart3,
-    phase: 8,
-    description: 'Views, bookings, conversion and revenue.',
-  },
+  { href: '/agent/analytics', label: 'Analytics', icon: BarChart3 },
   { href: '/agent/subscription', label: 'Subscription', icon: Package },
   { href: '/agent/profile', label: 'Profile', icon: User },
   { href: '/agent/settings', label: 'Settings', icon: Settings },
 ];
 
+/** Every permission that opens at least one card in the settings hub. */
+export const SETTINGS_PERMISSIONS: Permission[] = [
+  'settings.manage',
+  'settings.smtp',
+  'settings.maintenance',
+  'payments.settings',
+  'subscriptions.plans',
+  'content.site',
+  'seo.manage',
+  'careers.manage',
+  'help.manage',
+];
+
 export const ADMIN_NAV: NavItem[] = [
   { href: '/admin', label: 'Dashboard', icon: Gauge, permission: 'users.view' },
+  { href: '/admin/analytics', label: 'Analytics', icon: BarChart3, permission: 'analytics.view' },
 
   { href: '/admin/users', label: 'Users', icon: Users, permission: 'users.view', group: 'People' },
   { href: '/admin/agents', label: 'Agents', icon: UserCheck, permission: 'agents.view' },
@@ -207,17 +217,10 @@ export const ADMIN_NAV: NavItem[] = [
     href: '/admin/settings',
     label: 'Settings',
     icon: Settings,
-    phase: 8,
-    permission: 'settings.manage',
+    anyPermission: SETTINGS_PERMISSIONS,
   },
-  { href: '/admin/rbac', label: 'RBAC', icon: KeyRound, phase: 8, permission: 'roles.manage' },
-  {
-    href: '/admin/audit-logs',
-    label: 'Audit Logs',
-    icon: ShieldCheck,
-    phase: 8,
-    permission: 'audit.view',
-  },
+  { href: '/admin/rbac', label: 'Roles', icon: KeyRound, permission: 'roles.manage' },
+  { href: '/admin/audit-logs', label: 'Audit Logs', icon: ShieldCheck, permission: 'audit.view' },
 ];
 
 export const NAV_BY_TYPE: Record<AccountType, NavItem[]> = {
@@ -228,7 +231,9 @@ export const NAV_BY_TYPE: Record<AccountType, NavItem[]> = {
 
 export function visibleNav(user: AuthUser): NavItem[] {
   return NAV_BY_TYPE[user.accountType].filter(
-    (item) => !item.permission || user.permissions.includes(item.permission),
+    (item) =>
+      (!item.permission || user.permissions.includes(item.permission)) &&
+      (!item.anyPermission || item.anyPermission.some((p) => user.permissions.includes(p))),
   );
 }
 

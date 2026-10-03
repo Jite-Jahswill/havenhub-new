@@ -3,6 +3,7 @@ import type { Response } from 'express';
 
 import { Errors } from '../../common/errors/app.exception';
 import { Public } from '../../modules/auth/decorators/auth.decorators';
+import { MaintenanceExempt } from '../../modules/platform/maintenance';
 import { StorageService } from './storage.service';
 import { isPublicKey } from './storage.types';
 
@@ -11,6 +12,7 @@ import { isPublicKey } from './storage.types';
  * With S3, clients load files from the bucket/CDN and this route 404s.
  */
 @Public()
+@MaintenanceExempt()
 @Controller({ path: 'media', version: VERSION_NEUTRAL })
 export class MediaController {
   constructor(private readonly storage: StorageService) {}

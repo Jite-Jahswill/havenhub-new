@@ -1,4 +1,4 @@
-import type { AdminUserListItem, Paginated } from '@havenhub/shared';
+import type { AdminUserListItem, Paginated, RoleView } from '@havenhub/shared';
 import { Badge } from '@havenhub/ui';
 import type { Metadata } from 'next';
 
@@ -6,10 +6,11 @@ import { Filters } from '@/components/admin/filters';
 import { NoAccess } from '@/components/admin/no-access';
 import { Pagination } from '@/components/admin/pagination';
 import { EmptyRow, Table, Td, Th, Tr } from '@/components/admin/table';
+import { UserRolesAction } from '@/components/admin/platform/user-roles-action';
 import { UserStatusAction } from '@/components/admin/user-status-action';
 import { PageHeader } from '@/components/dashboard/dashboard-shell';
 import { UserStatusBadge } from '@/components/dashboard/status-badge';
-import { serverApi } from '@/lib/api/server';
+import { serverApi, serverApiData } from '@/lib/api/server';
 import { hasPermission, requireUser } from '@/lib/session';
 
 export const metadata: Metadata = { title: 'Users' };
@@ -30,7 +31,11 @@ export default async function AdminUsersPage({ searchParams }: PageProps<'/admin
   const query = new URLSearchParams(
     Object.entries(params).filter((e): e is [string, string] => Boolean(e[1])),
   );
-  const res = await serverApi<Paginated<AdminUserListItem>>(`/admin/users?${query}`);
+  const canManageRoles = hasPermission(user, 'roles.manage');
+  const [res, roles] = await Promise.all([
+    serverApi<Paginated<AdminUserListItem>>(`/admin/users?${query}`),
+    canManageRoles ? serverApiData<RoleView[]>('/admin/rbac/roles') : null,
+  ]);
   const canChangeStatus = hasPermission(user, 'users.block');
   const date = new Intl.DateTimeFormat('en-NG', { dateStyle: 'medium' });
 
@@ -80,6 +85,11 @@ export default async function AdminUsersPage({ searchParams }: PageProps<'/admin
                     <Badge>{item.accountType.toLowerCase()}</Badge>
                     {item.roles.length > 0 && (
                       <p className="mt-1 text-xs text-text-muted">{item.roles.join(', ')}</p>
+                    )}
+                    {roles && item.accountType === 'ADMIN' && item.id !== user.id && (
+                      <div className="mt-1 -ml-3.5">
+                        <UserRolesAction user={item} roles={roles} held={user.permissions} />
+                      </div>
                     )}
                   </Td>
                   <Td className="whitespace-nowrap text-text-secondary">

@@ -4,6 +4,7 @@ import { ErrorCode, ExperienceStatus, type ExperienceKind } from '@havenhub/shar
 import { AppException, Errors } from '../../common/errors/app.exception';
 import type { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
+import { ModerationPolicyService } from '../platform/moderation-policy.service';
 import { AGENT_EDITABLE } from './experience-lifecycle';
 import { AGENT_EXPERIENCE_INCLUDE, type AgentExperienceRow } from './experience.selects';
 
@@ -24,7 +25,15 @@ const A_KIND: Record<ExperienceKind, string> = {
  */
 @Injectable()
 export class ExperienceAccessService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly policy: ModerationPolicyService,
+  ) {}
+
+  /** Whether this kind of listing needs admin review before publication (moderation policy). */
+  requiresReview(kind: ExperienceKind, tx: Tx): Promise<boolean> {
+    return this.policy.requiresReview(kind, tx);
+  }
 
   async owned(
     agentProfileId: string,
@@ -74,9 +83,16 @@ export class ExperienceAccessService {
     }
   }
 
-  /** Changed public content on a live listing must be moderated again. */
-  async backToReviewIfPublished(tx: Tx, current: { id: string; status: string }) {
+  /**
+   * Changed public content on a live listing must be moderated again (unless
+   * the moderation policy publishes this kind without review).
+   */
+  async backToReviewIfPublished(
+    tx: Tx,
+    current: { id: string; status: string; kind: ExperienceKind },
+  ) {
     if (current.status !== ExperienceStatus.PUBLISHED) return false;
+    if (!(await this.policy.requiresReview(current.kind, tx))) return false;
     await tx.experience.update({
       where: { id: current.id },
       data: {

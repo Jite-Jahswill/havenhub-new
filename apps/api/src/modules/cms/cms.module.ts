@@ -53,5 +53,6 @@ import { TestimonialsService } from './testimonials.service';
     CampaignsService,
     CmsMaintenanceService,
   ],
+  exports: [SiteService],
 })
 export class CmsModule {}

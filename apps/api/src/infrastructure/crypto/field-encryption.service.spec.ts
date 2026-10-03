@@ -40,4 +40,15 @@ describe('FieldEncryptionService', () => {
     expect(maskLast4('8901', 10)).toBe('••••••8901');
     expect(maskLast4(null)).toBeNull();
   });
+
+  it('keeps purpose-bound secrets separate from each other and from field encryption', () => {
+    const smtp = service.forPurpose('smtp-password');
+    const other = service.forPurpose('other-secret');
+    const ciphertext = smtp.encrypt('hunter2-but-longer');
+    expect(ciphertext).not.toContain('hunter2');
+    expect(smtp.decrypt(ciphertext)).toBe('hunter2-but-longer');
+    expect(() => other.decrypt(ciphertext)).toThrow();
+    expect(() => service.decrypt(ciphertext)).toThrow();
+    expect(() => smtp.decrypt(service.encrypt('field'))).toThrow();
+  });
 });

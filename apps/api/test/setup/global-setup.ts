@@ -7,6 +7,7 @@ import { Client } from 'pg';
 import { PrismaClient } from '../../src/generated/prisma/client';
 import { seedDefaultAmenities } from '../../src/modules/amenities/default-amenities';
 import { seedCmsDefaults } from '../../src/modules/cms/default-cms';
+import { seedPlatformDefaults } from '../../src/modules/platform/default-platform';
 import { syncRbac } from '../../src/modules/rbac/rbac-sync';
 import { seedDefaultPlan } from '../../src/modules/subscriptions/default-plan';
 import { resolveTestEnv } from './test-env';
@@ -44,6 +45,7 @@ export default async function globalSetup(): Promise<void> {
     await seedDefaultAmenities(prisma);
     await seedDefaultPlan(prisma);
     await seedCmsDefaults(prisma);
+    await seedPlatformDefaults(prisma);
   } finally {
     await prisma.$disconnect();
   }

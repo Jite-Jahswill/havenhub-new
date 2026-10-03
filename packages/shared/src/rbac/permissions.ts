@@ -59,8 +59,12 @@ export const PERMISSIONS = {
   'support.respond': 'Answer support conversations from customers and agents',
 
   'seo.manage': 'Manage SEO settings',
-  'settings.manage': 'Manage platform settings',
-  'audit.view': 'View the audit log',
+  'settings.manage': 'Manage platform settings, including the moderation policy',
+  'settings.smtp': 'Configure the outgoing email (SMTP) server and send test emails',
+  'settings.maintenance': 'Switch maintenance mode on and off and edit its message',
+  'analytics.view': 'View platform analytics (users, listings, bookings)',
+  'analytics.financial': 'View financial analytics (revenue, refunds, commission, VAT)',
+  'audit.view': 'View the audit log, including changes, IP addresses and devices',
   'roles.manage': 'Create roles and assign them to administrators',
 } as const;
 

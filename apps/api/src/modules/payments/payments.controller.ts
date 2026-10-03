@@ -28,6 +28,7 @@ import {
   RequireVerifiedEmail,
   SkipCsrf,
 } from '../auth/decorators/auth.decorators';
+import { MaintenanceExempt } from '../platform/maintenance';
 import { InvalidWebhookSignature } from '../finance/providers/payment-provider';
 import { PaymentProviders } from '../finance/providers/payment-providers.service';
 import { RefundsService } from '../finance/refunds.service';
@@ -105,6 +106,8 @@ export class CustomerPaymentsController {
  */
 @Public()
 @SkipCsrf()
+// Payments confirmed during maintenance must still be recorded.
+@MaintenanceExempt()
 @Controller('payments/webhooks')
 export class PaymentWebhooksController {
   private readonly logger = new Logger(PaymentWebhooksController.name);

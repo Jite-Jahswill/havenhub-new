@@ -7,6 +7,7 @@ import type { AgentProfile, Prisma } from '../../generated/prisma/client';
 import { ImageProcessor } from '../../infrastructure/media/image-processor.service';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import { StorageService } from '../../infrastructure/storage/storage.service';
+import { ModerationPolicyService } from '../platform/moderation-policy.service';
 import { AuditService } from '../audit/audit.service';
 import { PlanLimitsService } from '../plans/plan-limits.service';
 import { AgentPropertiesService } from './agent-properties.service';
@@ -30,6 +31,7 @@ export class PropertyMediaService {
     private readonly storage: StorageService,
     private readonly audit: AuditService,
     private readonly properties: AgentPropertiesService,
+    private readonly policy: ModerationPolicyService,
   ) {}
 
   async addImage(
@@ -263,9 +265,13 @@ export class PropertyMediaService {
     return current;
   }
 
-  /** New media on a live listing must be moderated before the public sees it. */
+  /**
+   * New media on a live listing must be moderated before the public sees it
+   * (unless the moderation policy publishes properties without review).
+   */
   private async backToReviewIfPublished(tx: Tx, current: AgentPropertyRow): Promise<void> {
     if (current.status !== PropertyStatus.PUBLISHED) return;
+    if (!(await this.policy.requiresReview('PROPERTY', tx))) return;
     await tx.property.update({
       where: { id: current.id },
       data: {

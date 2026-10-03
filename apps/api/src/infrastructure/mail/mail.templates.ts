@@ -64,6 +64,16 @@ function render(input: LayoutInput): MailMessage {
 }
 
 export const MailTemplates = {
+  smtpTest: (to: string, source: string): MailMessage =>
+    render({
+      to,
+      subject: 'HavenHub SMTP test',
+      heading: 'Your SMTP settings work',
+      paragraphs: [
+        `This test email was sent through the ${source} SMTP settings at your request.`,
+        'No action is needed.',
+      ],
+    }),
   /** Phase 7: careers. No CV or personal details are repeated in the email. */
   applicationReceived: (to: string, name: string, jobTitle: string) =>
     render({

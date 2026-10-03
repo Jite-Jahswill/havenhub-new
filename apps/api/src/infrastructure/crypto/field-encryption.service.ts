@@ -21,9 +21,11 @@ const KEY_VERSION = 'v1';
 export class FieldEncryptionService {
   private readonly encryptionKey: Buffer;
   private readonly fingerprintKey: Buffer;
+  private readonly master: Buffer;
 
   constructor(@Inject(ENV) env: Pick<Env, 'FIELD_ENCRYPTION_KEY'>) {
     const master = Buffer.from(env.FIELD_ENCRYPTION_KEY, 'base64');
+    this.master = master;
     this.encryptionKey = Buffer.from(hkdfSync('sha256', master, '', 'havenhub:field-enc:v1', 32));
     this.fingerprintKey = Buffer.from(hkdfSync('sha256', master, '', 'havenhub:field-fp:v1', 32));
   }
@@ -51,10 +53,50 @@ export class FieldEncryptionService {
     ]).toString('utf8');
   }
 
+  /**
+   * An encrypter with its own HKDF sub-key for one kind of secret (e.g. the
+   * SMTP password), so a ciphertext of one kind can never be decrypted as
+   * another: the purpose is both the key-derivation label and the GCM
+   * associated data. Rotation of FIELD_ENCRYPTION_KEY is described in the README.
+   */
+  forPurpose(purpose: string): SecretCipher {
+    const key = Buffer.from(
+      hkdfSync('sha256', this.master, '', `havenhub:secret:${purpose}:v1`, 32),
+    );
+    const aad = Buffer.from(purpose, 'utf8');
+    return {
+      encrypt: (plaintext) => {
+        const iv = randomBytes(12);
+        const cipher = createCipheriv(ALGORITHM, key, iv).setAAD(aad);
+        const ciphertext = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
+        return [KEY_VERSION, iv, cipher.getAuthTag(), ciphertext]
+          .map((part) => (typeof part === 'string' ? part : part.toString('base64url')))
+          .join('.');
+      },
+      decrypt: (payload) => {
+        const [version, iv, tag, ciphertext] = payload.split('.');
+        if (version !== KEY_VERSION || !iv || !tag || !ciphertext) {
+          throw new Error('Unsupported ciphertext format');
+        }
+        const decipher = createDecipheriv(ALGORITHM, key, Buffer.from(iv, 'base64url')).setAAD(aad);
+        decipher.setAuthTag(Buffer.from(tag, 'base64url'));
+        return Buffer.concat([
+          decipher.update(Buffer.from(ciphertext, 'base64url')),
+          decipher.final(),
+        ]).toString('utf8');
+      },
+    };
+  }
+
   /** Deterministic keyed hash, for uniqueness checks without decrypting. */
   fingerprint(value: string): string {
     return createHmac('sha256', this.fingerprintKey).update(value).digest('hex');
   }
+}
+
+export interface SecretCipher {
+  encrypt(plaintext: string): string;
+  decrypt(payload: string): string;
 }
 
 /** "•••••••1234" — the only form in which sensitive numbers leave the API. */

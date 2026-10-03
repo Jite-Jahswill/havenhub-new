@@ -58,10 +58,8 @@ describe('loadEnv', () => {
     expect(loadEnv(valid).PAYMENT_PROVIDER).toBe('test');
   });
 
-  it('requires SMTP in production', () => {
-    expect(() => loadEnv({ ...valid, ...productionExtras, SMTP_HOST: undefined })).toThrow(
-      /SMTP_HOST/,
-    );
+  it('lets production start without SMTP_HOST (admin SMTP settings are checked at startup)', () => {
+    expect(() => loadEnv({ ...valid, ...productionExtras, SMTP_HOST: undefined })).not.toThrow();
   });
 
   it('refuses local disk storage in production', () => {

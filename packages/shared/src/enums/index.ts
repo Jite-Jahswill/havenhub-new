@@ -4,6 +4,7 @@ export * from './booking.js';
 export * from './chat.js';
 export * from './cms.js';
 export * from './experience.js';
+export * from './platform.js';
 export * from './property.js';
 export * from './subscription.js';
 export * from './theme.js';

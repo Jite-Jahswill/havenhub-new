@@ -37,6 +37,7 @@ import { AuthCookiesService } from './auth-cookies.service';
 import { AuthService } from './auth.service';
 import type { AuthContext } from './auth.types';
 import { CurrentAuth, OptionalAuth, Public, SkipCsrf } from './decorators/auth.decorators';
+import { MaintenanceExempt } from '../platform/maintenance';
 import type { IssuedSession } from './session.service';
 import { SessionService } from './session.service';
 
@@ -54,6 +55,8 @@ const GENERIC_EMAIL_MESSAGE = 'If an account exists for this email, we have sent
  *  - Token clients (Flutter, integrations): send `X-Auth-Mode: token` to
  *    receive tokens in the body, then use `Authorization: Bearer`.
  */
+// Sign-in and account flows stay available during maintenance.
+@MaintenanceExempt()
 @Controller('auth')
 export class AuthController {
   constructor(

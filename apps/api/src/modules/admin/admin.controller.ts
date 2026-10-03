@@ -1,13 +1,16 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseUUIDPipe,
   Patch,
+  Post,
   Put,
   Query,
   Req,
+  type PipeTransform,
 } from '@nestjs/common';
 import {
   AccountType,
@@ -17,11 +20,14 @@ import {
   adminSetUserRolesSchema,
   adminUpdateAgentVerificationSchema,
   adminUpdateUserStatusSchema,
-  paginationQuerySchema,
+  auditLogQuerySchema,
+  createRoleSchema,
+  updateRoleSchema,
 } from '@havenhub/shared';
 import type { Request } from 'express';
 import type { z } from 'zod';
 
+import { Errors } from '../../common/errors/app.exception';
 import { requestMeta } from '../../common/http/request-meta';
 import { ok } from '../../common/http/response';
 import { validate } from '../../common/pipes/zod-validation.pipe';
@@ -35,7 +41,16 @@ import {
   RequireVerifiedEmail,
 } from '../auth/decorators/auth.decorators';
 import { RbacService } from '../rbac/rbac.service';
+import { RolesService } from '../rbac/roles.service';
 import { UsersService } from '../users/users.service';
+
+/** Role keys are short slugs (system roles and generated custom_* keys); anything else is a 404. */
+const roleKeyPipe: PipeTransform<string, string> = {
+  transform: (value) => {
+    if (!/^[a-z][a-z0-9_]{1,59}$/.test(value)) throw Errors.notFound('Role');
+    return value;
+  },
+};
 
 /**
  * Administration API. Every route requires an ADMIN account AND the listed
@@ -49,6 +64,7 @@ export class AdminController {
     private readonly users: UsersService,
     private readonly agents: AgentsService,
     private readonly rbac: RbacService,
+    private readonly roles: RolesService,
     private readonly audit: AuditService,
   ) {}
 
@@ -93,16 +109,7 @@ export class AdminController {
     @Body(validate(adminSetUserRolesSchema)) body: z.output<typeof adminSetUserRolesSchema>,
     @Req() req: Request,
   ) {
-    const result = await this.rbac.setUserRoles(auth, id, body.roleKeys);
-    await this.audit.record({
-      actorId: auth.user.id,
-      action: 'user.roles.updated',
-      resourceType: 'user',
-      resourceId: id,
-      before: { roles: result.before },
-      after: { roles: result.after },
-      meta: requestMeta(req),
-    });
+    await this.rbac.setUserRoles(auth, id, body.roleKeys, requestMeta(req));
     return ok(await this.users.adminGet(id));
   }
 
@@ -135,7 +142,7 @@ export class AdminController {
     return ok(await this.agents.adminUpdateVerification(auth, id, body, requestMeta(req)));
   }
 
-  // ── RBAC (read-only in Phase 1) ──
+  // ── RBAC ──
 
   @Get('rbac/roles')
   @RequirePermissions('roles.manage')
@@ -149,13 +156,56 @@ export class AdminController {
     return ok(Object.entries(PERMISSIONS).map(([key, description]) => ({ key, description })));
   }
 
+  @Get('rbac/roles/:key')
+  @RequirePermissions('roles.manage')
+  async getRole(@Param('key', roleKeyPipe) key: string) {
+    return ok(await this.roles.get(key));
+  }
+
+  @Post('rbac/roles')
+  @RequirePermissions('roles.manage')
+  async createRole(
+    @CurrentAuth() auth: AuthContext,
+    @Body(validate(createRoleSchema)) body: z.output<typeof createRoleSchema>,
+    @Req() req: Request,
+  ) {
+    return ok(await this.roles.create(auth, body, requestMeta(req)));
+  }
+
+  @Patch('rbac/roles/:key')
+  @RequirePermissions('roles.manage')
+  async updateRole(
+    @CurrentAuth() auth: AuthContext,
+    @Param('key', roleKeyPipe) key: string,
+    @Body(validate(updateRoleSchema)) body: z.output<typeof updateRoleSchema>,
+    @Req() req: Request,
+  ) {
+    return ok(await this.roles.update(auth, key, body, requestMeta(req)));
+  }
+
+  @Delete('rbac/roles/:key')
+  @RequirePermissions('roles.manage')
+  async deleteRole(
+    @CurrentAuth() auth: AuthContext,
+    @Param('key', roleKeyPipe) key: string,
+    @Req() req: Request,
+  ) {
+    return ok(await this.roles.remove(auth, key, requestMeta(req)));
+  }
+
   // ── Audit log ──
 
   @Get('audit-logs')
   @RequirePermissions('audit.view')
   async auditLogs(
-    @Query(validate(paginationQuerySchema)) query: z.output<typeof paginationQuerySchema>,
+    @Query(validate(auditLogQuerySchema)) query: z.output<typeof auditLogQuerySchema>,
   ) {
-    return ok(await this.audit.list(query.page, query.pageSize));
+    return ok(await this.audit.list(query));
+  }
+
+  @Get('audit-logs/:id')
+  @RequirePermissions('audit.view')
+  async auditLog(@Param('id', new ParseUUIDPipe()) id: string) {
+    return ok(await this.audit.get(id));
   }
 }

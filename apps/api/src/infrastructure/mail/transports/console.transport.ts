@@ -5,7 +5,7 @@ import type { MailMessage, MailTransport } from '../mail.types';
 /**
  * Development fallback when SMTP is not configured: prints the email
  * (including verification links) to the API log. Never used in production —
- * env validation requires SMTP there.
+ * startup requires SMTP there (admin settings or SMTP_* variables).
  */
 export class ConsoleMailTransport implements MailTransport {
   readonly name = 'console';

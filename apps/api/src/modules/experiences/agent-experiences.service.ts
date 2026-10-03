@@ -184,7 +184,7 @@ export class AgentExperiencesService {
       if (input.title && input.title !== current.title && !current.publishedAt) {
         data.slug = propertySlug(input.title);
       }
-      if (wasPublished) {
+      if (wasPublished && (await this.access.requiresReview(current.kind, tx))) {
         data.status = ExperienceStatus.PENDING_REVIEW;
         data.submittedAt = new Date();
         data.moderationNote = null;
@@ -232,7 +232,7 @@ export class AgentExperiencesService {
       agent,
       id,
       meta,
-      (current) => {
+      async (current, tx) => {
         if (!AGENT_SUBMITTABLE.includes(current.status))
           throw invalidTransition('This listing cannot be submitted now.');
         const missing = missingForSubmission(submissionFacts(current));
@@ -244,13 +244,22 @@ export class AgentExperiencesService {
             { missing },
           );
         }
-        return {
-          status: ExperienceStatus.PENDING_REVIEW,
-          submittedAt: new Date(),
-          moderationNote: null,
-        };
+        const now = new Date();
+        if (!(await this.access.requiresReview(current.kind, tx))) {
+          // Moderation policy: this kind is published without admin review.
+          return {
+            status: ExperienceStatus.PUBLISHED,
+            submittedAt: now,
+            moderationNote: null,
+            publishedAt: current.publishedAt ?? now,
+          };
+        }
+        return { status: ExperienceStatus.PENDING_REVIEW, submittedAt: now, moderationNote: null };
       },
-      'experience.submitted',
+      (updated) =>
+        updated.status === ExperienceStatus.PUBLISHED
+          ? 'experience.published_without_review'
+          : 'experience.submitted',
     );
   }
 
@@ -406,7 +415,7 @@ export class AgentExperiencesService {
     id: string,
     meta: RequestMeta,
     decide: (current: AgentExperienceRow, tx: Tx) => Columns | Promise<Columns>,
-    action: string,
+    action: string | ((updated: AgentExperienceRow) => string),
   ): Promise<AgentExperienceView> {
     const row = await this.prisma.$transaction(async (tx) => {
       await this.access.lock(tx, agent.id, id);
@@ -420,7 +429,7 @@ export class AgentExperiencesService {
       await this.audit.record(
         {
           actorId: userId,
-          action,
+          action: typeof action === 'string' ? action : action(updated),
           resourceType: 'experience',
           resourceId: id,
           before: { status: current.status },

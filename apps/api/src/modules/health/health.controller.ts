@@ -3,6 +3,7 @@ import type { ApiSuccess, HealthCheck } from '@havenhub/shared';
 import type { Response } from 'express';
 
 import { Public } from '../auth/decorators/auth.decorators';
+import { MaintenanceExempt } from '../platform/maintenance';
 import { HealthService } from './health.service';
 
 /**
@@ -11,6 +12,7 @@ import { HealthService } from './health.service';
  *                           responds 503 when any dependency is down.
  */
 @Public()
+@MaintenanceExempt()
 @Controller({ path: 'health', version: VERSION_NEUTRAL })
 export class HealthController {
   constructor(private readonly health: HealthService) {}

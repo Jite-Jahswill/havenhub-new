@@ -282,6 +282,56 @@ One session system serves both client types; only the token transport differs.
 | Customer / agent | `GET/POST conversations` · `GET conversations/unread`, `conversations/:id` · `POST conversations/:id/read`, `…/archive` · `GET/POST conversations/:id/messages` · `POST conversations/:id/attachments` · `GET conversations/:id/attachments/:attachmentId` · `PATCH/DELETE messages/:id` · `PUT/DELETE messages/:id/reaction` · `POST realtime/ticket` |
 | Admin            | `GET admin/conversations`, `admin/conversations/:id`, `admin/conversations/:id/attachments/:attachmentId` · `POST admin/conversations/:id/status`, `admin/messages/:id/remove`                                                                                                                                                                         |
 
+## Advanced admin (Phase 8)
+
+- **Roles:** the nine built-in roles live in code (`system-roles.ts`), are re-synced by `pnpm db:seed`
+  and cannot be edited. Admins with `roles.manage` create custom roles from permissions they hold
+  themselves, and assign roles from the Users page. Nobody edits a role they hold or changes their
+  own roles; a role still assigned to anyone cannot be deleted; the last active Super Admin cannot be
+  demoted. Changes lock the affected rows and are audited in the same transaction.
+- **Audit log:** append-only in the database (a trigger rejects UPDATE/DELETE; the only allowed change
+  is `actor_id → NULL` when the acting user is deleted). `audit.view` lists with filters (actor,
+  action or `prefix.`, resource, Nigerian dates) and shows before/after, IP and device per entry.
+  Entries are kept indefinitely.
+- **Analytics:** live, read-only queries (no rollups), Nigerian calendar dates, integer kobo.
+  `analytics.view` covers people, listings and bookings; money needs `analytics.financial`. Revenue is
+  the gross value of successful booking payments on their payment date, before refunds; refunds,
+  commission, service fees, VAT and subscription revenue are separate. Active users is an
+  approximation from the session data kept (each session's sign-in and most recent use, not a
+  per-request history): a session used before and after the range but not during it still counts. Features that do not exist yet (ticket sales, withdrawals, reviews, property
+  sales) report "not available". Agents see only their own figures at `/agent/analytics`.
+- **Moderation policy:** per listing type (properties, events, tours, hotels, cleaning), whether
+  publication needs admin review (default: yes, everywhere). With review off, a verified agent's
+  submission — and later edits — publish immediately (`*.published_without_review` in the audit log).
+  Changes apply to the next submission; existing listings keep their state.
+- **Maintenance mode** (`settings.maintenance`): non-admin API requests get `503` + `Retry-After`
+  (code `MAINTENANCE_MODE`), and the web proxy serves a branded 503 page (CMS logo and contact
+  details). Always available: administrators, `/auth/*`, health checks, payment webhooks,
+  `/platform/status`, `/site`, media, background jobs. The switch is cached in Redis and rewritten
+  on every change, so all instances flip at once.
+- **SMTP** (`settings.smtp`, Super Admin only by default): admin-managed settings override the
+  `SMTP_*` variables; with neither, development prints email to the log and production refuses to
+  start. One resolver (`MailTransportResolver`) decides for all email: database → environment → none.
+  Only encrypted connections (TLS or STARTTLS) on mail ports 25/465/587/2525. Hosts are resolved and
+  every address must be public (loopback, private, link-local and reserved ranges are refused when
+  saving and again before each send, connecting to the checked address). The password is write-only:
+  AES-256-GCM under an HKDF sub-key of `FIELD_ENCRYPTION_KEY` (purpose `smtp-password`), never
+  returned, logged or audited. Test emails go only to the signed-in admin and are rate-limited and
+  audited. Changes propagate to every instance through a Redis token.
+- **Rotating `FIELD_ENCRYPTION_KEY`:** encrypted values (NIN, account numbers, the SMTP password)
+  cannot be read with a new key. Before switching keys, note that the SMTP password will need to be
+  entered again: after deploying the new key, open Settings → Outgoing email and save the password
+  (until then, sending through the database settings fails with "Enter it again", and the log says
+  so; the environment SMTP is not used silently). NIN and account numbers need a re-encryption step
+  before the key changes (not automated).
+
+| Area      | Routes (`/api/v1`)                                                                                                                                                          |
+| --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Roles     | `GET admin/rbac/roles`, `admin/rbac/roles/:key`, `admin/rbac/permissions` · `POST admin/rbac/roles` · `PATCH/DELETE admin/rbac/roles/:key` · `PUT admin/users/:id/roles`    |
+| Audit     | `GET admin/audit-logs` (filters), `admin/audit-logs/:id`                                                                                                                    |
+| Analytics | `GET admin/analytics/overview`, `admin/analytics/financial`, `agents/me/analytics` (`?from&to`)                                                                             |
+| Settings  | `GET/PATCH admin/settings/maintenance`, `admin/settings/moderation` · `GET/PUT/DELETE admin/settings/smtp` · `POST admin/settings/smtp/test` · public `GET platform/status` |
+
 ## Prerequisites
 
 - **Node.js 24 LTS** (`nvm use` reads `.nvmrc`)
@@ -351,7 +401,7 @@ See `.env.example` for the full annotated list.
 | `AUTH_SECRET`                         | API         | yes      | 32-byte base64 key signing CSRF tokens                                           |
 | `WEB_APP_URL`                         | API         | yes\*    | Web origin, for email links (\*defaults to `http://localhost:3000`)              |
 | `CORS_ORIGINS`                        | API         | no       | Allowed browser origins                                                          |
-| `SMTP_HOST`, `SMTP_*`                 | API         | prod     | SMTP delivery; required when `NODE_ENV=production`                               |
+| `SMTP_HOST`, `SMTP_*`                 | API         | prod\*   | SMTP delivery (\*or admin-managed SMTP settings); one is required in production  |
 | `REQUIRE_EMAIL_VERIFICATION`          | API         | no       | Require a verified email to sign in (default `true`)                             |
 | `ACCESS_TOKEN_TTL_MINUTES`            | API         | no       | Default 15                                                                       |
 | `REFRESH_TOKEN_TTL_DAYS`              | API         | no       | Default 30                                                                       |

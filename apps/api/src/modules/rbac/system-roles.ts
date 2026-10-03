@@ -25,12 +25,15 @@ export const SYSTEM_ROLES: SystemRoleDefinition[] = [
     key: 'admin',
     name: 'Admin',
     description:
-      'Day-to-day platform administration without role, settings, commission/VAT, plan pricing, private conversation, support or job-applicant access.',
+      'Day-to-day platform administration without role, settings (including SMTP and maintenance mode), commission/VAT, plan pricing, private conversation, support or job-applicant access.',
     permissions: PERMISSION_KEYS.filter(
       (p) =>
         ![
           'roles.manage',
           'settings.manage',
+          // Outgoing-email credentials and taking the site offline are Super Admin only by default.
+          'settings.smtp',
+          'settings.maintenance',
           'payments.settings',
           'subscriptions.plans',
           // Reading private conversations is limited to support roles.
@@ -45,8 +48,11 @@ export const SYSTEM_ROLES: SystemRoleDefinition[] = [
   {
     key: 'finance_admin',
     name: 'Finance Admin',
-    description: 'Payments, refunds, agent withdrawals and subscription plans.',
+    description:
+      'Payments, refunds, agent withdrawals, subscription plans and financial analytics.',
     permissions: [
+      'analytics.view',
+      'analytics.financial',
       'bookings.view',
       'payments.view',
       'payments.refund',
@@ -136,8 +142,9 @@ export const SYSTEM_ROLES: SystemRoleDefinition[] = [
   {
     key: 'operations_manager',
     name: 'Operations Manager',
-    description: 'Agent verification and listing operations.',
+    description: 'Agent verification, listing operations and platform analytics.',
     permissions: [
+      'analytics.view',
       'users.view',
       'agents.view',
       'agents.verify',

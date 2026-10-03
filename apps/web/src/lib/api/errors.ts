@@ -16,6 +16,10 @@ export function fieldErrors(error: ApiError | null | undefined): Record<string, 
   return result;
 }
 
+/** The first validation issue's message (for pages without form fields), else the error message. */
+export const firstIssue = (error: ApiError): string =>
+  Object.values(fieldErrors(error))[0] ?? error.message;
+
 export const networkError: ApiError = {
   success: false,
   code: 'NETWORK_ERROR',

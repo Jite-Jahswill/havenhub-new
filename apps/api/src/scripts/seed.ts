@@ -7,6 +7,7 @@
  */
 import { seedDefaultAmenities } from '../modules/amenities/default-amenities';
 import { seedCmsDefaults } from '../modules/cms/default-cms';
+import { seedPlatformDefaults } from '../modules/platform/default-platform';
 import { syncRbac } from '../modules/rbac/rbac-sync';
 import { seedDefaultPlan } from '../modules/subscriptions/default-plan';
 import { scriptPrisma } from './script-context';
@@ -26,6 +27,10 @@ async function main(): Promise<void> {
     );
     const cms = await seedCmsDefaults(prisma);
     console.log(`CMS: ${cms.created} default row(s) added (existing content untouched).`);
+    const platform = await seedPlatformDefaults(prisma);
+    console.log(
+      `Platform settings: ${platform.created ? 'defaults created' : 'already present (untouched)'}.`,
+    );
   } finally {
     await prisma.$disconnect();
   }

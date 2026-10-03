@@ -53,33 +53,35 @@ model User {
   createdAt       DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt       DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  sessions             Session[]
-  verificationTokens   VerificationToken[]
-  roles                UserRole[]                @relation("UserRoles")
-  rolesAssigned        UserRole[]                @relation("UserRolesAssignedBy")
-  agentProfile         AgentProfile?             @relation("AgentProfileUser")
-  agentsReviewed       AgentProfile[]            @relation("AgentProfileReviewer")
-  auditLogs            AuditLog[]
-  propertiesReviewed   Property[]                @relation("PropertyReviewer")
-  favorites            PropertyFavorite[]
-  bookings             Booking[]                 @relation("BookingCustomer")
-  pricingConfigs       PricingConfig[]
-  refundsReviewed      Refund[]                  @relation("RefundReviewer")
-  plansCreated         SubscriptionPlan[]        @relation("SubscriptionPlanCreator")
-  conversations        ConversationParticipant[]
-  messagesSent         Message[]                 @relation("MessageSender")
-  messagesDeleted      Message[]                 @relation("MessageDeleter")
-  conversationsClosed  Conversation[]            @relation("ConversationCloser")
-  attachmentsUploaded  MessageAttachment[]
-  experiencesReviewed  Experience[]              @relation("ExperienceReviewer")
-  vacationZonesCreated VacationZone[]
-  cmsMediaUploaded     CmsMedia[]                @relation("CmsMediaUploader")
-  pagesUpdated         Page[]                    @relation("PageUpdater")
-  blogPostsAuthored    BlogPost[]                @relation("BlogPostAuthor")
-  campaignsCreated     EmailCampaign[]           @relation("CampaignCreator")
-  applicationsReviewed JobApplication[]          @relation("ApplicationReviewer")
-  siteSettingsUpdated  SiteSettings[]            @relation("SiteSettingsUpdater")
-  messageReactions     MessageReaction[]
+  sessions                Session[]
+  verificationTokens      VerificationToken[]
+  roles                   UserRole[]                @relation("UserRoles")
+  rolesAssigned           UserRole[]                @relation("UserRolesAssignedBy")
+  agentProfile            AgentProfile?             @relation("AgentProfileUser")
+  agentsReviewed          AgentProfile[]            @relation("AgentProfileReviewer")
+  auditLogs               AuditLog[]
+  propertiesReviewed      Property[]                @relation("PropertyReviewer")
+  favorites               PropertyFavorite[]
+  bookings                Booking[]                 @relation("BookingCustomer")
+  pricingConfigs          PricingConfig[]
+  refundsReviewed         Refund[]                  @relation("RefundReviewer")
+  plansCreated            SubscriptionPlan[]        @relation("SubscriptionPlanCreator")
+  conversations           ConversationParticipant[]
+  messagesSent            Message[]                 @relation("MessageSender")
+  messagesDeleted         Message[]                 @relation("MessageDeleter")
+  conversationsClosed     Conversation[]            @relation("ConversationCloser")
+  attachmentsUploaded     MessageAttachment[]
+  experiencesReviewed     Experience[]              @relation("ExperienceReviewer")
+  vacationZonesCreated    VacationZone[]
+  cmsMediaUploaded        CmsMedia[]                @relation("CmsMediaUploader")
+  pagesUpdated            Page[]                    @relation("PageUpdater")
+  blogPostsAuthored       BlogPost[]                @relation("BlogPostAuthor")
+  campaignsCreated        EmailCampaign[]           @relation("CampaignCreator")
+  applicationsReviewed    JobApplication[]          @relation("ApplicationReviewer")
+  siteSettingsUpdated     SiteSettings[]            @relation("SiteSettingsUpdater")
+  smtpSettingsUpdated     SmtpSettings[]            @relation("SmtpSettingsUpdater")
+  platformSettingsUpdated PlatformSettings[]        @relation("PlatformSettingsUpdater")
+  messageReactions        MessageReaction[]
 
   @@index([accountType, status])
   @@index([createdAt])
@@ -2011,4 +2013,57 @@ model EmailCampaignDelivery {
   @@unique([campaignId, subscriberId])
   @@index([campaignId, status])
   @@map("email_campaign_deliveries")
+}
+
+// ─── Platform configuration (Phase 8) ────────────────────────────────────────
+
+enum SmtpSecurity {
+  /// Implicit TLS (usually port 465).
+  TLS
+  /// STARTTLS required (usually port 587).
+  STARTTLS
+}
+
+/// Admin-managed outgoing email server (one row, id = 1). When present it
+/// overrides the SMTP_* environment variables. The password is stored only
+/// as AES-256-GCM ciphertext under a key derived from FIELD_ENCRYPTION_KEY.
+model SmtpSettings {
+  id                 Int          @id @default(1)
+  host               String       @db.VarChar(253)
+  port               Int
+  security           SmtpSecurity
+  username           String?      @db.VarChar(254)
+  passwordCiphertext String?      @map("password_ciphertext") @db.VarChar(1024)
+  fromEmail          String       @map("from_email") @db.VarChar(254)
+  fromName           String       @map("from_name") @db.VarChar(100)
+  /// Bumped on every change; API instances rebuild their transport when it moves.
+  version            Int          @default(1)
+  updatedById        String?      @map("updated_by_id") @db.Uuid
+  createdAt          DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  updatedBy User? @relation("SmtpSettingsUpdater", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@map("smtp_settings")
+}
+
+/// Maintenance mode and the moderation policy (one row, id = 1).
+model PlatformSettings {
+  id                    Int       @id @default(1)
+  maintenanceEnabled    Boolean   @default(false) @map("maintenance_enabled")
+  maintenanceMessage    String?   @map("maintenance_message") @db.VarChar(500)
+  maintenanceReturnText String?   @map("maintenance_return_text") @db.VarChar(200)
+  maintenanceUpdatedAt  DateTime? @map("maintenance_updated_at") @db.Timestamptz(3)
+  /// true = admin review is required before a listing of this type is published.
+  reviewProperties      Boolean   @default(true) @map("review_properties")
+  reviewEvents          Boolean   @default(true) @map("review_events")
+  reviewTours           Boolean   @default(true) @map("review_tours")
+  reviewHotels          Boolean   @default(true) @map("review_hotels")
+  reviewCleaning        Boolean   @default(true) @map("review_cleaning")
+  updatedById           String?   @map("updated_by_id") @db.Uuid
+  updatedAt             DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  updatedBy User? @relation("PlatformSettingsUpdater", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@map("platform_settings")
 }

@@ -26,6 +26,7 @@ import { ok } from '../../common/http/response';
 import { validate } from '../../common/pipes/zod-validation.pipe';
 import { RateLimit } from '../../common/rate-limit/rate-limit.decorator';
 import { Public, SkipCsrf } from '../auth/decorators/auth.decorators';
+import { MaintenanceExempt } from '../platform/maintenance';
 import { BlogService } from './blog.service';
 import { CareersService } from './careers.service';
 import { CvUpload } from './cms-upload.decorators';
@@ -62,6 +63,8 @@ export class PublicCmsController {
     private readonly newsletter: NewsletterService,
   ) {}
 
+  /** Branding only; the maintenance page and admin pages render with it. */
+  @MaintenanceExempt()
   @Get('site')
   async siteView() {
     return ok(await this.site.publicSite());

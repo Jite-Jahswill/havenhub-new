@@ -160,13 +160,8 @@ const envSchema = z
         message: 'The simulated test provider cannot take payments in production; use paystack',
       });
     }
-    if (env.NODE_ENV === 'production' && !env.SMTP_HOST) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['SMTP_HOST'],
-        message: 'SMTP must be configured in production so verification emails are delivered',
-      });
-    }
+    // SMTP in production may also come from the admin settings, so it is
+    // checked at startup by MailModule rather than here.
   });
 
 type ParsedEnv = z.infer<typeof envSchema>;

@@ -1,15 +1,74 @@
-import { AUTH_COOKIES, CSRF_HEADER } from '@havenhub/shared';
+import {
+  AUTH_COOKIES,
+  CSRF_HEADER,
+  type ApiResponse,
+  type PlatformStatusView,
+} from '@havenhub/shared';
 import { NextResponse, type NextRequest } from 'next/server';
+
+import { maintenancePage } from './lib/maintenance-page';
 
 const API_URL = (process.env.API_INTERNAL_URL ?? 'http://localhost:4000').replace(/\/$/, '');
 
 /**
+ * Pages that stay available in maintenance mode: the admin panel, sign-in
+ * and account recovery, the system status page and on-demand revalidation.
+ * (The API applies the same rule on its side and is the real authority.)
+ */
+const MAINTENANCE_OPEN = [
+  '/admin',
+  '/login',
+  '/register',
+  '/check-email',
+  '/forgot-password',
+  '/reset-password',
+  '/verify-email',
+  '/status',
+  '/internal',
+];
+
+const isOpen = (path: string) =>
+  MAINTENANCE_OPEN.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
+
+/** Reads the switch from the API on every page request (no client input, no stale cache). */
+async function maintenanceResponse(request: NextRequest): Promise<NextResponse | null> {
+  if (isOpen(request.nextUrl.pathname)) return null;
+  let status: PlatformStatusView;
+  try {
+    const res = await fetch(`${API_URL}/api/v1/platform/status`, {
+      cache: 'no-store',
+      signal: AbortSignal.timeout(3000),
+    });
+    const body = (await res.json()) as ApiResponse<PlatformStatusView>;
+    if (!body.success) return null;
+    status = body.data;
+  } catch {
+    // API unreachable: pages fail on their own; do not guess.
+    return null;
+  }
+  if (!status.maintenance.enabled) return null;
+  return new NextResponse(maintenancePage(status), {
+    status: 503,
+    headers: {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Retry-After': String(status.maintenance.retryAfterSeconds),
+      'Cache-Control': 'no-store',
+    },
+  });
+}
+
+/**
+ * Maintenance mode first (503 page for public routes), then session upkeep.
+ *
  * Keeps web sessions alive across page loads. Access tokens are short-lived;
  * when one has expired (its cookie is gone) but a refresh cookie remains,
  * rotate the session before rendering, and pass the new cookies both to the
  * browser and to this request so Server Components see the fresh session.
  */
 export async function proxy(request: NextRequest) {
+  const blocked = await maintenanceResponse(request);
+  if (blocked) return blocked;
+
   const hasAccess = request.cookies.has(AUTH_COOKIES.ACCESS);
   const refresh = request.cookies.get(AUTH_COOKIES.REFRESH)?.value;
   if (hasAccess || !refresh) return NextResponse.next();

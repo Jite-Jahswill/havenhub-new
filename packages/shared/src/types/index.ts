@@ -162,6 +162,8 @@ export interface RoleView {
   description: string | null;
   isSystem: boolean;
   permissions: Permission[];
+  userCount: number;
+  updatedAt: string;
 }
 
 export interface AuditLogView {
@@ -181,3 +183,4 @@ export * from './subscription.js';
 export * from './chat.js';
 export * from './experience.js';
 export * from './cms.js';
+export * from './platform.js';

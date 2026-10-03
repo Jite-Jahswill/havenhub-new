@@ -11,6 +11,8 @@ export const ErrorCode = {
   RATE_LIMITED: 'RATE_LIMITED',
   INTERNAL_ERROR: 'INTERNAL_ERROR',
   SERVICE_UNAVAILABLE: 'SERVICE_UNAVAILABLE',
+  /** The platform is in maintenance mode; retry later (see Retry-After). */
+  MAINTENANCE_MODE: 'MAINTENANCE_MODE',
 
   // Authentication
   UNAUTHENTICATED: 'UNAUTHENTICATED',
