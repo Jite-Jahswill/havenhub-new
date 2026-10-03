@@ -327,8 +327,18 @@ describe('authorization (IDOR)', () => {
 
   it('admins have no participant access; they use the audited admin routes', async () => {
     const { conversation } = await scenario();
-    const admin = await adminAuth(ctx, ['super_admin']);
+    // Without support.respond an admin cannot use participant routes at all.
+    const admin = await adminAuth(ctx, ['property_manager']);
     await ctx.http().get(`/api/v1/conversations/${conversation.id}`).set(admin.auth).expect(403);
+    // Support staff (Phase 7) only see support conversations they joined.
+    const support = await adminAuth(ctx, ['super_admin']);
+    await ctx.http().get(`/api/v1/conversations/${conversation.id}`).set(support.auth).expect(404);
+    await ctx
+      .http()
+      .post(`/api/v1/conversations/${conversation.id}/messages`)
+      .set(support.auth)
+      .send({ body: 'hi', clientKey: clientKey() })
+      .expect(404);
     await ctx.http().get('/api/v1/conversations').expect(401);
   });
 });

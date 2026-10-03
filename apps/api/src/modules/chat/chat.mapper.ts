@@ -133,6 +133,7 @@ export function toContext(row: ConversationRow, urls: Urls): ConversationContext
       },
     };
   }
+  if (row.contextType === 'SUPPORT') return { type: 'SUPPORT' };
   if (row.contextType === 'EXPERIENCE' && row.experience) {
     const e = row.experience;
     return {

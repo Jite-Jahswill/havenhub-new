@@ -6,14 +6,20 @@ import Link from 'next/link';
 
 import { Photo } from '@/components/properties/photo';
 import { serverApi } from '@/lib/api/server';
+import { routeMetadata } from '@/lib/cms';
 import { env } from '@/lib/env';
 import { priceRange } from '@/lib/experiences';
 
-export const metadata: Metadata = {
+const BASE_METADATA: Metadata = {
   title: 'Vacation destinations',
   description: 'Holiday destinations across Nigeria: where to stay, what to do and what it costs.',
   alternates: { canonical: `${env.NEXT_PUBLIC_SITE_URL}/destinations` },
 };
+
+/** Admin overrides from the SEO dashboard win over these defaults. */
+export function generateMetadata(): Promise<Metadata> {
+  return routeMetadata('/destinations', BASE_METADATA);
+}
 
 export default async function DestinationsPage({ searchParams }: PageProps<'/destinations'>) {
   const { page } = await searchParams;

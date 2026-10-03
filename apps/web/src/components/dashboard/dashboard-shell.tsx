@@ -26,8 +26,14 @@ export function DashboardShell({ user, children }: { user: AuthUser; children: R
   const pathname = usePathname();
   const items = visibleNav(user);
   const rootHref = items[0]?.href;
-  const isActive = (item: NavItem) =>
-    item.href === rootHref ? pathname === item.href : pathname.startsWith(item.href);
+  const matches = (href: string) =>
+    href === rootHref ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
+  // The most specific matching item wins (e.g. /admin/careers/applications over /admin/careers).
+  const activeHref = items
+    .map((i) => i.href)
+    .filter(matches)
+    .sort((a, b) => b.length - a.length)[0];
+  const isActive = (item: NavItem) => item.href === activeHref;
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-4 py-8 sm:px-6 lg:flex-row lg:gap-12 lg:px-8 lg:py-12">

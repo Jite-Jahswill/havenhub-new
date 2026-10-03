@@ -114,6 +114,23 @@ const envSchema = z
     CHAT_SWEEP_INTERVAL_SECONDS: z.coerce.number().int().min(0).max(3600).default(60),
     /** How long a message stays unread before the recipient is emailed about it. */
     CHAT_EMAIL_DELAY_SECONDS: z.coerce.number().int().min(0).max(86400).default(600),
+
+    // ── CMS (Phase 7) ──
+    /** CMS sweep: due email campaigns and CV retention; 0 disables it (tests). */
+    CMS_SWEEP_INTERVAL_SECONDS: z.coerce.number().int().min(0).max(3600).default(60),
+    /** Campaign emails sent per sweep tick (throttles SMTP). */
+    CAMPAIGN_BATCH_SIZE: z.coerce.number().int().min(1).max(1000).default(50),
+    /**
+     * Shared secret for on-demand revalidation of cached CMS pages in the web
+     * app. Server-to-server only; unset disables it (pages then refresh on
+     * their own short revalidate interval).
+     */
+    REVALIDATE_SECRET: z.preprocess(
+      (v) => (v === '' ? undefined : v),
+      z.string().min(32).optional(),
+    ),
+    /** Where the API reaches the web app for revalidation (defaults to WEB_APP_URL). */
+    WEB_INTERNAL_URL: z.preprocess((v) => (v === '' ? undefined : v), z.url().optional()),
   })
   .superRefine((env, ctx) => {
     if (env.STORAGE_DRIVER === 's3') {

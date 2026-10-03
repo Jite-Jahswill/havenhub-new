@@ -5,15 +5,21 @@ import type { Metadata } from 'next';
 import { SearchFilters, type SearchState } from '@/components/properties/search-filters';
 import { SearchResults } from '@/components/properties/search-results';
 import { serverApi, serverApiData } from '@/lib/api/server';
+import { routeMetadata } from '@/lib/cms';
 import { env } from '@/lib/env';
 import { getCurrentUser } from '@/lib/session';
 
-export const metadata: Metadata = {
+const BASE_METADATA: Metadata = {
   title: 'Find a place to rent, stay or buy',
   description:
     'Browse verified rentals, short stays, homes and land for sale across Nigeria — with clear prices and verified agents.',
   alternates: { canonical: `${env.NEXT_PUBLIC_SITE_URL}/properties` },
 };
+
+/** Admin overrides from the SEO dashboard win over these defaults. */
+export function generateMetadata(): Promise<Metadata> {
+  return routeMetadata('/properties', BASE_METADATA);
+}
 
 const KEYS = [
   'q',

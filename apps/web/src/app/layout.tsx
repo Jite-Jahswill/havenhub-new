@@ -5,6 +5,7 @@ import type { ReactNode } from 'react';
 import { SiteFooter } from '@/components/site-footer';
 import { SiteHeader } from '@/components/site-header';
 import { ThemeProvider } from '@/components/theme-provider';
+import { absoluteUrl, getSite } from '@/lib/cms';
 import { env } from '@/lib/env';
 
 import './globals.css';
@@ -15,16 +16,35 @@ const jakarta = Plus_Jakarta_Sans({
   display: 'swap',
 });
 
-export const metadata: Metadata = {
-  metadataBase: new URL(env.NEXT_PUBLIC_SITE_URL),
-  title: {
-    default: 'HavenHub — Find your next place to live, stay, work or explore',
-    template: '%s · HavenHub',
-  },
-  description:
-    'HavenHub is Nigeria’s trusted marketplace for rentals, short stays, property and land sales, hotels, events and experiences.',
-  applicationName: 'HavenHub',
-};
+const DEFAULT_TITLE = 'HavenHub — Find your next place to live, stay, work or explore';
+const DEFAULT_DESCRIPTION =
+  'HavenHub is Nigeria’s trusted marketplace for rentals, short stays, property and land sales, hotels, events and experiences.';
+
+/** Site-wide defaults come from the CMS (site settings + SEO dashboard). */
+export async function generateMetadata(): Promise<Metadata> {
+  const site = await getSite();
+  const title = site.seo.title ?? DEFAULT_TITLE;
+  const description = site.seo.description ?? DEFAULT_DESCRIPTION;
+  return {
+    metadataBase: new URL(env.NEXT_PUBLIC_SITE_URL),
+    title: { default: title, template: `%s · ${site.siteName}` },
+    description,
+    applicationName: site.siteName,
+    ...(site.seo.keywords.length ? { keywords: site.seo.keywords } : {}),
+    ...(site.faviconUrl ? { icons: { icon: [{ url: site.faviconUrl, type: 'image/png' }] } } : {}),
+    openGraph: {
+      siteName: site.siteName,
+      type: 'website',
+      locale: 'en_NG',
+      ...(site.seo.ogImageUrl ? { images: [{ url: absoluteUrl(site.seo.ogImageUrl) }] } : {}),
+    },
+    twitter: {
+      card: site.seo.ogImageUrl ? 'summary_large_image' : 'summary',
+      ...(site.seo.twitterHandle ? { site: site.seo.twitterHandle } : {}),
+    },
+    ...(site.seo.allowIndexing ? {} : { robots: { index: false, follow: false } }),
+  };
+}
 
 export const viewport: Viewport = {
   themeColor: [

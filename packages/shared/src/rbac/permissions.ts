@@ -43,8 +43,20 @@ export const PERMISSIONS = {
   'messages.moderate': 'Remove messages and close or reopen conversations',
 
   'blog.create': 'Create blog posts',
-  'blog.edit': 'Edit blog posts',
-  'blog.publish': 'Publish and unpublish blog posts',
+  'blog.edit': 'Edit blog posts, categories and tags',
+  'blog.publish': 'Publish, schedule and unpublish blog posts',
+  'blog.delete': 'Archive and permanently delete blog posts',
+
+  'content.site': 'Edit site settings, homepage sections and testimonials',
+  'content.pages': 'Create, edit and publish pages (about, contact, terms, privacy…)',
+  'content.media': 'Upload and manage CMS images',
+  'help.manage': 'Manage help centre categories, articles and FAQs',
+  'careers.manage': 'Create, edit, publish and close job postings',
+  'careers.applications': 'View job applicants, their CVs and update application status',
+  'marketing.subscribers': 'View and manage newsletter subscribers',
+  'marketing.campaigns': 'Create and edit email campaigns',
+  'marketing.send': 'Schedule, send and cancel email campaigns',
+  'support.respond': 'Answer support conversations from customers and agents',
 
   'seo.manage': 'Manage SEO settings',
   'settings.manage': 'Manage platform settings',

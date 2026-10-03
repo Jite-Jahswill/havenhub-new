@@ -39,6 +39,7 @@ export type ConversationContextView =
         thumbnailUrl: string | null;
       };
     }
+  | { type: 'SUPPORT' }
   | {
       type: 'BOOKING';
       booking: {
@@ -209,3 +210,16 @@ export type ChatEventPayloads = {
   'typing.started': EventBase & { userId: string };
   'typing.stopped': EventBase & { userId: string };
 };
+
+/** Phase 7: the support queue (admins with `support.respond`). */
+export interface SupportConversationItem {
+  id: string;
+  status: ConversationStatus;
+  requester: { id: string; name: string; email: string; role: ParticipantRole } | null;
+  /** Support staff who have joined. */
+  staff: { id: string; name: string }[];
+  /** Whether the viewer has joined (and can therefore read and reply). */
+  joined: boolean;
+  lastActivityAt: string;
+  createdAt: string;
+}

@@ -10,6 +10,15 @@ interface LayoutInput {
   paragraphs: string[];
   action?: { label: string; url: string };
   footnote?: string;
+  /**
+   * Pre-rendered body HTML. Only ever produced by the safe Markdown renderer
+   * (every string escaped, links and images allow-listed).
+   */
+  safeBodyHtml?: string;
+  /** Plain-text version of `safeBodyHtml`. */
+  bodyText?: string;
+  footerHtml?: string;
+  headers?: Record<string, string>;
 }
 
 /** Minimal, client-safe HTML layout with a plain-text alternative. */
@@ -18,6 +27,7 @@ function render(input: LayoutInput): MailMessage {
     input.heading,
     '',
     ...input.paragraphs,
+    ...(input.bodyText ? [input.bodyText] : []),
     ...(input.action ? ['', `${input.action.label}: ${input.action.url}`] : []),
     ...(input.footnote ? ['', input.footnote] : []),
     '',
@@ -36,16 +46,74 @@ function render(input: LayoutInput): MailMessage {
         <p style="margin:0 0 32px;font-weight:700;font-size:20px"><span style="color:#D82227">■</span> HavenHub</p>
         <h1 style="font-size:22px;margin:0 0 16px">${escapeHtml(input.heading)}</h1>
         ${input.paragraphs.map((p) => `<p style="line-height:1.6;margin:0 0 12px">${escapeHtml(p)}</p>`).join('')}
+        ${input.safeBodyHtml ? `<div style="line-height:1.6">${input.safeBodyHtml}</div>` : ''}
         ${button}
         ${input.footnote ? `<p style="color:#767676;font-size:13px;margin-top:32px">${escapeHtml(input.footnote)}</p>` : ''}
+        ${input.footerHtml ?? ''}
       </td></tr>
     </table>
   </td></tr></table></body></html>`;
 
-  return { to: input.to, subject: input.subject, text: textParts.join('\n'), html };
+  return {
+    to: input.to,
+    subject: input.subject,
+    text: textParts.join('\n'),
+    html,
+    ...(input.headers ? { headers: input.headers } : {}),
+  };
 }
 
 export const MailTemplates = {
+  /** Phase 7: careers. No CV or personal details are repeated in the email. */
+  applicationReceived: (to: string, name: string, jobTitle: string) =>
+    render({
+      to,
+      subject: `We received your application: ${jobTitle}`,
+      heading: `Thanks for applying, ${name}`,
+      paragraphs: [
+        `We have received your application for “${jobTitle}”. Our team will review it and contact you if it moves forward.`,
+      ],
+      footnote:
+        'You received this email because this address was used to apply for a job at HavenHub.',
+    }),
+
+  /** Phase 7: newsletter double opt-in. */
+  newsletterConfirm: (to: string, url: string, hours: number) =>
+    render({
+      to,
+      subject: 'Confirm your HavenHub newsletter subscription',
+      heading: 'Confirm your subscription',
+      paragraphs: [
+        'Someone (hopefully you) asked to receive the HavenHub newsletter at this address.',
+        `Confirm within ${hours} hours to start receiving it. If this wasn’t you, ignore this email and nothing will be sent.`,
+      ],
+      action: { label: 'Confirm subscription', url },
+    }),
+
+  /** Phase 7: a newsletter campaign, with one-click unsubscribe. */
+  campaign: (
+    to: string,
+    subject: string,
+    safeBodyHtml: string,
+    bodyText: string,
+    unsubscribeUrl: string,
+    oneClickUrl: string,
+  ) =>
+    render({
+      to,
+      subject,
+      heading: subject,
+      paragraphs: [],
+      safeBodyHtml,
+      bodyText: `${bodyText}\n\nUnsubscribe: ${unsubscribeUrl}`,
+      footnote: 'You are receiving this because you subscribed to the HavenHub newsletter.',
+      footerHtml: `<p style="font-size:13px"><a href="${escapeHtml(unsubscribeUrl)}" style="color:#5c5c5c">Unsubscribe</a></p>`,
+      headers: {
+        'List-Unsubscribe': `<${oneClickUrl}>`,
+        'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+      },
+    }),
+
   // ── Messages (Phase 5) ──
   /** One email per conversation per unread burst; no message content, for privacy. */
   unreadMessages: (

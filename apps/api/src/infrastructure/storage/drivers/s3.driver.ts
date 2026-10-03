@@ -10,7 +10,7 @@ import {
 
 import type { Env } from '../../../config/env';
 import {
-  PRIVATE_PREFIX,
+  isPrivateKey,
   assertSafeKey,
   type StorageDriver,
   type StoredObject,
@@ -49,7 +49,7 @@ export class S3StorageDriver implements StorageDriver {
         Key: key,
         Body: body,
         ContentType: contentType,
-        CacheControl: key.startsWith(PRIVATE_PREFIX)
+        CacheControl: isPrivateKey(key)
           ? 'private, no-store'
           : 'public, max-age=31536000, immutable',
       }),

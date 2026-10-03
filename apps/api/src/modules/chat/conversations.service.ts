@@ -35,6 +35,8 @@ type ListQuery = z.output<typeof listConversationsQuerySchema>;
  *   BOOKING  — the booking's customer or its agent, with each other
  *   EXPERIENCE — a customer, about a public event/tour/hotel/cleaning
  *               listing, with its agent (no purchase is involved)
+ *   SUPPORT  — a customer or agent asking HavenHub for help; support staff
+ *              join it from the admin support queue
  * Agents cannot open conversations with arbitrary customers.
  */
 @Injectable()
@@ -87,6 +89,16 @@ export class ConversationsService {
       participants = [
         { userId: me.id, role: 'CUSTOMER' },
         { userId: listing.agentProfile.userId, role: 'AGENT' },
+      ];
+    } else if (input.contextType === 'SUPPORT') {
+      // One support thread per person; HavenHub staff join it from the support queue.
+      if (me.accountType !== AccountType.CUSTOMER && me.accountType !== AccountType.AGENT) {
+        throw Errors.forbidden('Support conversations are for customers and agents.');
+      }
+      contextKey = `support:${me.id}`;
+      data = { contextType: 'SUPPORT', contextKey };
+      participants = [
+        { userId: me.id, role: me.accountType === AccountType.AGENT ? 'AGENT' : 'CUSTOMER' },
       ];
     } else {
       const booking = await this.prisma.booking.findUnique({

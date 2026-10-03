@@ -62,6 +62,8 @@ export function contextLine(c: Pick<ConversationSummary, 'context'>): string {
       return c.context.experience.title;
     case 'PROPERTY':
       return c.context.property.title;
+    case 'SUPPORT':
+      return 'HavenHub support';
   }
 }
 

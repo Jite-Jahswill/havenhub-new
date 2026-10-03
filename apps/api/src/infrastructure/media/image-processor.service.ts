@@ -40,6 +40,38 @@ export class ImageProcessor {
     return { display, thumbnail };
   }
 
+  /** CMS content images (any size from 16 px), plus a thumbnail. */
+  async cmsRenditions(input: Buffer): Promise<{ large: Rendition; thumbnail: Rendition }> {
+    await this.inspect(input, { minWidth: 16, minHeight: 16 });
+    const [large, thumbnail] = await Promise.all([
+      this.render(input, 2000, 82),
+      this.render(input, 480, 74),
+    ]);
+    return { large, thumbnail };
+  }
+
+  /** Site logo: fits within 800 × 240, transparency kept (WebP). */
+  async logo(input: Buffer): Promise<Rendition> {
+    await this.inspect(input, { minWidth: 16, minHeight: 16 });
+    const { data, info } = await sharp(input, { limitInputPixels: MAX_INPUT_PIXELS })
+      .rotate()
+      .resize(800, 240, { fit: 'inside', withoutEnlargement: true })
+      .webp({ quality: 90, alphaQuality: 100 })
+      .toBuffer({ resolveWithObject: true });
+    return { buffer: data, width: info.width, height: info.height };
+  }
+
+  /** Favicon: a 64 × 64 PNG on a transparent background. */
+  async favicon(input: Buffer): Promise<Rendition> {
+    await this.inspect(input, { minWidth: 16, minHeight: 16 });
+    const { data, info } = await sharp(input, { limitInputPixels: MAX_INPUT_PIXELS })
+      .rotate()
+      .resize(64, 64, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+      .png()
+      .toBuffer({ resolveWithObject: true });
+    return { buffer: data, width: info.width, height: info.height };
+  }
+
   async avatar(input: Buffer): Promise<Rendition> {
     await this.inspect(input);
     const { data, info } = await sharp(input, { limitInputPixels: MAX_INPUT_PIXELS })

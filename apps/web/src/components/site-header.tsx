@@ -1,13 +1,14 @@
 import { Container, Logo, buttonClasses } from '@havenhub/ui';
 import Link from 'next/link';
 
+import { getSite } from '@/lib/cms';
 import { DASHBOARD_PATH } from '@/lib/navigation';
 import { getCurrentUser } from '@/lib/session';
 
 import { ThemeToggle } from './theme-toggle';
 
 export async function SiteHeader() {
-  const user = await getCurrentUser();
+  const [user, site] = await Promise.all([getCurrentUser(), getSite()]);
   const initials = user?.fullName
     .split(/\s+/)
     .slice(0, 2)
@@ -17,11 +18,22 @@ export async function SiteHeader() {
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-background/85 backdrop-blur-md">
       <Container className="flex h-18 items-center justify-between gap-4">
-        <Link href="/" aria-label="HavenHub home" className="rounded-md">
-          {/* Below 375px only the 32px roof mark fits beside the actions; crop to it. */}
-          <span className="block overflow-hidden max-[375px]:w-8">
-            <Logo />
-          </span>
+        <Link href="/" aria-label={`${site.siteName} home`} className="rounded-md">
+          {site.logo ? (
+            // eslint-disable-next-line @next/next/no-img-element -- admin-uploaded, re-encoded logo
+            <img
+              src={site.logo.url}
+              alt=""
+              width={site.logo.width}
+              height={site.logo.height}
+              className="h-9 w-auto max-w-[160px] object-contain sm:max-w-[200px]"
+            />
+          ) : (
+            /* Below 375px only the 32px roof mark fits beside the actions; crop to it. */
+            <span className="block overflow-hidden max-[375px]:w-8">
+              <Logo />
+            </span>
+          )}
         </Link>
         <div className="flex items-center gap-2 sm:gap-3">
           <Link href="/properties" className={buttonClasses({ variant: 'ghost', size: 'sm' })}>

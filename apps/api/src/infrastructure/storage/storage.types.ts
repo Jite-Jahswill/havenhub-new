@@ -28,19 +28,22 @@ export const STORAGE_DRIVER = Symbol('STORAGE_DRIVER');
 export const SAFE_STORAGE_KEY = /^(?!.*\.\.)[a-z0-9][a-z0-9/_-]*\.(webp|jpg|png)$/;
 
 /**
- * Private objects (chat attachments). Never served by the public media route
- * or a public bucket URL — only streamed by an API endpoint that checks who
- * is asking. With S3, keep the `chat/` prefix out of any public-read policy.
+ * Private objects: chat attachments (`chat/`) and job-application CVs
+ * (`careers/`). Never served by the public media route or a public bucket
+ * URL — only streamed by an API endpoint that checks who is asking. With S3,
+ * keep these prefixes out of any public-read policy.
  */
 export const PRIVATE_PREFIX = 'chat/';
+export const PRIVATE_PREFIXES = ['chat/', 'careers/'] as const;
 const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
 export const SAFE_PRIVATE_KEY = new RegExp(
-  `^chat/${UUID}/${UUID}(-[a-z]+)?\\.(webp|mp4|mov|webm|mp3|m4a|ogg|wav|pdf|docx|xlsx|pptx|txt|csv)$`,
+  `^(chat/${UUID}/${UUID}(-[a-z]+)?\\.(webp|mp4|mov|webm|mp3|m4a|ogg|wav|pdf|docx|xlsx|pptx|txt|csv)|careers/${UUID}/${UUID}(-[a-z]+)?\\.(pdf|docx))$`,
 );
 
+export const isPrivateKey = (key: string) => PRIVATE_PREFIXES.some((p) => key.startsWith(p));
+
 /** Keys the public media route may serve. */
-export const isPublicKey = (key: string) =>
-  SAFE_STORAGE_KEY.test(key) && !key.startsWith(PRIVATE_PREFIX);
+export const isPublicKey = (key: string) => SAFE_STORAGE_KEY.test(key) && !isPrivateKey(key);
 
 export function assertSafeKey(key: string): void {
   if (!isPublicKey(key) && !SAFE_PRIVATE_KEY.test(key)) {

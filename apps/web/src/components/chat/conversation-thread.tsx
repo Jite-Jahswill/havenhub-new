@@ -41,7 +41,7 @@ export function ConversationThread({
 }: {
   conversation: ConversationSummary;
   viewerId: string;
-  area: 'account' | 'agent';
+  area: 'account' | 'agent' | 'admin';
   status: RealtimeStatus;
   onBack: () => void;
   onChanged: (c: Partial<ConversationSummary> & { id: string }) => void;
@@ -305,7 +305,11 @@ export function ConversationThread({
       ? `/properties/${ctx.property.slug}`
       : ctx.type === 'EXPERIENCE'
         ? experiencePath(ctx.experience.kind, ctx.experience.slug)
-        : `/${area}/bookings/${ctx.booking.id}`;
+        : ctx.type === 'SUPPORT'
+          ? area === 'admin'
+            ? '/admin/support'
+            : '/help'
+          : `/${area}/bookings/${ctx.booking.id}`;
   const closed = conversation.status === 'CLOSED';
 
   return (

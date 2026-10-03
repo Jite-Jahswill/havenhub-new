@@ -11,15 +11,18 @@ import { ChatNotificationsService } from './chat-notifications.service';
 import { ChatRealtimeHandlers } from './chat-realtime.handlers';
 import { ConversationsService } from './conversations.service';
 import { MessagesService } from './messages.service';
+import { AdminSupportController } from './support.controller';
+import { SupportService } from './support.service';
 import { UnreadService } from './unread.service';
 
 /**
- * Communication (Phase 5): conversations about a property or booking,
+ * Communication (Phase 5): conversations about a property, booking,
+ * experience or (Phase 7) a support request,
  * messages, attachments, reactions, read cursors, real-time delivery
  * (via the global RealtimeModule) and digest notifications.
  */
 @Module({
-  controllers: [ChatController, AdminChatController],
+  controllers: [ChatController, AdminChatController, AdminSupportController],
   providers: [
     ChatAccessService,
     ConversationsService,
@@ -31,6 +34,7 @@ import { UnreadService } from './unread.service';
     ChatRealtimeHandlers,
     ChatMaintenanceService,
     ChatAdminService,
+    SupportService,
   ],
   exports: [ConversationsService, ChatMaintenanceService],
 })

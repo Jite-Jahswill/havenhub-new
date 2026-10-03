@@ -180,3 +180,4 @@ export * from './property.js';
 export * from './subscription.js';
 export * from './chat.js';
 export * from './experience.js';
+export * from './cms.js';

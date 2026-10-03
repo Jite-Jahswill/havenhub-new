@@ -18,6 +18,7 @@ import { FinanceModule } from './modules/finance/finance.module';
 import { HealthModule } from './modules/health/health.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { PlansModule } from './modules/plans/plans.module';
+import { CmsModule } from './modules/cms/cms.module';
 import { ExperiencesModule } from './modules/experiences/experiences.module';
 import { PropertiesModule } from './modules/properties/properties.module';
 import { RbacModule } from './modules/rbac/rbac.module';
@@ -48,6 +49,7 @@ import { UsersModule } from './modules/users/users.module';
     AmenitiesModule,
     PropertiesModule,
     ExperiencesModule,
+    CmsModule,
     FinanceModule,
     BookingsModule,
     PaymentsModule,

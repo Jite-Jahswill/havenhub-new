@@ -4,6 +4,7 @@ export * from './api-response.js';
 export * from './auth.js';
 export * from './booking.js';
 export * from './chat.js';
+export * from './cms.js';
 export * from './experience.js';
 export * from './fields.js';
 export * from './health.js';

@@ -41,5 +41,7 @@ import { VacationZonesService } from './vacation-zones.service';
     ExperienceSearchService,
     VacationZonesService,
   ],
+  // The CMS homepage shows public listings through these, unchanged.
+  exports: [ExperienceSearchService, VacationZonesService],
 })
 export class ExperiencesModule {}

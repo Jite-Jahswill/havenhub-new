@@ -3,6 +3,8 @@ export interface MailMessage {
   subject: string;
   text: string;
   html: string;
+  /** Extra headers (e.g. List-Unsubscribe on campaign email). */
+  headers?: Record<string, string>;
 }
 
 /**

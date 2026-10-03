@@ -128,8 +128,15 @@ export class ChatNotificationsService implements ChatNotificationChannel {
     const about =
       c.contextType === 'BOOKING' && c.booking
         ? `booking ${c.booking.reference}`
-        : `“${c.property?.title ?? c.experience?.title ?? 'a listing'}”`;
-    const area = participant.user.accountType === 'AGENT' ? 'agent' : 'account';
+        : c.contextType === 'SUPPORT'
+          ? 'your HavenHub support request'
+          : `“${c.property?.title ?? c.experience?.title ?? 'a listing'}”`;
+    const area =
+      participant.user.accountType === 'AGENT'
+        ? 'agent'
+        : participant.user.accountType === 'ADMIN'
+          ? 'admin'
+          : 'account';
     await this.mail.send(
       MailTemplates.unreadMessages(
         participant.user.email,

@@ -73,6 +73,12 @@ model User {
   attachmentsUploaded  MessageAttachment[]
   experiencesReviewed  Experience[]              @relation("ExperienceReviewer")
   vacationZonesCreated VacationZone[]
+  cmsMediaUploaded     CmsMedia[]                @relation("CmsMediaUploader")
+  pagesUpdated         Page[]                    @relation("PageUpdater")
+  blogPostsAuthored    BlogPost[]                @relation("BlogPostAuthor")
+  campaignsCreated     EmailCampaign[]           @relation("CampaignCreator")
+  applicationsReviewed JobApplication[]          @relation("ApplicationReviewer")
+  siteSettingsUpdated  SiteSettings[]            @relation("SiteSettingsUpdater")
   messageReactions     MessageReaction[]
 
   @@index([accountType, status])
@@ -995,6 +1001,8 @@ enum ConversationContextType {
   PROPERTY
   BOOKING
   EXPERIENCE
+  /// Phase 7: a customer or agent asking HavenHub support for help.
+  SUPPORT
 }
 
 enum ConversationStatus {
@@ -1500,4 +1508,507 @@ model VacationZoneExperience {
   @@id([zoneId, experienceId])
   @@index([experienceId])
   @@map("vacation_zone_experiences")
+}
+
+// ─── Phase 7: CMS ────────────────────────────────────────────────────────────
+//
+// Site content, homepage builder, static pages, blog, help centre, careers,
+// SEO and newsletter. Long-form text is Markdown source; it is rendered by an
+// allow-listing renderer (no raw HTML), never injected as HTML.
+
+enum ContentStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum HomepageSectionKey {
+  HERO
+  EXPLORE
+  FEATURED_PROPERTIES
+  POPULAR_LOCATIONS
+  RENT_PROPERTIES
+  SALE_PROPERTIES
+  VACATION_ZONES
+  HOTELS
+  EVENTS
+  TOURS
+  CLEANING
+  SPECIAL_OFFERS
+  AWARDS
+  BLOG
+  TESTIMONIALS
+  CTA
+}
+
+enum JobStatus {
+  DRAFT
+  PUBLISHED
+  CLOSED
+  ARCHIVED
+}
+
+enum EmploymentType {
+  FULL_TIME
+  PART_TIME
+  CONTRACT
+  INTERNSHIP
+  TEMPORARY
+}
+
+enum ApplicationStatus {
+  NEW
+  REVIEWED
+  SHORTLISTED
+  REJECTED
+  HIRED
+}
+
+enum SubscriberStatus {
+  /// Signed up; waiting for the email confirmation (double opt-in).
+  PENDING
+  SUBSCRIBED
+  UNSUBSCRIBED
+}
+
+enum SubscriberEventType {
+  REQUESTED
+  CONFIRMED
+  UNSUBSCRIBED
+  /// Personal data removed by the retention job (the record itself stays).
+  ERASED
+}
+
+enum CampaignStatus {
+  DRAFT
+  SCHEDULED
+  SENDING
+  SENT
+  CANCELLED
+}
+
+enum DeliveryStatus {
+  PENDING
+  SENDING
+  SENT
+  FAILED
+  SKIPPED
+}
+
+/// The one row of site-wide content and switches (id is always 1).
+model SiteSettings {
+  id             Int     @id @default(1)
+  siteName       String  @default("HavenHub") @map("site_name") @db.VarChar(60)
+  tagline        String? @db.VarChar(160)
+  logoKey        String? @map("logo_key") @db.VarChar(300)
+  logoWidth      Int?    @map("logo_width")
+  logoHeight     Int?    @map("logo_height")
+  faviconKey     String? @map("favicon_key") @db.VarChar(300)
+  contactEmail   String? @map("contact_email") @db.VarChar(254)
+  contactPhone   String? @map("contact_phone") @db.VarChar(40)
+  contactAddress String? @map("contact_address") @db.VarChar(300)
+  /// [{ network, url }] — validated by the API.
+  socialLinks    Json    @default("[]") @map("social_links")
+  footerText     String? @map("footer_text") @db.VarChar(500)
+
+  blogEnabled             Boolean @default(true) @map("blog_enabled")
+  careersEnabled          Boolean @default(false) @map("careers_enabled")
+  helpCenterEnabled       Boolean @default(false) @map("help_center_enabled")
+  newsletterEnabled       Boolean @default(false) @map("newsletter_enabled")
+  /// Shown next to the signup checkbox and stored with every consent record.
+  newsletterConsentText   String? @map("newsletter_consent_text") @db.VarChar(1000)
+  /// Require email confirmation before a subscriber receives campaigns.
+  newsletterDoubleOptIn   Boolean @default(true) @map("newsletter_double_opt_in")
+  /// CVs older than this are deleted by the retention job; null keeps them.
+  cvRetentionDays         Int?    @map("cv_retention_days")
+  /// Unsubscribed or never-confirmed subscribers are anonymised this many
+  /// days later; null keeps them.
+  newsletterRetentionDays Int?    @map("newsletter_retention_days")
+
+  seoTitle        String?  @map("seo_title") @db.VarChar(70)
+  seoDescription  String?  @map("seo_description") @db.VarChar(200)
+  seoKeywords     String[] @default([]) @map("seo_keywords")
+  ogImageId       String?  @map("og_image_id") @db.Uuid
+  twitterHandle   String?  @map("twitter_handle") @db.VarChar(16)
+  allowIndexing   Boolean  @default(true) @map("allow_indexing")
+  /// Extra paths kept out of robots.txt (private areas are always excluded).
+  robotsDisallow  String[] @default([]) @map("robots_disallow")
+  /// Which public sections appear in sitemap.xml.
+  sitemapSections String[] @default([]) @map("sitemap_sections")
+
+  updatedById String?  @map("updated_by_id") @db.Uuid
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  ogImage   CmsMedia? @relation("SiteOgImage", fields: [ogImageId], references: [id], onDelete: Restrict)
+  updatedBy User?     @relation("SiteSettingsUpdater", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@map("site_settings")
+}
+
+model HomepageSection {
+  key       HomepageSectionKey @id
+  enabled   Boolean            @default(false)
+  sortOrder Int                @default(0) @map("sort_order")
+  title     String?            @db.VarChar(120)
+  subtitle  String?            @db.VarChar(300)
+  /// Section-specific settings, validated per key by the API.
+  config    Json               @default("{}")
+  updatedAt DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@map("homepage_sections")
+}
+
+/// Images uploaded for CMS content (public, re-encoded WebP).
+model CmsMedia {
+  id           String   @id @default(uuid(7)) @db.Uuid
+  storageKey   String   @unique @map("storage_key") @db.VarChar(300)
+  thumbnailKey String   @map("thumbnail_key") @db.VarChar(300)
+  width        Int
+  height       Int
+  bytes        Int
+  altText      String?  @map("alt_text") @db.VarChar(200)
+  uploadedById String?  @map("uploaded_by_id") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  uploadedBy   User?          @relation("CmsMediaUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
+  pagesOg      Page[]         @relation("PageOgImage")
+  postsCover   BlogPost[]     @relation("BlogPostCover")
+  testimonials Testimonial[]
+  seoRoutes    SeoRoute[]
+  siteOg       SiteSettings[] @relation("SiteOgImage")
+
+  @@index([createdAt(sort: Desc)])
+  @@map("cms_media")
+}
+
+/// About, Contact, Terms, Privacy and any custom page.
+model Page {
+  id             String        @id @default(uuid(7)) @db.Uuid
+  slug           String        @unique @db.VarChar(80)
+  title          String        @db.VarChar(160)
+  body           String        @default("")
+  status         ContentStatus @default(DRAFT)
+  /// Built-in pages (about, contact, terms, privacy) keep their slug and cannot be deleted.
+  system         Boolean       @default(false)
+  publishedAt    DateTime?     @map("published_at") @db.Timestamptz(3)
+  seoTitle       String?       @map("seo_title") @db.VarChar(70)
+  seoDescription String?       @map("seo_description") @db.VarChar(200)
+  ogImageId      String?       @map("og_image_id") @db.Uuid
+  noIndex        Boolean       @default(false) @map("no_index")
+  updatedById    String?       @map("updated_by_id") @db.Uuid
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  ogImage   CmsMedia? @relation("PageOgImage", fields: [ogImageId], references: [id], onDelete: Restrict)
+  updatedBy User?     @relation("PageUpdater", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@index([status])
+  @@map("pages")
+}
+
+model BlogCategory {
+  id          String   @id @default(uuid(7)) @db.Uuid
+  slug        String   @unique @db.VarChar(80)
+  name        String   @db.VarChar(80)
+  description String?  @db.VarChar(300)
+  sortOrder   Int      @default(0) @map("sort_order")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  posts BlogPost[]
+
+  @@map("blog_categories")
+}
+
+model BlogTag {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  slug      String   @unique @db.VarChar(60)
+  name      String   @db.VarChar(60)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  posts BlogPostTag[]
+
+  @@map("blog_tags")
+}
+
+model BlogPost {
+  id             String        @id @default(uuid(7)) @db.Uuid
+  slug           String        @unique @db.VarChar(160)
+  title          String        @db.VarChar(160)
+  excerpt        String?       @db.VarChar(400)
+  body           String        @default("")
+  status         ContentStatus @default(DRAFT)
+  /// Publication time; a PUBLISHED post with a future time is "scheduled".
+  publishAt      DateTime?     @map("publish_at") @db.Timestamptz(3)
+  coverImageId   String?       @map("cover_image_id") @db.Uuid
+  categoryId     String?       @map("category_id") @db.Uuid
+  authorId       String?       @map("author_id") @db.Uuid
+  /// Byline shown publicly (defaults to the author's name).
+  authorName     String?       @map("author_name") @db.VarChar(120)
+  readingMinutes Int           @default(1) @map("reading_minutes")
+  seoTitle       String?       @map("seo_title") @db.VarChar(70)
+  seoDescription String?       @map("seo_description") @db.VarChar(200)
+  seoKeywords    String[]      @default([]) @map("seo_keywords")
+  canonicalUrl   String?       @map("canonical_url") @db.VarChar(500)
+  noIndex        Boolean       @default(false) @map("no_index")
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  coverImage CmsMedia?          @relation("BlogPostCover", fields: [coverImageId], references: [id], onDelete: Restrict)
+  category   BlogCategory?      @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  author     User?              @relation("BlogPostAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  tags       BlogPostTag[]
+  related    BlogPostRelation[] @relation("PostRelated")
+  relatedTo  BlogPostRelation[] @relation("PostRelatedTo")
+
+  @@index([status, publishAt(sort: Desc)])
+  @@index([categoryId])
+  @@map("blog_posts")
+}
+
+model BlogPostTag {
+  postId String @map("post_id") @db.Uuid
+  tagId  String @map("tag_id") @db.Uuid
+
+  post BlogPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  tag  BlogTag  @relation(fields: [tagId], references: [id], onDelete: Restrict)
+
+  @@id([postId, tagId])
+  @@index([tagId])
+  @@map("blog_post_tags")
+}
+
+/// Hand-picked related posts, in display order.
+model BlogPostRelation {
+  postId    String @map("post_id") @db.Uuid
+  relatedId String @map("related_id") @db.Uuid
+  sortOrder Int    @default(0) @map("sort_order")
+
+  post    BlogPost @relation("PostRelated", fields: [postId], references: [id], onDelete: Cascade)
+  related BlogPost @relation("PostRelatedTo", fields: [relatedId], references: [id], onDelete: Cascade)
+
+  @@id([postId, relatedId])
+  @@index([relatedId])
+  @@map("blog_post_relations")
+}
+
+model HelpCategory {
+  id          String   @id @default(uuid(7)) @db.Uuid
+  slug        String   @unique @db.VarChar(80)
+  name        String   @db.VarChar(80)
+  description String?  @db.VarChar(300)
+  sortOrder   Int      @default(0) @map("sort_order")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  articles HelpArticle[]
+  faqs     Faq[]
+
+  @@map("help_categories")
+}
+
+model HelpArticle {
+  id             String        @id @default(uuid(7)) @db.Uuid
+  slug           String        @unique @db.VarChar(160)
+  title          String        @db.VarChar(160)
+  summary        String?       @db.VarChar(300)
+  body           String        @default("")
+  status         ContentStatus @default(DRAFT)
+  categoryId     String        @map("category_id") @db.Uuid
+  sortOrder      Int           @default(0) @map("sort_order")
+  publishedAt    DateTime?     @map("published_at") @db.Timestamptz(3)
+  seoTitle       String?       @map("seo_title") @db.VarChar(70)
+  seoDescription String?       @map("seo_description") @db.VarChar(200)
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  category HelpCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  @@index([categoryId, status, sortOrder])
+  @@map("help_articles")
+}
+
+model Faq {
+  id         String   @id @default(uuid(7)) @db.Uuid
+  question   String   @db.VarChar(300)
+  answer     String
+  categoryId String?  @map("category_id") @db.Uuid
+  published  Boolean  @default(false)
+  sortOrder  Int      @default(0) @map("sort_order")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  category HelpCategory? @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  @@index([published, sortOrder])
+  @@map("faqs")
+}
+
+model Testimonial {
+  id         String   @id @default(uuid(7)) @db.Uuid
+  quote      String   @db.VarChar(600)
+  authorName String   @map("author_name") @db.VarChar(120)
+  authorRole String?  @map("author_role") @db.VarChar(120)
+  photoId    String?  @map("photo_id") @db.Uuid
+  published  Boolean  @default(false)
+  sortOrder  Int      @default(0) @map("sort_order")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  photo CmsMedia? @relation(fields: [photoId], references: [id], onDelete: Restrict)
+
+  @@index([published, sortOrder])
+  @@map("testimonials")
+}
+
+/// SEO overrides for fixed public routes (e.g. "/", "/properties", "/blog").
+model SeoRoute {
+  path        String   @id @db.VarChar(120)
+  title       String?  @db.VarChar(70)
+  description String?  @db.VarChar(200)
+  ogImageId   String?  @map("og_image_id") @db.Uuid
+  noIndex     Boolean  @default(false) @map("no_index")
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  ogImage CmsMedia? @relation(fields: [ogImageId], references: [id], onDelete: Restrict)
+
+  @@map("seo_routes")
+}
+
+model JobPosting {
+  id             String         @id @default(uuid(7)) @db.Uuid
+  slug           String         @unique @db.VarChar(160)
+  title          String         @db.VarChar(160)
+  department     String?        @db.VarChar(80)
+  location       String         @db.VarChar(160)
+  employmentType EmploymentType @map("employment_type")
+  description    String         @default("")
+  requirements   String         @default("")
+  status         JobStatus      @default(DRAFT)
+  publishedAt    DateTime?      @map("published_at") @db.Timestamptz(3)
+  closesAt       DateTime?      @map("closes_at") @db.Timestamptz(3)
+  closedAt       DateTime?      @map("closed_at") @db.Timestamptz(3)
+  seoTitle       String?        @map("seo_title") @db.VarChar(70)
+  seoDescription String?        @map("seo_description") @db.VarChar(200)
+  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  applications JobApplication[]
+
+  @@index([status, publishedAt(sort: Desc)])
+  @@map("job_postings")
+}
+
+/// Applicant personal data: only users with `careers.applications` see it.
+model JobApplication {
+  id              String            @id @default(uuid(7)) @db.Uuid
+  jobId           String            @map("job_id") @db.Uuid
+  fullName        String            @map("full_name") @db.VarChar(120)
+  /// Lower-cased.
+  email           String            @db.VarChar(254)
+  phone           String            @db.VarChar(20)
+  coverNote       String?           @map("cover_note") @db.VarChar(4000)
+  /// Private storage key (careers/…); never served publicly. Null once deleted.
+  cvKey           String?           @map("cv_key") @db.VarChar(300)
+  cvFileName      String            @map("cv_file_name") @db.VarChar(200)
+  cvContentType   String            @map("cv_content_type") @db.VarChar(120)
+  cvBytes         Int               @map("cv_bytes")
+  cvDeletedAt     DateTime?         @map("cv_deleted_at") @db.Timestamptz(3)
+  status          ApplicationStatus @default(NEW)
+  reviewedById    String?           @map("reviewed_by_id") @db.Uuid
+  statusChangedAt DateTime?         @map("status_changed_at") @db.Timestamptz(3)
+  createdAt       DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  job        JobPosting @relation(fields: [jobId], references: [id], onDelete: Restrict)
+  reviewedBy User?      @relation("ApplicationReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@unique([jobId, email])
+  @@index([jobId, status, createdAt(sort: Desc)])
+  @@index([createdAt])
+  @@map("job_applications")
+}
+
+model EmailSubscriber {
+  id                    String           @id @default(uuid(7)) @db.Uuid
+  /// Lower-cased.
+  email                 String           @unique @db.VarChar(254)
+  status                SubscriberStatus @default(PENDING)
+  /// The consent statement the person agreed to, as shown at the time.
+  consentText           String?          @map("consent_text") @db.VarChar(1000)
+  consentSource         String?          @map("consent_source") @db.VarChar(60)
+  consentAt             DateTime?        @map("consent_at") @db.Timestamptz(3)
+  confirmedAt           DateTime?        @map("confirmed_at") @db.Timestamptz(3)
+  unsubscribedAt        DateTime?        @map("unsubscribed_at") @db.Timestamptz(3)
+  /// SHA-256 of the confirmation secret (double opt-in); cleared once used.
+  confirmTokenHash      String?          @unique @map("confirm_token_hash") @db.Char(64)
+  confirmTokenExpiresAt DateTime?        @map("confirm_token_expires_at") @db.Timestamptz(3)
+  /// SHA-256 of the unsubscribe secret carried in every campaign email.
+  unsubscribeTokenHash  String           @unique @map("unsubscribe_token_hash") @db.Char(64)
+  /// Set when the retention job removed the address (see SiteSettings).
+  erasedAt              DateTime?        @map("erased_at") @db.Timestamptz(3)
+  createdAt             DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt             DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  events     EmailSubscriberEvent[]
+  deliveries EmailCampaignDelivery[]
+
+  @@index([status])
+  @@map("email_subscribers")
+}
+
+/// Append-only consent history (who agreed to what, and when they withdrew).
+model EmailSubscriberEvent {
+  id           String              @id @default(uuid(7)) @db.Uuid
+  subscriberId String              @map("subscriber_id") @db.Uuid
+  type         SubscriberEventType
+  source       String?             @db.VarChar(60)
+  consentText  String?             @map("consent_text") @db.VarChar(1000)
+  /// Hashed, never the raw address.
+  ipHash       String?             @map("ip_hash") @db.Char(64)
+  actorId      String?             @map("actor_id") @db.Uuid
+  createdAt    DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  subscriber EmailSubscriber @relation(fields: [subscriberId], references: [id], onDelete: Restrict)
+
+  @@index([subscriberId, createdAt])
+  @@map("email_subscriber_events")
+}
+
+model EmailCampaign {
+  id          String         @id @default(uuid(7)) @db.Uuid
+  name        String         @db.VarChar(120)
+  subject     String         @db.VarChar(160)
+  body        String
+  status      CampaignStatus @default(DRAFT)
+  scheduledAt DateTime?      @map("scheduled_at") @db.Timestamptz(3)
+  startedAt   DateTime?      @map("started_at") @db.Timestamptz(3)
+  completedAt DateTime?      @map("completed_at") @db.Timestamptz(3)
+  cancelledAt DateTime?      @map("cancelled_at") @db.Timestamptz(3)
+  createdById String?        @map("created_by_id") @db.Uuid
+  createdAt   DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  createdBy  User?                   @relation("CampaignCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  deliveries EmailCampaignDelivery[]
+
+  @@index([status, scheduledAt])
+  @@map("email_campaigns")
+}
+
+/// One row per campaign and subscriber: the unique pair makes sending idempotent.
+model EmailCampaignDelivery {
+  id           String         @id @default(uuid(7)) @db.Uuid
+  campaignId   String         @map("campaign_id") @db.Uuid
+  subscriberId String         @map("subscriber_id") @db.Uuid
+  status       DeliveryStatus @default(PENDING)
+  error        String?        @db.VarChar(300)
+  claimedAt    DateTime?      @map("claimed_at") @db.Timestamptz(3)
+  sentAt       DateTime?      @map("sent_at") @db.Timestamptz(3)
+  createdAt    DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  campaign   EmailCampaign   @relation(fields: [campaignId], references: [id], onDelete: Restrict)
+  subscriber EmailSubscriber @relation(fields: [subscriberId], references: [id], onDelete: Restrict)
+
+  @@unique([campaignId, subscriberId])
+  @@index([campaignId, status])
+  @@map("email_campaign_deliveries")
 }

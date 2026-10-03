@@ -34,6 +34,7 @@ export function resolveTestEnv(): Record<string, string> {
     BOOKING_SWEEP_INTERVAL_SECONDS: '0',
     SUBSCRIPTION_SWEEP_INTERVAL_SECONDS: '0',
     CHAT_SWEEP_INTERVAL_SECONDS: '0',
+    CMS_SWEEP_INTERVAL_SECONDS: '0',
   };
 }
 

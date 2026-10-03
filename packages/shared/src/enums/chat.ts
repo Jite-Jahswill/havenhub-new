@@ -7,6 +7,8 @@ export const ConversationContextType = {
   BOOKING: 'BOOKING',
   /** Phase 6: an event, tour, hotel or cleaning-service listing. */
   EXPERIENCE: 'EXPERIENCE',
+  /** Phase 7: a customer or agent asking HavenHub support for help. */
+  SUPPORT: 'SUPPORT',
 } as const;
 export type ConversationContextType =
   (typeof ConversationContextType)[keyof typeof ConversationContextType];

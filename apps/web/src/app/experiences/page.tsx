@@ -3,13 +3,19 @@ import { BedDouble, Map, Palmtree, Sparkles, Ticket, type LucideIcon } from 'luc
 import type { Metadata } from 'next';
 import Link from 'next/link';
 
+import { routeMetadata } from '@/lib/cms';
 import { env } from '@/lib/env';
 
-export const metadata: Metadata = {
+const BASE_METADATA: Metadata = {
   title: 'Experiences',
   description: 'Events, tours, hotels, cleaning services and holiday destinations across Nigeria.',
   alternates: { canonical: `${env.NEXT_PUBLIC_SITE_URL}/experiences` },
 };
+
+/** Admin overrides from the SEO dashboard win over these defaults. */
+export function generateMetadata(): Promise<Metadata> {
+  return routeMetadata('/experiences', BASE_METADATA);
+}
 
 const SECTIONS: { href: string; title: string; text: string; icon: LucideIcon }[] = [
   { href: '/events', title: 'Events', text: 'Concerts, festivals and gatherings.', icon: Ticket },

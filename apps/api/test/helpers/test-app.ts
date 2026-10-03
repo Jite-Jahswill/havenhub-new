@@ -20,6 +20,7 @@ import { MemoryMailTransport } from '../../src/infrastructure/mail/transports/me
 import { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
 import { RedisService } from '../../src/infrastructure/redis/redis.service';
 import { PasswordService } from '../../src/modules/auth/password.service';
+import { seedCmsDefaults } from '../../src/modules/cms/default-cms';
 import { seedDefaultPlan } from '../../src/modules/subscriptions/default-plan';
 import { setupApp } from '../../src/setup-app';
 
@@ -69,9 +70,10 @@ export async function createTestContext(overrides: Partial<Env> = {}): Promise<T
     env,
     reset: async () => {
       await prisma.$executeRawUnsafe(
-        'TRUNCATE users, sessions, verification_tokens, user_roles, agent_profiles, payout_accounts, audit_logs, properties, property_images, property_videos, property_amenities, property_favorites, property_view_daily, pricing_configs, bookings, booking_line_items, payments, refunds, ledger_entries, agent_earnings, subscription_plans, subscription_plan_entitlements, agent_subscriptions, subscription_payments, conversations, conversation_participants, messages, message_revisions, message_attachments, message_reactions, experiences, experience_images, experience_videos, experience_amenities, events, event_ticket_types, tours, tour_dates, hotels, hotel_room_types, hotel_rooms, hotel_room_availability, cleaning_services, vacation_zones, vacation_zone_experiences CASCADE',
+        'TRUNCATE users, sessions, verification_tokens, user_roles, agent_profiles, payout_accounts, audit_logs, properties, property_images, property_videos, property_amenities, property_favorites, property_view_daily, pricing_configs, bookings, booking_line_items, payments, refunds, ledger_entries, agent_earnings, subscription_plans, subscription_plan_entitlements, agent_subscriptions, subscription_payments, conversations, conversation_participants, messages, message_revisions, message_attachments, message_reactions, experiences, experience_images, experience_videos, experience_amenities, events, event_ticket_types, tours, tour_dates, hotels, hotel_room_types, hotel_rooms, hotel_room_availability, cleaning_services, vacation_zones, vacation_zone_experiences, site_settings, homepage_sections, cms_media, pages, blog_categories, blog_tags, blog_posts, blog_post_tags, blog_post_relations, help_categories, help_articles, faqs, testimonials, seo_routes, job_postings, job_applications, email_subscribers, email_subscriber_events, email_campaigns, email_campaign_deliveries CASCADE',
       );
       await seedDefaultPlan(prisma);
+      await seedCmsDefaults(prisma);
       await redis.client.flushdb();
       mail.clear();
     },

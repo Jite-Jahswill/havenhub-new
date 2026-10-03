@@ -26,4 +26,17 @@ describe('system roles', () => {
     const superAdmin = SYSTEM_ROLES.find((r) => r.key === SUPER_ADMIN_ROLE)!;
     expect(resolveRolePermissions(superAdmin)).toEqual(PERMISSION_KEYS);
   });
+
+  it('grant applicant data and support replies explicitly, never through the general Admin role', () => {
+    for (const permission of ['careers.applications', 'support.respond'] as const) {
+      const admin = SYSTEM_ROLES.find((r) => r.key === 'admin')!;
+      expect(resolveRolePermissions(admin)).not.toContain(permission);
+    }
+    const holders = (p: string) =>
+      SYSTEM_ROLES.filter((r) => (resolveRolePermissions(r) as string[]).includes(p)).map(
+        (r) => r.key,
+      );
+    expect(holders('careers.applications')).toEqual([SUPER_ADMIN_ROLE]);
+    expect(holders('support.respond').sort()).toEqual([SUPER_ADMIN_ROLE, 'support_admin'].sort());
+  });
 });

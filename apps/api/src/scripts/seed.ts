@@ -1,10 +1,12 @@
 /**
  * Seeds reference data that must exist in every environment (permissions,
- * system roles, the starter amenity catalogue and the free default plan). Idempotent — run after every `prisma migrate deploy`.
+ * system roles, the starter amenity catalogue, the free default plan and the
+ * initial CMS rows). Idempotent — run after every `prisma migrate deploy`.
  *
  *   pnpm db:seed
  */
 import { seedDefaultAmenities } from '../modules/amenities/default-amenities';
+import { seedCmsDefaults } from '../modules/cms/default-cms';
 import { syncRbac } from '../modules/rbac/rbac-sync';
 import { seedDefaultPlan } from '../modules/subscriptions/default-plan';
 import { scriptPrisma } from './script-context';
@@ -22,6 +24,8 @@ async function main(): Promise<void> {
         ? 'Subscription plans: default free plan created.'
         : 'Subscription plans: default plan already exists (untouched).',
     );
+    const cms = await seedCmsDefaults(prisma);
+    console.log(`CMS: ${cms.created} default row(s) added (existing content untouched).`);
   } finally {
     await prisma.$disconnect();
   }

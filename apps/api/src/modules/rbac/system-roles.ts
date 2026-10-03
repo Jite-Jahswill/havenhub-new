@@ -25,7 +25,7 @@ export const SYSTEM_ROLES: SystemRoleDefinition[] = [
     key: 'admin',
     name: 'Admin',
     description:
-      'Day-to-day platform administration without role, settings, commission/VAT, plan pricing or private conversation access.',
+      'Day-to-day platform administration without role, settings, commission/VAT, plan pricing, private conversation, support or job-applicant access.',
     permissions: PERMISSION_KEYS.filter(
       (p) =>
         ![
@@ -36,6 +36,9 @@ export const SYSTEM_ROLES: SystemRoleDefinition[] = [
           // Reading private conversations is limited to support roles.
           'conversations.view',
           'messages.moderate',
+          'support.respond',
+          // Applicant personal data is granted explicitly, never by default.
+          'careers.applications',
         ].includes(p),
     ),
   },
@@ -89,25 +92,46 @@ export const SYSTEM_ROLES: SystemRoleDefinition[] = [
       'subscriptions.view',
       'conversations.view',
       'messages.moderate',
+      'support.respond',
+      'help.manage',
     ],
   },
   {
     key: 'content_manager',
     name: 'Content Manager',
-    description: 'Blog, destination and content publishing.',
-    permissions: ['blog.create', 'blog.edit', 'blog.publish', 'vacation_zones.manage'],
+    description: 'Site content, pages, blog, help centre, careers and destinations.',
+    permissions: [
+      'blog.create',
+      'blog.edit',
+      'blog.publish',
+      'blog.delete',
+      'content.site',
+      'content.pages',
+      'content.media',
+      'help.manage',
+      'careers.manage',
+      'vacation_zones.manage',
+    ],
   },
   {
     key: 'marketing_manager',
     name: 'Marketing Manager',
-    description: 'Marketing content and campaigns.',
-    permissions: ['blog.create', 'blog.edit', 'users.view'],
+    description: 'Marketing content, newsletter subscribers and email campaigns.',
+    permissions: [
+      'blog.create',
+      'blog.edit',
+      'content.media',
+      'marketing.subscribers',
+      'marketing.campaigns',
+      'marketing.send',
+      'users.view',
+    ],
   },
   {
     key: 'seo_manager',
     name: 'SEO Manager',
     description: 'Search engine optimisation.',
-    permissions: ['seo.manage', 'blog.edit'],
+    permissions: ['seo.manage', 'blog.edit', 'content.media'],
   },
   {
     key: 'operations_manager',

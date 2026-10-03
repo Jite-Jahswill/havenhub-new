@@ -13,6 +13,7 @@ import {
   Query,
   Res,
   UploadedFile,
+  UseGuards,
 } from '@nestjs/common';
 import {
   AccountType,
@@ -43,15 +44,18 @@ import { AttachmentsService } from './attachments.service';
 import { ChatUpload } from './chat-upload.decorator';
 import { ConversationsService } from './conversations.service';
 import { MessagesService } from './messages.service';
+import { SupportStaffGuard } from './support-staff.guard';
 
 const uuid = new ParseUUIDPipe();
 
 /**
- * Customers' and agents' own conversations. Every route resolves the caller
- * as a participant first; anything else is "not found".
+ * Customers' and agents' own conversations — and, since Phase 7, support
+ * staff in the support conversations they have joined. Every route resolves
+ * the caller as a participant first; anything else is "not found".
  */
 @Controller()
-@AccountTypes(AccountType.CUSTOMER, AccountType.AGENT)
+@AccountTypes(AccountType.CUSTOMER, AccountType.AGENT, AccountType.ADMIN)
+@UseGuards(SupportStaffGuard)
 @RequireVerifiedEmail()
 export class ChatController {
   constructor(

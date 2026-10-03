@@ -26,11 +26,13 @@ const messageText = z
     z.string().max(MAX_MESSAGE_LENGTH, `Messages can be up to ${MAX_MESSAGE_LENGTH} characters`),
   );
 
-/** Starts (or returns the existing) conversation about a property, booking or experience. */
+/** Starts (or returns the existing) conversation about a property, booking, experience or support. */
 export const startConversationSchema = z.discriminatedUnion('contextType', [
   z.object({ contextType: z.literal('PROPERTY'), propertyId: z.uuid() }),
   z.object({ contextType: z.literal('BOOKING'), bookingId: z.uuid() }),
   z.object({ contextType: z.literal('EXPERIENCE'), experienceId: z.uuid() }),
+  /** Phase 7: the signed-in customer's or agent's conversation with HavenHub support. */
+  z.object({ contextType: z.literal('SUPPORT') }),
 ]);
 export type StartConversationInput = z.input<typeof startConversationSchema>;
 

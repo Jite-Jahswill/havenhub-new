@@ -16,7 +16,13 @@ import { ConversationThread } from './conversation-thread';
  * by side on large screens, one at a time on phones. The open conversation
  * lives in the URL (`?c=<id>`), so it survives reloads and can be linked.
  */
-export function ChatWorkspace({ viewerId, area }: { viewerId: string; area: 'account' | 'agent' }) {
+export function ChatWorkspace({
+  viewerId,
+  area,
+}: {
+  viewerId: string;
+  area: 'account' | 'agent' | 'admin';
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
@@ -192,7 +198,9 @@ export function ChatWorkspace({ viewerId, area }: { viewerId: string; area: 'acc
             <p className="max-w-xs text-sm text-text-secondary">
               {area === 'agent'
                 ? 'Messages from customers about your listings and bookings appear here.'
-                : 'Message an agent from any listing or booking to start a conversation.'}
+                : area === 'admin'
+                  ? 'Support conversations you have joined appear here.'
+                  : 'Message an agent from any listing or booking to start a conversation.'}
             </p>
           </div>
         )}

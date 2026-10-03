@@ -35,3 +35,102 @@
   outline: 2px solid var(--hh-ring);
   outline-offset: 2px;
 }
+
+/* CMS content rendered by <Markdown> (only allow-listed elements reach here). */
+.cms-prose {
+  color: var(--hh-text-secondary);
+  line-height: 1.75;
+  overflow-wrap: anywhere;
+}
+.cms-prose > * + * {
+  margin-top: 1rem;
+}
+.cms-prose h2,
+.cms-prose h3,
+.cms-prose h4 {
+  color: var(--hh-text);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+  margin-top: 2rem;
+}
+.cms-prose h2 {
+  font-size: 1.375rem;
+}
+.cms-prose h3 {
+  font-size: 1.15rem;
+}
+.cms-prose h4 {
+  font-size: 1rem;
+}
+.cms-prose a {
+  color: var(--hh-primary-text);
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.cms-prose strong {
+  color: var(--hh-text);
+}
+.cms-prose ul,
+.cms-prose ol {
+  padding-left: 1.4rem;
+}
+.cms-prose ul {
+  list-style: disc;
+}
+.cms-prose ol {
+  list-style: decimal;
+}
+.cms-prose li + li {
+  margin-top: 0.35rem;
+}
+.cms-prose blockquote {
+  border-left: 3px solid var(--hh-border-strong);
+  padding-left: 1rem;
+  font-style: italic;
+}
+.cms-prose code {
+  border-radius: 6px;
+  background: var(--hh-surface-secondary);
+  color: var(--hh-text);
+  padding: 0.1rem 0.35rem;
+  font-size: 0.9em;
+}
+.cms-prose pre {
+  overflow-x: auto;
+  border-radius: 12px;
+  background: var(--hh-surface-secondary);
+  padding: 1rem;
+}
+.cms-prose pre code {
+  background: none;
+  padding: 0;
+}
+.cms-prose hr {
+  border-color: var(--hh-border);
+  margin: 2rem 0;
+}
+.cms-prose img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 12px;
+}
+.cms-prose .cms-table {
+  overflow-x: auto;
+}
+.cms-prose table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95em;
+}
+.cms-prose th,
+.cms-prose td {
+  border: 1px solid var(--hh-border);
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+}
+.cms-prose th {
+  background: var(--hh-surface-secondary);
+  color: var(--hh-text);
+}
