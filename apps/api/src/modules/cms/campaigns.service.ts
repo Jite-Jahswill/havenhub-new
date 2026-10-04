@@ -22,6 +22,7 @@ import { MailTemplates } from '../../infrastructure/mail/mail.templates';
 import { MAIL_TRANSPORT, type MailTransport } from '../../infrastructure/mail/mail.types';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import { StorageService } from '../../infrastructure/storage/storage.service';
+import { describeError } from '../../common/logging/describe-error';
 import { AuditService } from '../audit/audit.service';
 import {
   assertMarkdownImages,
@@ -348,9 +349,12 @@ export class CampaignsService {
       await this.finish(deliveryId, 'SENT', null);
       return 'sent';
     } catch (error) {
-      this.logger.warn(
-        `Campaign ${campaign.id} delivery ${deliveryId} failed: ${(error as Error).message}`,
-      );
+      this.logger.warn('Campaign delivery failed', {
+        event: 'campaign.delivery_failed',
+        campaignId: campaign.id,
+        deliveryId,
+        ...describeError(error),
+      });
       await this.finish(deliveryId, 'FAILED', (error as Error).message.slice(0, 300));
       return 'failed';
     }

@@ -33,6 +33,7 @@ export function resolveTestEnv(): Record<string, string> {
     PAYSTACK_SECRET_KEY: 'sk_test_havenhub_webhook_secret',
     BOOKING_SWEEP_INTERVAL_SECONDS: '0',
     SUBSCRIPTION_SWEEP_INTERVAL_SECONDS: '0',
+    PAYMENT_RECONCILE_INTERVAL_SECONDS: '0',
     CHAT_SWEEP_INTERVAL_SECONDS: '0',
     CMS_SWEEP_INTERVAL_SECONDS: '0',
   };

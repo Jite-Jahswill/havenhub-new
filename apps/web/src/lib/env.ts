@@ -1,3 +1,5 @@
+import { unsafeProductionUrl } from '@havenhub/shared';
+import { PHASE_PRODUCTION_BUILD } from 'next/constants';
 import { z } from 'zod';
 
 /**
@@ -5,16 +7,45 @@ import { z } from 'zod';
  * directly: requests go to this app's own `/api/*`, which Next.js forwards
  * to API_INTERNAL_URL. Auth cookies therefore stay first-party on the web
  * domain, whatever domain the API is deployed on.
+ *
+ * A production server refuses localhost or plain-http URLs (fail closed).
+ * Builds are exempt — they run with local defaults in CI — but a Vercel
+ * production build is checked in next.config.ts.
  */
-const serverEnvSchema = z.object({
-  API_INTERNAL_URL: z.url().default('http://localhost:4000'),
-  NEXT_PUBLIC_SITE_URL: z.url().default('http://localhost:3000'),
-  /** Shared with the API for on-demand CMS revalidation; never sent to the browser. */
-  REVALIDATE_SECRET: z.preprocess((v) => (v === '' ? undefined : v), z.string().min(32).optional()),
-});
+const serverEnvSchema = z
+  .object({
+    API_INTERNAL_URL: z.url().default('http://localhost:4000'),
+    NEXT_PUBLIC_SITE_URL: z.url().default('http://localhost:3000'),
+    /** Proves visitor IPs to the API (X-HavenHub-Client-IP); server-only, required in production. */
+    INTERNAL_API_SECRET: z.preprocess(
+      (v) => (v === '' ? undefined : v),
+      z.string().min(32).optional(),
+    ),
+    /** Shared with the API for on-demand CMS revalidation; never sent to the browser. */
+    REVALIDATE_SECRET: z.preprocess(
+      (v) => (v === '' ? undefined : v),
+      z.string().min(32).optional(),
+    ),
+  })
+  .superRefine((env, ctx) => {
+    if (process.env.NODE_ENV !== 'production' || process.env.NEXT_PHASE === PHASE_PRODUCTION_BUILD)
+      return;
+    if (!env.INTERNAL_API_SECRET) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['INTERNAL_API_SECRET'],
+        message: 'Required in production (shared with the API)',
+      });
+    }
+    for (const key of ['API_INTERNAL_URL', 'NEXT_PUBLIC_SITE_URL'] as const) {
+      const problem = unsafeProductionUrl(env[key]);
+      if (problem) ctx.addIssue({ code: 'custom', path: [key], message: `${env[key]} ${problem}` });
+    }
+  });
 
 export const env = serverEnvSchema.parse({
   API_INTERNAL_URL: process.env.API_INTERNAL_URL,
   NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL,
+  INTERNAL_API_SECRET: process.env.INTERNAL_API_SECRET,
   REVALIDATE_SECRET: process.env.REVALIDATE_SECRET,
 });

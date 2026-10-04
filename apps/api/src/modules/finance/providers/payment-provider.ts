@@ -18,6 +18,16 @@ export interface PaymentProvider {
   refund(input: { reference: string; amountKobo: bigint }): Promise<ProviderRefundResult>;
 
   /**
+   * What the provider knows about refunds of a payment, without changing
+   * anything. Asked before every refund request, so a refund whose earlier
+   * attempt may have reached the provider is never sent twice.
+   */
+  findRefund(input: {
+    reference: string;
+    providerTransactionId: string | null;
+  }): Promise<ProviderRefundLookup>;
+
+  /**
    * Authenticates and parses a webhook. Throws `InvalidWebhookSignature`
    * when the signature does not match; returns null for ignored events.
    */
@@ -53,6 +63,13 @@ export interface ProviderRefundResult {
   message: string | null;
 }
 
+/** `none` = the provider has no refund for the payment at all. */
+export interface ProviderRefundLookup {
+  status: 'completed' | 'processing' | 'failed' | 'none';
+  providerRefundId: string | null;
+  message: string | null;
+}
+
 export type ProviderWebhookEvent =
   | { type: 'charge.success'; reference: string }
   | { type: 'refund.processed'; reference: string }
@@ -76,5 +93,20 @@ export function verificationMismatch(
   return null;
 }
 
-/** A provider call that failed for reasons other than the payment itself. */
-export class PaymentProviderError extends Error {}
+/**
+ * A provider call that failed for reasons other than the payment itself.
+ *
+ * `outcomeUnknown` is true when the request may have reached the provider
+ * and taken effect (timeout, network failure, 5xx, unreadable response):
+ * the caller must not assume it failed. False means the provider answered
+ * and refused the request.
+ */
+export class PaymentProviderError extends Error {
+  readonly outcomeUnknown: boolean;
+
+  constructor(message: string, options: { outcomeUnknown?: boolean } = {}) {
+    super(message);
+    this.name = 'PaymentProviderError';
+    this.outcomeUnknown = options.outcomeUnknown ?? false;
+  }
+}

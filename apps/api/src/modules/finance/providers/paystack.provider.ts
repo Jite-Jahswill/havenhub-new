@@ -7,6 +7,7 @@ import {
   PaymentProviderError,
   type InitializePaymentInput,
   type PaymentProvider,
+  type ProviderRefundLookup,
   type ProviderRefundResult,
   type ProviderVerification,
   type ProviderWebhookEvent,
@@ -81,6 +82,30 @@ export class PaystackProvider implements PaymentProvider {
     return { status, providerRefundId: String(data.id), message: null };
   }
 
+  /**
+   * Lists the refunds of a transaction (GET /refund?transaction=…). Any
+   * completed refund wins, then one still in progress; "none" only when the
+   * provider has no refund for it at all.
+   */
+  async findRefund(input: {
+    reference: string;
+    providerTransactionId: string | null;
+  }): Promise<ProviderRefundLookup> {
+    const transaction = encodeURIComponent(input.providerTransactionId ?? input.reference);
+    const refunds = await this.call<{ id: number; status: string }[]>(
+      'GET',
+      `/refund?transaction=${transaction}&perPage=100`,
+    );
+    const pick = (statuses: string[]) => refunds.find((r) => statuses.includes(r.status));
+    const done = pick(['processed']);
+    if (done) return { status: 'completed', providerRefundId: String(done.id), message: null };
+    const open = refunds.find((r) => r.status !== 'failed');
+    if (open) return { status: 'processing', providerRefundId: String(open.id), message: null };
+    const failed = pick(['failed']);
+    if (failed) return { status: 'failed', providerRefundId: String(failed.id), message: null };
+    return { status: 'none', providerRefundId: null, message: null };
+  }
+
   parseWebhook(
     rawBody: Buffer,
     headers: Record<string, string | string[] | undefined>,
@@ -133,12 +158,17 @@ export class PaystackProvider implements PaymentProvider {
         signal: AbortSignal.timeout(15_000),
       });
     } catch (error) {
-      throw new PaymentProviderError(`Paystack unreachable: ${(error as Error).message}`);
+      // Timeout or network failure: the request may still have been processed.
+      throw new PaymentProviderError(`Paystack unreachable: ${(error as Error).message}`, {
+        outcomeUnknown: true,
+      });
     }
     const payload = (await res.json().catch(() => null)) as PaystackEnvelope<T> | null;
     if (!res.ok || !payload?.status) {
       throw new PaymentProviderError(
-        `Paystack ${method} ${path.split('/').slice(0, 3).join('/')} failed (${res.status}): ${payload?.message ?? 'no response body'}`,
+        `Paystack ${method} ${path.split('?')[0]!.split('/').slice(0, 3).join('/')} failed (${res.status}): ${payload?.message ?? 'no response body'}`,
+        // A server error or unreadable answer does not prove the request failed.
+        { outcomeUnknown: res.status >= 500 || payload === null },
       );
     }
     return payload.data;

@@ -6,6 +6,7 @@ import {
   type OnApplicationShutdown,
 } from '@nestjs/common';
 
+import { runSweepTick } from '../../common/logging/request-context';
 import { ENV } from '../../config/config.module';
 import type { Env } from '../../config/env';
 import { DistributedLockService } from '../../infrastructure/redis/distributed-lock.service';
@@ -46,9 +47,7 @@ export class ChatMaintenanceService implements OnApplicationBootstrap, OnApplica
     if (this.running) return;
     this.running = true;
     try {
-      await this.runOnce();
-    } catch (error) {
-      this.logger.error(`Chat sweep failed: ${(error as Error).message}`);
+      await runSweepTick(this.logger, 'chat.sweep', () => this.runOnce());
     } finally {
       this.running = false;
     }

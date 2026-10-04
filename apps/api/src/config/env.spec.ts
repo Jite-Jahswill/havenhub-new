@@ -18,6 +18,10 @@ const productionExtras = {
   STORAGE_SECRET_KEY: 'secret',
   PAYMENT_PROVIDER: 'paystack',
   PAYSTACK_SECRET_KEY: 'sk_live_example',
+  WEB_APP_URL: 'https://havenhub.ng',
+  CORS_ORIGINS: 'https://havenhub.ng',
+  TRUST_PROXY: '1',
+  INTERNAL_API_SECRET: 'internal-secret-for-tests-0123456789abcdef',
 };
 
 describe('loadEnv', () => {
@@ -93,5 +97,77 @@ describe('loadEnv', () => {
     const env = loadEnv({ ...valid, REQUIRE_EMAIL_VERIFICATION: 'false', TRUST_PROXY: '1' });
     expect(env.REQUIRE_EMAIL_VERIFICATION).toBe(false);
     expect(env.trustProxy).toBe(1);
+  });
+
+  it('defaults trust proxy to loopback outside production', () => {
+    expect(loadEnv(valid).trustProxy).toBe('loopback');
+  });
+
+  it('accepts a complete production configuration', () => {
+    const env = loadEnv({ ...valid, ...productionExtras });
+    expect(env.trustProxy).toBe(1);
+    expect(env.WEB_APP_URL).toBe('https://havenhub.ng');
+  });
+
+  describe('production guardrails', () => {
+    const prod = (overrides: Record<string, string | undefined>) => () =>
+      loadEnv({ ...valid, ...productionExtras, ...overrides });
+
+    it('refuses localhost or plain-http public URLs', () => {
+      expect(prod({ WEB_APP_URL: undefined })).toThrow(/WEB_APP_URL.*localhost/);
+      expect(prod({ WEB_APP_URL: 'http://havenhub.ng' })).toThrow(/WEB_APP_URL.*https/);
+      expect(prod({ WEB_INTERNAL_URL: 'http://localhost:3000' })).toThrow(/WEB_INTERNAL_URL/);
+    });
+
+    it('refuses localhost, plain-http or missing CORS origins', () => {
+      expect(prod({ CORS_ORIGINS: undefined })).toThrow(/CORS_ORIGINS.*localhost/);
+      expect(prod({ CORS_ORIGINS: 'https://havenhub.ng,http://evil.example' })).toThrow(
+        /CORS_ORIGINS.*https/,
+      );
+      expect(prod({ CORS_ORIGINS: ' , ' })).toThrow(/CORS_ORIGINS: Required in production/);
+    });
+
+    it('requires an explicit trust-proxy setting that is not "trust everything"', () => {
+      expect(prod({ TRUST_PROXY: undefined })).toThrow(/TRUST_PROXY: Set explicitly/);
+      expect(prod({ TRUST_PROXY: 'true' })).toThrow(/TRUST_PROXY: Trusting every proxy/);
+      expect(prod({ TRUST_PROXY: '10.0.0.0/8' })).not.toThrow();
+    });
+
+    it('requires the internal secret shared with the web server', () => {
+      expect(prod({ INTERNAL_API_SECRET: undefined })).toThrow(/INTERNAL_API_SECRET: Required/);
+      expect(prod({ INTERNAL_API_SECRET: '' })).toThrow(/INTERNAL_API_SECRET: Required/);
+      expect(prod({ INTERNAL_API_SECRET: 'too-short' })).toThrow(/INTERNAL_API_SECRET/);
+    });
+
+    it('refuses insecure cookies', () => {
+      expect(prod({ COOKIE_SECURE: 'false' })).toThrow(/COOKIE_SECURE/);
+      expect(prod({ COOKIE_SECURE: 'true' })).not.toThrow();
+    });
+
+    it('does not apply to development or test', () => {
+      expect(() =>
+        loadEnv({ ...valid, NODE_ENV: 'test', COOKIE_SECURE: 'false', TRUST_PROXY: 'true' }),
+      ).not.toThrow();
+      expect(() => loadEnv({ ...valid, WEB_APP_URL: 'http://localhost:3000' })).not.toThrow();
+    });
+  });
+
+  it('parses the optional database pool settings', () => {
+    expect(loadEnv(valid).DATABASE_POOL_MAX).toBeUndefined();
+    const env = loadEnv({
+      ...valid,
+      DATABASE_POOL_MAX: '15',
+      DATABASE_STATEMENT_TIMEOUT_MS: '30000',
+      DATABASE_CONNECT_TIMEOUT_MS: '5000',
+    });
+    expect(env).toMatchObject({
+      DATABASE_POOL_MAX: 15,
+      DATABASE_STATEMENT_TIMEOUT_MS: 30000,
+      DATABASE_CONNECT_TIMEOUT_MS: 5000,
+    });
+    expect(() => loadEnv({ ...valid, DATABASE_POOL_MAX: '0' })).toThrow(/DATABASE_POOL_MAX/);
+    expect(() => loadEnv({ ...valid, DATABASE_STATEMENT_TIMEOUT_MS: '5' })).toThrow(
+      /DATABASE_STATEMENT_TIMEOUT_MS/,
+    );
   });
 });

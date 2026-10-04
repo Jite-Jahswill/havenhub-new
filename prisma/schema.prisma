@@ -122,6 +122,8 @@ model Session {
 
   @@index([userId, revokedAt])
   @@index([expiresAt])
+  /// Active users by session activity (analytics).
+  @@index([lastUsedAt])
   @@map("sessions")
 }
 
@@ -733,6 +735,8 @@ model Payment {
 
   @@index([bookingId, createdAt])
   @@index([status, createdAt])
+  /// Revenue reporting by payment date (analytics).
+  @@index([paidAt])
   @@map("payments")
 }
 
@@ -768,6 +772,8 @@ model Refund {
   ledgerEntries LedgerEntry[]
 
   @@index([status, createdAt])
+  /// Refunds by completion date (analytics).
+  @@index([completedAt])
   @@index([bookingId])
   @@map("refunds")
 }
@@ -991,6 +997,8 @@ model SubscriptionPayment {
 
   @@index([agentProfileId, createdAt])
   @@index([status, createdAt])
+  /// Subscription revenue by payment date (analytics, admin metrics).
+  @@index([paidAt])
   @@map("subscription_payments")
 }
 

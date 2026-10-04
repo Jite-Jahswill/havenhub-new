@@ -18,6 +18,7 @@ import { koboToNumber } from '../../common/money';
 import { ENV } from '../../config/config.module';
 import type { Env } from '../../config/env';
 import type { Payment, Prisma } from '../../generated/prisma/client';
+import { describeError } from '../../common/logging/describe-error';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { snapshotOf } from '../bookings/booking.mapper';
@@ -126,9 +127,12 @@ export class PaymentsService {
         amountKobo: koboToNumber(payment.amountKobo),
       };
     } catch (error) {
-      this.logger.error(
-        `Could not start payment ${payment.reference}: ${(error as Error).message}`,
-      );
+      this.logger.error('Could not start a payment with the provider', {
+        event: 'payment.initiate_failed',
+        kind: 'booking',
+        reference: payment.reference,
+        ...describeError(error),
+      });
       await this.prisma.payment.update({
         where: { id: payment.id },
         data: { status: PaymentStatus.FAILED, failureReason: 'Could not start the payment' },
@@ -161,7 +165,13 @@ export class PaymentsService {
       verification = await this.providers.get(payment.provider).verify(reference);
     } catch (error) {
       if (error instanceof PaymentProviderError) {
-        this.logger.warn(`Verification of ${reference} failed: ${error.message}`);
+        this.logger.warn('Payment verification with the provider failed', {
+          event: 'payment.verification_failed',
+          kind: 'booking',
+          reference,
+          outcomeUnknown: error.outcomeUnknown,
+          ...describeError(error),
+        });
         throw new AppException(
           HttpStatus.BAD_GATEWAY,
           ErrorCode.PAYMENT_VERIFICATION_FAILED,

@@ -17,6 +17,8 @@ import type { z } from 'zod';
 
 import { AppException, Errors } from '../../common/errors/app.exception';
 import { requestMeta } from '../../common/http/request-meta';
+import { clientIp } from '../../common/http/client-ip';
+import { describeError } from '../../common/logging/describe-error';
 import { ok } from '../../common/http/response';
 import { validate } from '../../common/pipes/zod-validation.pipe';
 import { RateLimit } from '../../common/rate-limit/rate-limit.decorator';
@@ -130,7 +132,12 @@ export class PaymentWebhooksController {
       event = provider.parseWebhook(req.rawBody, req.headers);
     } catch (error) {
       if (error instanceof InvalidWebhookSignature) {
-        this.logger.warn(`Rejected webhook with an invalid signature from ${req.ip}`);
+        // Never log the signature, the body or the secret.
+        this.logger.warn('Rejected webhook: invalid signature', {
+          event: 'webhook.invalid_signature',
+          provider: 'paystack',
+          ip: clientIp(req) ?? 'unknown',
+        });
         throw new AppException(HttpStatus.UNAUTHORIZED, ErrorCode.FORBIDDEN, 'Invalid signature.');
       }
       throw Errors.badRequest('Malformed webhook payload.');
@@ -153,9 +160,22 @@ export class PaymentWebhooksController {
       // Unknown references are acknowledged (not ours / already handled);
       // anything else is surfaced so the provider retries.
       if (error instanceof AppException && error.code === ErrorCode.NOT_FOUND) {
-        this.logger.warn(`Webhook for unknown reference ${event.reference}`);
+        this.logger.warn('Webhook for an unknown reference', {
+          event: 'webhook.unknown_reference',
+          provider: 'paystack',
+          eventType: event.type,
+          reference: event.reference,
+        });
         return ok({ received: true });
       }
+      // Surfaced (non-2xx) so the provider retries; logged here with its context.
+      this.logger.error('Webhook processing failed', {
+        event: 'webhook.processing_failed',
+        provider: 'paystack',
+        eventType: event.type,
+        reference: event.reference,
+        ...describeError(error),
+      });
       throw error;
     }
     return ok({ received: true });

@@ -1,5 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 
+import { describeError } from '../../common/logging/describe-error';
 import { ENV } from '../../config/config.module';
 import type { Env } from '../../config/env';
 import { MailService } from '../../infrastructure/mail/mail.service';
@@ -81,7 +82,11 @@ export class ChatNotificationsService implements ChatNotificationChannel {
       try {
         if (await this.sendDigest(userId!, conversationId!)) sent++;
       } catch (error) {
-        this.logger.error(`Chat email for ${conversationId} failed: ${(error as Error).message}`);
+        this.logger.error('Chat email digest failed', {
+          event: 'chat.email_failed',
+          conversationId,
+          ...describeError(error),
+        });
       }
     }
     return sent;

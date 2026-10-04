@@ -56,9 +56,14 @@ export const adminListRefundsQuerySchema = paginationQuerySchema.extend({
   status: z.enum(RefundStatus).optional(),
 });
 
+/**
+ * APPROVE sends a requested (or failed) refund; REJECT declines it; RECHECK
+ * asks the payment provider about a refund still processing (e.g. after a
+ * timeout) and finishes or resends it only when that is safe.
+ */
 export const reviewRefundSchema = z
   .object({
-    action: z.enum(['APPROVE', 'REJECT']),
+    action: z.enum(['APPROVE', 'REJECT', 'RECHECK']),
     note: z.string().trim().max(500).optional(),
   })
   .refine((v) => v.action !== 'REJECT' || Boolean(v.note), {

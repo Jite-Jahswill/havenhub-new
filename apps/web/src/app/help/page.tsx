@@ -29,6 +29,7 @@ export default async function HelpPage({ searchParams }: PageProps<'/help'>) {
     q
       ? cmsData<{ articles: HelpArticleCard[]; faqs: FaqView[] }>(
           `/help/search?q=${encodeURIComponent(q)}`,
+          { visitor: true },
         )
       : null,
   ]);

@@ -8,14 +8,18 @@ import { useState } from 'react';
 import { api } from '@/lib/api/client';
 import { useApiAction } from '@/lib/use-api-action';
 
-/** Approve (sends the money back through the provider) or reject a refund. */
+/**
+ * Approve (sends the money back through the provider) or reject a refund.
+ * A refund still processing — e.g. the provider did not answer — can be
+ * re-checked: the provider is asked first, so money is never sent twice.
+ */
 export function RefundReview({ refundId, status }: { refundId: string; status: RefundStatus }) {
   const router = useRouter();
   const { pending, error, fieldErrors, run } = useApiAction();
   const [note, setNote] = useState('');
-  const [action, setAction] = useState<'APPROVE' | 'REJECT' | null>(null);
+  const [action, setAction] = useState<'APPROVE' | 'REJECT' | 'RECHECK' | null>(null);
 
-  async function review(next: 'APPROVE' | 'REJECT') {
+  async function review(next: 'APPROVE' | 'REJECT' | 'RECHECK') {
     setAction(next);
     const done = await run(() =>
       api('POST', `/admin/refunds/${refundId}/review`, {
@@ -27,6 +31,23 @@ export function RefundReview({ refundId, status }: { refundId: string; status: R
       setNote('');
       router.refresh();
     }
+  }
+
+  if (status === 'PROCESSING') {
+    return (
+      <div className="flex flex-col gap-3">
+        {error && <Alert tone="error">{error.message}</Alert>}
+        <p className="text-text-secondary">
+          Waiting for the payment provider to confirm. If it is taking long, check its status — a
+          refund is only sent again if the provider has none.
+        </p>
+        <div>
+          <Button size="sm" variant="secondary" onClick={() => review('RECHECK')} loading={pending}>
+            Check with payment provider
+          </Button>
+        </div>
+      </div>
+    );
   }
 
   return (

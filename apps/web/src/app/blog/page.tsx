@@ -28,7 +28,8 @@ export default async function BlogPage({ searchParams }: PageProps<'/blog'>) {
     ...(page && /^\d{1,4}$/.test(page) ? { page } : {}),
   });
   const [res, categories] = await Promise.all([
-    cmsApi<BlogPostList>(`/blog/posts?${params}`),
+    // A search is visitor input: forward the visitor's signed IP for per-IP limits.
+    cmsApi<BlogPostList>(`/blog/posts?${params}`, { visitor: Boolean(q) }),
     cmsData<BlogCategoryView[]>('/blog/categories'),
   ]);
   return (

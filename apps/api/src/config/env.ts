@@ -1,3 +1,4 @@
+import { unsafeProductionUrl } from '@havenhub/shared';
 import { z } from 'zod';
 
 const booleanFlag = z
@@ -23,11 +24,31 @@ const envSchema = z
           .map((origin) => origin.trim())
           .filter(Boolean),
       ),
-    /** Express "trust proxy" setting: hop count, or a comma-separated list of subnets. */
-    TRUST_PROXY: z.string().default('loopback'),
+    /**
+     * Express "trust proxy" setting: hop count, or a comma-separated list of
+     * subnets. Defaults to "loopback" outside production; production must set
+     * it explicitly (1 for the Railway edge) and may never trust everything.
+     */
+    TRUST_PROXY: z.string().optional(),
 
     DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ }),
+    /** Optional connection-pool size per API instance (pg default when unset). */
+    DATABASE_POOL_MAX: z.coerce.number().int().min(1).max(200).optional(),
+    /** Optional per-statement timeout (ms) enforced by PostgreSQL; unset = no limit. */
+    DATABASE_STATEMENT_TIMEOUT_MS: z.coerce.number().int().min(100).max(600_000).optional(),
+    /** Optional timeout (ms) for opening a new database connection; unset = no limit. */
+    DATABASE_CONNECT_TIMEOUT_MS: z.coerce.number().int().min(100).max(120_000).optional(),
     REDIS_URL: z.url({ protocol: /^rediss?$/ }),
+
+    /**
+     * Shared with the web server only: proves that X-HavenHub-Client-IP
+     * (the visitor's IP on server-side and proxied requests) is genuine.
+     * Required in production. Generate with: openssl rand -base64 32
+     */
+    INTERNAL_API_SECRET: z.preprocess(
+      (v) => (v === '' ? undefined : v),
+      z.string().min(32, 'Use at least 32 characters (openssl rand -base64 32)').optional(),
+    ),
 
     /** Public URL of the web app, used to build links in emails. */
     WEB_APP_URL: z.url().default('http://localhost:3000'),
@@ -108,6 +129,12 @@ const envSchema = z
      * runs). Bounds how long a crashed instance can hold a job back.
      */
     SCHEDULED_JOB_LOCK_TTL_SECONDS: z.coerce.number().int().min(5).max(3600).default(120),
+    /**
+     * Interval of the payment reconciliation sweep, which re-verifies PENDING
+     * booking and subscription payments 15 minutes to 72 hours old (missed
+     * webhooks); 0 disables it (tests).
+     */
+    PAYMENT_RECONCILE_INTERVAL_SECONDS: z.coerce.number().int().min(0).max(3600).default(300),
     /** Interval of the subscription sweep (term expiry/start, reminders); 0 disables it (tests). */
     SUBSCRIPTION_SWEEP_INTERVAL_SECONDS: z.coerce.number().int().min(0).max(86400).default(300),
     /** Chat sweep: unread-message email digests and unsent-attachment cleanup; 0 disables it (tests). */
@@ -162,6 +189,50 @@ const envSchema = z
     }
     // SMTP in production may also come from the admin settings, so it is
     // checked at startup by MailModule rather than here.
+
+    if (env.NODE_ENV === 'production') {
+      // Fail closed on configuration that silently breaks emails, payment
+      // callbacks, CORS, cookie security or client IPs in production.
+      const urls: [string, string | undefined][] = [
+        ['WEB_APP_URL', env.WEB_APP_URL],
+        ['WEB_INTERNAL_URL', env.WEB_INTERNAL_URL],
+        ...env.CORS_ORIGINS.map((origin): [string, string] => ['CORS_ORIGINS', origin]),
+      ];
+      for (const [key, value] of urls) {
+        const problem = value === undefined ? null : unsafeProductionUrl(value);
+        if (problem) ctx.addIssue({ code: 'custom', path: [key], message: `${value} ${problem}` });
+      }
+      if (!env.CORS_ORIGINS.length) {
+        ctx.addIssue({ code: 'custom', path: ['CORS_ORIGINS'], message: 'Required in production' });
+      }
+      if (env.TRUST_PROXY === undefined) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['TRUST_PROXY'],
+          message: 'Set explicitly in production (1 behind the Railway edge)',
+        });
+      } else if (env.TRUST_PROXY.trim() === 'true') {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['TRUST_PROXY'],
+          message: 'Trusting every proxy lets clients forge their IP; use a hop count or subnets',
+        });
+      }
+      if (!env.INTERNAL_API_SECRET) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['INTERNAL_API_SECRET'],
+          message: 'Required in production (shared with the web server)',
+        });
+      }
+      if (env.COOKIE_SECURE === false) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['COOKIE_SECURE'],
+          message: 'Cookies must be Secure in production',
+        });
+      }
+    }
   });
 
 type ParsedEnv = z.infer<typeof envSchema>;
@@ -185,7 +256,7 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
     ...env,
     port: env.PORT ?? env.API_PORT,
     cookieSecure: env.COOKIE_SECURE ?? env.NODE_ENV === 'production',
-    trustProxy: parseTrustProxy(env.TRUST_PROXY),
+    trustProxy: parseTrustProxy(env.TRUST_PROXY ?? 'loopback'),
   };
 }
 

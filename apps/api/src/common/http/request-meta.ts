@@ -1,15 +1,17 @@
 import type { Request } from 'express';
 
+import { clientIp } from './client-ip';
+
 export interface RequestMeta {
   ipAddress: string | null;
   userAgent: string | null;
 }
 
-/** Client IP (honours the configured `trust proxy`) and a bounded user agent. */
+/** The canonical client IP (see `resolveClientIp`) and a bounded user agent. */
 export function requestMeta(req: Request): RequestMeta {
   const userAgent = req.get('user-agent');
   return {
-    ipAddress: req.ip ?? null,
+    ipAddress: clientIp(req) ?? null,
     userAgent: userAgent ? userAgent.slice(0, 512) : null,
   };
 }

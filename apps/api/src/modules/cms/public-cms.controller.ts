@@ -22,6 +22,7 @@ import { z } from 'zod';
 
 import { Errors } from '../../common/errors/app.exception';
 import { requestMeta } from '../../common/http/request-meta';
+import { clientIp } from '../../common/http/client-ip';
 import { ok } from '../../common/http/response';
 import { validate } from '../../common/pipes/zod-validation.pipe';
 import { RateLimit } from '../../common/rate-limit/rate-limit.decorator';
@@ -206,7 +207,7 @@ export class PublicCmsController {
     @Body(validate(newsletterSubscribeSchema)) body: Out<typeof newsletterSubscribeSchema>,
     @Req() req: Request,
   ) {
-    return ok(await this.newsletter.subscribe(body, req.ip));
+    return ok(await this.newsletter.subscribe(body, clientIp(req)));
   }
 
   @Post('newsletter/confirm')
@@ -216,7 +217,7 @@ export class PublicCmsController {
     @Body(validate(newsletterTokenSchema)) body: Out<typeof newsletterTokenSchema>,
     @Req() req: Request,
   ) {
-    return ok(await this.newsletter.confirm(body.token, req.ip));
+    return ok(await this.newsletter.confirm(body.token, clientIp(req)));
   }
 
   /** From the unsubscribe page (token in the body). */
@@ -238,7 +239,7 @@ export class PublicCmsController {
     return ok(
       await this.newsletter.unsubscribe(
         token,
-        req.ip,
+        clientIp(req),
         fromBody.success ? 'unsubscribe_page' : 'one_click',
       ),
     );

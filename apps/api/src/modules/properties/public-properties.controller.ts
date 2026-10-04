@@ -13,6 +13,7 @@ import { propertySearchQuerySchema } from '@havenhub/shared';
 import type { Request } from 'express';
 import type { z } from 'zod';
 
+import { clientIp } from '../../common/http/client-ip';
 import { ok } from '../../common/http/response';
 import { validate } from '../../common/pipes/zod-validation.pipe';
 import { RateLimit } from '../../common/rate-limit/rate-limit.decorator';
@@ -53,7 +54,7 @@ export class PublicPropertiesController {
   @HttpCode(HttpStatus.ACCEPTED)
   @RateLimit({ name: 'views:ip', limit: 120, windowSeconds: 60, by: 'ip' })
   async view(@Param('id', new ParseUUIDPipe()) id: string, @Req() req: Request) {
-    await this.search.recordView(id, `${req.ip ?? ''}|${req.get('user-agent') ?? ''}`);
+    await this.search.recordView(id, `${clientIp(req) ?? ''}|${req.get('user-agent') ?? ''}`);
     return ok({ recorded: true });
   }
 }

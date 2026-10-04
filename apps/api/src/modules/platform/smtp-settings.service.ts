@@ -1,4 +1,4 @@
-import { HttpStatus, Inject, Injectable } from '@nestjs/common';
+import { HttpStatus, Inject, Injectable, Logger } from '@nestjs/common';
 import {
   ErrorCode,
   type SmtpSettingsView,
@@ -36,6 +36,8 @@ type Input = z.output<typeof updateSmtpSettingsSchema>;
  */
 @Injectable()
 export class SmtpSettingsService {
+  private readonly logger = new Logger(SmtpSettingsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
@@ -182,6 +184,12 @@ export class SmtpSettingsService {
         caught instanceof SmtpSendError
           ? caught
           : new SmtpSendError('The email could not be sent.', 'EUNKNOWN');
+      // Code only: no recipient, server reply or credentials.
+      this.logger.warn('SMTP test email failed', {
+        event: 'smtp.test_failed',
+        source: resolved.source,
+        errorCode: error.code,
+      });
     }
     await this.audit.record({
       actorId: actor.user.id,

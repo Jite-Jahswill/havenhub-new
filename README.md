@@ -396,16 +396,18 @@ See `.env.example` for the full annotated list.
 | Variable                              | Used by     | Required | Description                                                                      |
 | ------------------------------------- | ----------- | -------- | -------------------------------------------------------------------------------- |
 | `DATABASE_URL`                        | API, Prisma | yes      | PostgreSQL connection string                                                     |
-| `REDIS_URL`                           | API         | yes      | Redis (rate limiting; caching, queues and chat later)                            |
+| `REDIS_URL`                           | API         | yes      | Redis (rate limits, locks, caches, realtime fan-out)                             |
 | `FIELD_ENCRYPTION_KEY`                | API         | yes      | 32-byte base64 key encrypting NIN / account numbers                              |
-| `AUTH_SECRET`                         | API         | yes      | 32-byte base64 key signing CSRF tokens                                           |
+| `AUTH_SECRET`                         | API         | yes      | 32-byte base64 key signing CSRF tokens and unsubscribe links                     |
+| `INTERNAL_API_SECRET`                 | API, Web    | prod     | Same value on both; authenticates server-side calls that forward visitor IPs     |
 | `WEB_APP_URL`                         | API         | yes\*    | Web origin, for email links (\*defaults to `http://localhost:3000`)              |
 | `CORS_ORIGINS`                        | API         | no       | Allowed browser origins                                                          |
 | `SMTP_HOST`, `SMTP_*`                 | API         | prod\*   | SMTP delivery (\*or admin-managed SMTP settings); one is required in production  |
 | `REQUIRE_EMAIL_VERIFICATION`          | API         | no       | Require a verified email to sign in (default `true`)                             |
 | `ACCESS_TOKEN_TTL_MINUTES`            | API         | no       | Default 15                                                                       |
 | `REFRESH_TOKEN_TTL_DAYS`              | API         | no       | Default 30                                                                       |
-| `TRUST_PROXY`                         | API         | no       | Proxy hops for client IPs behind a load balancer                                 |
+| `TRUST_PROXY`                         | API         | prod     | Proxy hops for client IPs; `1` behind Railway (`true` is refused in production)  |
+| `DATABASE_POOL_MAX`, `DATABASE_*_MS`  | API         | no       | Pool size, statement and connect timeouts (unset = driver defaults)              |
 | `API_INTERNAL_URL`                    | Web         | yes\*    | Where the web server reaches the API (\*default `http://localhost:4000`)         |
 | `NEXT_PUBLIC_SITE_URL`                | Web         | yes\*    | Canonical site URL                                                               |
 | `NEXT_PUBLIC_MAPBOX_TOKEN`            | Web         | prod     | Mapbox public token for map tiles (OpenStreetMap is used in development)         |
@@ -417,6 +419,8 @@ See `.env.example` for the full annotated list.
 | `SUBSCRIPTION_SWEEP_INTERVAL_SECONDS` | API         | no       | Subscription term/reminder sweep (default 300; 0 disables)                       |
 | `CHAT_SWEEP_INTERVAL_SECONDS`         | API         | no       | Chat email digests and unsent-upload cleanup (default 60; 0 disables)            |
 | `CHAT_EMAIL_DELAY_SECONDS`            | API         | no       | Unread time before a digest email (default 600)                                  |
+| `PAYMENT_RECONCILE_INTERVAL_SECONDS`  | API         | no       | Re-verifies pending payments 15 min–72 h old (default 300; 0 disables)           |
+| `REVALIDATE_SECRET`                   | API, Web    | no       | Same value on both; instant CMS refresh after admin edits (else within ~60 s)    |
 | `NEXT_PUBLIC_REALTIME_URL`            | Web         | prod     | Public API origin for the Socket.IO connection (default `http://localhost:4000`) |
 
 Web variables live in `apps/web/.env.example`. **Never commit `.env` files.**
@@ -425,11 +429,17 @@ Web variables live in `apps/web/.env.example`. **Never commit `.env` files.**
 
 - **Web → Vercel:** set the project root to `apps/web` and the build command to
   `cd ../.. && pnpm build:web`, which builds workspace dependencies first. Set
-  `API_INTERNAL_URL` (the API's URL), `NEXT_PUBLIC_SITE_URL` and `NEXT_PUBLIC_MAPBOX_TOKEN`.
+  `API_INTERNAL_URL` (the API's URL), `NEXT_PUBLIC_SITE_URL`, `NEXT_PUBLIC_MAPBOX_TOKEN`,
+  `NEXT_PUBLIC_REALTIME_URL`, `INTERNAL_API_SECRET` and (optionally) `REVALIDATE_SECRET`.
 - **API → Railway (or any container/Node host):** build with `pnpm install --frozen-lockfile && pnpm build:api`,
   run `pnpm db:deploy && pnpm --filter @havenhub/api seed:prod` as a pre-deploy step, start with
-  `pnpm start:api`, and use `/api/health` as the health check. Set the required variables above,
-  plus `NODE_ENV=production`, `TRUST_PROXY` and `CORS_ORIGINS` / `WEB_APP_URL` set to the web origin.
+  `pnpm start:api`. Use `/api/health/live` for liveness/restart probes and `/api/health`
+  (readiness: `503` when PostgreSQL or Redis is down) for the deploy health check and alerts. Set
+  the required variables above, plus `NODE_ENV=production`, `TRUST_PROXY=1`, `INTERNAL_API_SECRET`
+  and `CORS_ORIGINS` / `WEB_APP_URL` set to the web origin.
+- **Operations:** the production checklist, health-check semantics, migration policy and runbooks
+  (database recovery, Paystack webhooks, refunds, storage, secret rotation, incidents) are in
+  [docs/operations.md](docs/operations.md).
 
 ## Roadmap
 

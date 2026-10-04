@@ -1,5 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 
+import { describeError } from '../../common/logging/describe-error';
 import { MAIL_TRANSPORT, type MailMessage, type MailTransport } from './mail.types';
 
 @Injectable()
@@ -18,9 +19,12 @@ export class MailService {
     try {
       await this.transport.send(message);
     } catch (error) {
-      this.logger.error(
-        `Failed to send "${message.subject}" via ${this.transport.name}: ${(error as Error).message}`,
-      );
+      // No recipient, subject or server reply (it can quote addresses).
+      this.logger.error('Email could not be sent', {
+        event: 'mail.send_failed',
+        transport: this.transport.name,
+        ...describeError(error),
+      });
     }
   }
 }

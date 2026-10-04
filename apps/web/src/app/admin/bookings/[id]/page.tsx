@@ -245,7 +245,7 @@ export default async function AdminBookingPage({ params }: PageProps<'/admin/boo
                   {r.reviewNote && (
                     <p className="text-text-secondary">Review note: {r.reviewNote}</p>
                   )}
-                  {canRefund && (r.status === 'REQUESTED' || r.status === 'FAILED') && (
+                  {canRefund && ['REQUESTED', 'FAILED', 'PROCESSING'].includes(r.status) && (
                     <RefundReview refundId={r.id} status={r.status} />
                   )}
                 </CardBody>

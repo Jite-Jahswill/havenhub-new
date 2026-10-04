@@ -1,4 +1,4 @@
-import { HttpStatus, Inject, Injectable } from '@nestjs/common';
+import { HttpStatus, Inject, Injectable, Logger } from '@nestjs/common';
 import {
   AccountType,
   ErrorCode,
@@ -36,6 +36,8 @@ type RegisterAgent = Omit<RegisterAgentInput, 'sex' | 'serviceTypes'> & {
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly passwords: PasswordService,
@@ -123,6 +125,13 @@ export class AuthService {
       : await this.passwords.verifyDummy(input.password);
 
     if (!user || !valid) {
+      // Neither the email nor the password is logged; the request id and
+      // canonical IP (rate limiting) identify the attempt.
+      this.logger.warn('Sign-in failed', {
+        event: 'auth.login_failed',
+        reason: 'invalid_credentials',
+        clientType,
+      });
       throw new AppException(
         HttpStatus.UNAUTHORIZED,
         ErrorCode.INVALID_CREDENTIALS,
@@ -130,8 +139,22 @@ export class AuthService {
       );
     }
     // Status and verification are only revealed after a correct password.
-    if (user.status !== UserStatus.ACTIVE) throw accountStatusError(user.status);
+    if (user.status !== UserStatus.ACTIVE) {
+      this.logger.warn('Sign-in refused', {
+        event: 'auth.login_failed',
+        reason: `account_${user.status.toLowerCase()}`,
+        userId: user.id,
+        clientType,
+      });
+      throw accountStatusError(user.status);
+    }
     if (this.env.REQUIRE_EMAIL_VERIFICATION && !user.emailVerifiedAt) {
+      this.logger.warn('Sign-in refused', {
+        event: 'auth.login_failed',
+        reason: 'email_not_verified',
+        userId: user.id,
+        clientType,
+      });
       throw new AppException(
         HttpStatus.FORBIDDEN,
         ErrorCode.EMAIL_NOT_VERIFIED,

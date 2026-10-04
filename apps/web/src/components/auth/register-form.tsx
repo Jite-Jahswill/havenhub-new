@@ -12,6 +12,7 @@ import { useRouter } from 'next/navigation';
 import type { FormEvent } from 'react';
 
 import { api } from '@/lib/api/client';
+import { CHECK_EMAIL_PATH, rememberPendingEmail } from '@/lib/check-email';
 import { SERVICE_LABELS } from '@/lib/labels';
 import { formText } from '@/lib/form';
 import { useApiAction } from '@/lib/use-api-action';
@@ -46,7 +47,11 @@ export function RegisterForm({ variant }: { variant: 'customer' | 'agent' }) {
     if (!input) return;
 
     const done = await run(() => api('POST', `/auth/register/${variant}`, input));
-    if (done) router.push(`/check-email?email=${encodeURIComponent(input.email)}`);
+    if (done) {
+      // The address is shown on the next page via sessionStorage, never the URL.
+      rememberPendingEmail(input.email);
+      router.push(CHECK_EMAIL_PATH);
+    }
   }
 
   return (

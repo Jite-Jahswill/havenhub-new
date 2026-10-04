@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { AgentSubscriptionStatus as S } from '@havenhub/shared';
 
+import { runSweepTick } from '../../common/logging/request-context';
 import { ENV } from '../../config/config.module';
 import type { Env } from '../../config/env';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
@@ -63,9 +64,7 @@ export class SubscriptionMaintenanceService
     if (this.running) return;
     this.running = true;
     try {
-      await this.runOnce();
-    } catch (error) {
-      this.logger.error(`Subscription sweep failed: ${(error as Error).message}`);
+      await runSweepTick(this.logger, 'subscriptions.sweep', () => this.runOnce());
     } finally {
       this.running = false;
     }

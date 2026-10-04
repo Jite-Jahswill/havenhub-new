@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { AgentEarningStatus, BookingStatus, todayInNigeria } from '@havenhub/shared';
 
+import { runSweepTick } from '../../common/logging/request-context';
 import { ENV } from '../../config/config.module';
 import type { Env } from '../../config/env';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
@@ -63,9 +64,7 @@ export class BookingMaintenanceService implements OnApplicationBootstrap, OnAppl
     if (this.running) return;
     this.running = true;
     try {
-      await this.runOnce();
-    } catch (error) {
-      this.logger.error(`Booking sweep failed: ${(error as Error).message}`);
+      await runSweepTick(this.logger, 'bookings.sweep', () => this.runOnce());
     } finally {
       this.running = false;
     }

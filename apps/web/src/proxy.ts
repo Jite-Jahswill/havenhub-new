@@ -6,6 +6,12 @@ import {
 } from '@havenhub/shared';
 import { NextResponse, type NextRequest } from 'next/server';
 
+import {
+  CLIENT_IP_HEADER,
+  INTERNAL_SECRET_HEADER,
+  internalIdentityHeaders,
+} from './lib/api/client-ip';
+import { requestIdHeaders } from './lib/api/request-id';
 import { maintenancePage } from './lib/maintenance-page';
 
 const API_URL = (process.env.API_INTERNAL_URL ?? 'http://localhost:4000').replace(/\/$/, '');
@@ -66,6 +72,8 @@ async function maintenanceResponse(request: NextRequest): Promise<NextResponse |
  * browser and to this request so Server Components see the fresh session.
  */
 export async function proxy(request: NextRequest) {
+  if (request.nextUrl.pathname.startsWith('/api/')) return forwardApi(request);
+
   const blocked = await maintenanceResponse(request);
   if (blocked) return blocked;
 
@@ -83,6 +91,8 @@ export async function proxy(request: NextRequest) {
         [CSRF_HEADER]: request.cookies.get(AUTH_COOKIES.CSRF)?.value ?? '',
         'User-Agent': request.headers.get('user-agent') ?? '',
         'X-Forwarded-For': request.headers.get('x-forwarded-for') ?? '',
+        ...internalIdentityHeaders(request.headers),
+        ...requestIdHeaders(request.headers),
       },
       cache: 'no-store',
     });
@@ -109,9 +119,29 @@ export async function proxy(request: NextRequest) {
   return response;
 }
 
+/**
+ * Browser calls to `/api/*` are rewritten to the API (next.config.ts). Before
+ * that, drop any identity headers the browser sent and attach the visitor's
+ * signed IP, so the API rate-limits and audits the visitor, not this server.
+ */
+function forwardApi(request: NextRequest): NextResponse {
+  const headers = new Headers(request.headers);
+  headers.delete(INTERNAL_SECRET_HEADER);
+  headers.delete(CLIENT_IP_HEADER);
+  for (const [name, value] of Object.entries({
+    ...internalIdentityHeaders(request.headers),
+    ...requestIdHeaders(request.headers),
+  })) {
+    headers.set(name, value);
+  }
+  return NextResponse.next({ request: { headers } });
+}
+
 export const config = {
-  // Pages only — not API calls, static assets or images.
+  // Pages (maintenance, session upkeep) and API calls (visitor identity) —
+  // not static assets or images.
   matcher: [
+    '/api/:path*',
     '/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:png|jpg|jpeg|svg|webp|ico)$).*)',
   ],
 };

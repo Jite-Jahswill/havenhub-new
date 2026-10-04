@@ -1,21 +1,19 @@
 import type { Metadata } from 'next';
 
 import { AuthCard, TextLink } from '@/components/auth/auth-card';
-import { ResendVerification } from '@/components/auth/resend-verification';
+import { CheckEmailAddress, CheckEmailResend } from '@/components/auth/check-email-details';
 
 export const metadata: Metadata = { title: 'Check your email', robots: { index: false } };
 
-export default async function CheckEmailPage({ searchParams }: PageProps<'/check-email'>) {
-  const { email } = await searchParams;
-  const address = typeof email === 'string' ? email : '';
+/** The address comes from this tab's sessionStorage, never the URL (see lib/check-email). */
+export default function CheckEmailPage() {
   return (
     <AuthCard
       title="Check your email"
       description={
         <>
-          We sent a verification link to{' '}
-          {address ? <strong className="text-text">{address}</strong> : 'your inbox'}. Open it to
-          activate your account. The link expires in 24 hours.
+          We sent a verification link to <CheckEmailAddress />. Open it to activate your account.
+          The link expires in 24 hours.
         </>
       }
       footer={
@@ -25,7 +23,7 @@ export default async function CheckEmailPage({ searchParams }: PageProps<'/check
       }
     >
       <p className="text-sm text-text-secondary">Didn’t get it? Check your spam folder, or:</p>
-      <ResendVerification email={address} />
+      <CheckEmailResend />
     </AuthCard>
   );
 }

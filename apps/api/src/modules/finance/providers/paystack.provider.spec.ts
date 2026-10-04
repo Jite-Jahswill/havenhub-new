@@ -146,4 +146,76 @@ describe('PaystackProvider', () => {
       ).toBeNull();
     });
   });
+
+  describe('ambiguous vs definite failures', () => {
+    const provider = (fetch: ReturnType<typeof vi.fn>) =>
+      new PaystackProvider(SECRET, 'https://api.test', fetch as unknown as typeof globalThis.fetch);
+    const refundOf = (p: PaystackProvider) => p.refund({ reference: 'HHP-1', amountKobo: 100n });
+    const caught = async (promise: Promise<unknown>) => {
+      try {
+        await promise;
+      } catch (error) {
+        return error as PaymentProviderError;
+      }
+      throw new Error('expected an error');
+    };
+
+    it('treats timeouts, network errors, 5xx and unreadable answers as outcome unknown', async () => {
+      const timeout = vi.fn().mockRejectedValue(new DOMException('timed out', 'TimeoutError'));
+      expect((await caught(refundOf(provider(timeout)))).outcomeUnknown).toBe(true);
+      const server = fakeFetch(502, { status: false, message: 'Bad gateway' });
+      expect((await caught(refundOf(provider(server)))).outcomeUnknown).toBe(true);
+      const garbage = vi.fn().mockResolvedValue(new Response('<html>oops</html>', { status: 200 }));
+      expect((await caught(refundOf(provider(garbage)))).outcomeUnknown).toBe(true);
+    });
+
+    it('treats an explicit refusal (4xx) as a definite failure', async () => {
+      const refused = fakeFetch(400, {
+        status: false,
+        message: 'Transaction has been fully reversed',
+      });
+      const error = await caught(refundOf(provider(refused)));
+      expect(error).toBeInstanceOf(PaymentProviderError);
+      expect(error.outcomeUnknown).toBe(false);
+      expect(error.message).toContain('fully reversed');
+      expect(error.message).not.toContain(SECRET);
+    });
+  });
+
+  describe('findRefund', () => {
+    const lookup = (data: unknown) => {
+      const fetch = fakeFetch(200, { status: true, message: 'ok', data });
+      const provider = new PaystackProvider(SECRET, 'https://api.test', fetch);
+      return {
+        fetch,
+        result: provider.findRefund({ reference: 'HHP-1', providerTransactionId: '987' }),
+      };
+    };
+
+    it('lists refunds by transaction id and prefers a completed one', async () => {
+      const { fetch, result } = lookup([
+        { id: 1, status: 'failed' },
+        { id: 2, status: 'processed' },
+      ]);
+      expect(await result).toEqual({ status: 'completed', providerRefundId: '2', message: null });
+      const [url, init] = fetch.mock.calls[0] as [string, RequestInit];
+      expect(url).toBe('https://api.test/refund?transaction=987&perPage=100');
+      expect(init.method).toBe('GET');
+    });
+
+    it('reports one in progress, only-failed and none', async () => {
+      expect(await lookup([{ id: 3, status: 'pending' }]).result).toMatchObject({
+        status: 'processing',
+        providerRefundId: '3',
+      });
+      expect(await lookup([{ id: 4, status: 'failed' }]).result).toMatchObject({
+        status: 'failed',
+      });
+      expect(await lookup([]).result).toEqual({
+        status: 'none',
+        providerRefundId: null,
+        message: null,
+      });
+    });
+  });
 });

@@ -11,3 +11,12 @@ onlyBuiltDependencies:
   - prisma
   - sharp
   - unrs-resolver
+
+# Security fixes for transitive dependencies of the Prisma CLI (tooling only;
+# never loaded by the running API). Prisma 7.x pins the vulnerable versions:
+#  - mysql2: GHSA-3f6p-5ww8-9rcr, GHSA-rgwj-5xj2-c3m3 (fixed in 3.23.1)
+#  - deepmerge-ts: GHSA-ggr8-5vv4-36mx (fixed in 8.0.0; Prisma only calls `deepmerge`)
+# Remove once a Prisma 7 release ships fixed versions.
+overrides:
+  mysql2: ^3.23.1
+  deepmerge-ts: ^8.0.0

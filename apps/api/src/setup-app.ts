@@ -4,6 +4,8 @@ import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
+import { clientIpMiddleware } from './common/http/client-ip';
+import { requestContextMiddleware } from './common/logging/request-context';
 import type { Env } from './config/env';
 
 /**
@@ -14,13 +16,17 @@ import type { Env } from './config/env';
  */
 export function setupApp(
   app: INestApplication,
-  env: Pick<Env, 'CORS_ORIGINS'> & Partial<Pick<Env, 'trustProxy'>>,
+  env: Pick<Env, 'CORS_ORIGINS'> & Partial<Pick<Env, 'trustProxy' | 'INTERNAL_API_SECRET'>>,
 ): void {
   const express = app as NestExpressApplication;
   // Needed for correct client IPs (rate limiting, audit) behind Railway/Vercel proxies.
   express.set('trust proxy', env.trustProxy ?? 'loopback');
   express.disable('x-powered-by');
+  // First: one request id per request, echoed back and carried by every log line.
+  app.use(requestContextMiddleware);
   express.useBodyParser('json', { limit: '100kb' });
+  // One canonical visitor IP per request, for rate limits and audit records.
+  app.use(clientIpMiddleware(env.INTERNAL_API_SECRET));
 
   app.use(helmet());
   app.use(cookieParser());

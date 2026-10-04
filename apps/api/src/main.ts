@@ -7,6 +7,7 @@ import { NestFactory } from '@nestjs/core';
 import { config as loadDotenv } from 'dotenv';
 
 import { AppModule } from './app.module';
+import { AppLogger } from './common/logging/app-logger';
 import { ENV } from './config/config.module';
 import type { Env } from './config/env';
 import { setupApp } from './setup-app';
@@ -17,7 +18,12 @@ loadDotenv({ path: resolve(__dirname, '../../../.env'), quiet: true });
 
 async function bootstrap(): Promise<void> {
   // rawBody: payment webhooks are authenticated by a signature over the exact bytes.
-  const app = await NestFactory.create(AppModule, { bodyParser: false, rawBody: true });
+  // Logs: JSON lines in production, carrying the request id / job run id.
+  const app = await NestFactory.create(AppModule, {
+    bodyParser: false,
+    rawBody: true,
+    logger: new AppLogger({ production: process.env.NODE_ENV === 'production' }),
+  });
   const env = app.get<Env>(ENV);
   setupApp(app, env);
 

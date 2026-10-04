@@ -8,6 +8,7 @@ import {
   PaymentProviderError,
   type InitializePaymentInput,
   type PaymentProvider,
+  type ProviderRefundLookup,
   type ProviderRefundResult,
   type ProviderVerification,
   type ProviderWebhookEvent,
@@ -21,6 +22,26 @@ interface SimulatedTransaction {
 }
 
 const key = (reference: string) => `testpay:${reference}`;
+const refundKey = (reference: string) => `testpay:refund:${reference}`;
+const refundModeKey = (reference: string) => `testpay:refund-mode:${reference}`;
+const refundCallsKey = (reference: string) => `testpay:refund-calls:${reference}`;
+
+/**
+ * How the simulated provider answers refund requests (tests only):
+ *  - `complete` (default): refunded at once;
+ *  - `processing`: accepted, confirmed later;
+ *  - `reject`: refused;
+ *  - `lost-response`: refunded, but the answer never arrives (timeout);
+ *  - `unreachable`: the request never reaches the provider (timeout);
+ *  - `lookup-unreachable`: refund lookups time out.
+ */
+export type SimulatedRefundMode =
+  'complete' | 'processing' | 'reject' | 'lost-response' | 'unreachable' | 'lookup-unreachable';
+
+interface SimulatedRefund {
+  id: string;
+  status: 'completed' | 'processing';
+}
 const TTL_SECONDS = 7 * 24 * 3600;
 
 /**
@@ -79,12 +100,73 @@ export class TestPaymentProvider implements PaymentProvider {
     };
   }
 
-  refund(input: { reference: string }): Promise<ProviderRefundResult> {
-    return Promise.resolve({
-      status: 'completed',
-      providerRefundId: `test_refund_${input.reference}`,
-      message: null,
-    });
+  async refund(input: { reference: string }): Promise<ProviderRefundResult> {
+    await this.redis.client.incr(refundCallsKey(input.reference));
+    const mode = await this.refundMode(input.reference);
+    if (mode === 'unreachable') {
+      throw new PaymentProviderError('Simulated timeout', { outcomeUnknown: true });
+    }
+    // Like a real provider, a payment can only be refunded once.
+    if (await this.redis.client.get(refundKey(input.reference))) {
+      throw new PaymentProviderError('Transaction has been fully reversed');
+    }
+    if (mode === 'reject') {
+      return { status: 'failed', providerRefundId: null, message: 'Refused (simulated)' };
+    }
+    const refund: SimulatedRefund = {
+      id: `test_refund_${input.reference}`,
+      status: mode === 'processing' ? 'processing' : 'completed',
+    };
+    await this.redis.client.set(
+      refundKey(input.reference),
+      JSON.stringify(refund),
+      'EX',
+      TTL_SECONDS,
+    );
+    if (mode === 'lost-response') {
+      throw new PaymentProviderError('Simulated timeout after the refund', {
+        outcomeUnknown: true,
+      });
+    }
+    return { status: refund.status, providerRefundId: refund.id, message: null };
+  }
+
+  async findRefund(input: { reference: string }): Promise<ProviderRefundLookup> {
+    if ((await this.refundMode(input.reference)) === 'lookup-unreachable') {
+      throw new PaymentProviderError('Simulated timeout', { outcomeUnknown: true });
+    }
+    const raw = await this.redis.client.get(refundKey(input.reference));
+    if (!raw) return { status: 'none', providerRefundId: null, message: null };
+    const refund = JSON.parse(raw) as SimulatedRefund;
+    return { status: refund.status, providerRefundId: refund.id, message: null };
+  }
+
+  /** Tests: how refund requests for this payment behave from now on. */
+  async simulateRefund(reference: string, mode: SimulatedRefundMode): Promise<void> {
+    await this.redis.client.set(refundModeKey(reference), mode, 'EX', TTL_SECONDS);
+  }
+
+  /** Tests: the simulated provider confirms an accepted refund later. */
+  async settleSimulatedRefund(reference: string): Promise<void> {
+    const raw = await this.redis.client.get(refundKey(reference));
+    if (!raw) throw new PaymentProviderError('No simulated refund');
+    const refund = JSON.parse(raw) as SimulatedRefund;
+    await this.redis.client.set(
+      refundKey(reference),
+      JSON.stringify({ ...refund, status: 'completed' }),
+      'EX',
+      TTL_SECONDS,
+    );
+  }
+
+  /** Tests: how many refund requests reached the provider for this payment. */
+  async refundRequests(reference: string): Promise<number> {
+    return Number((await this.redis.client.get(refundCallsKey(reference))) ?? 0);
+  }
+
+  private async refundMode(reference: string): Promise<SimulatedRefundMode> {
+    return ((await this.redis.client.get(refundModeKey(reference))) ??
+      'complete') as SimulatedRefundMode;
   }
 
   parseWebhook(): ProviderWebhookEvent | null {
