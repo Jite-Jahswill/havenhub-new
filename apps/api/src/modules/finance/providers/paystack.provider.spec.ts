@@ -183,19 +183,32 @@ describe('PaystackProvider', () => {
   });
 
   describe('findRefund', () => {
-    const lookup = (data: unknown) => {
+    // Paystack's GET /refund items name the refunded transaction by id
+    // (`transaction`, an integer) and by reference (`transaction_reference`).
+    const ours = { transaction: 987, transaction_reference: 'HHP-1' };
+    const other = { transaction: 555, transaction_reference: 'HHP-OTHER' };
+    const listing = (data: unknown) => {
       const fetch = fakeFetch(200, { status: true, message: 'ok', data });
       const provider = new PaystackProvider(SECRET, 'https://api.test', fetch);
-      return {
-        fetch,
-        result: provider.findRefund({ reference: 'HHP-1', providerTransactionId: '987' }),
-      };
+      return { fetch, provider };
+    };
+    const lookup = (data: unknown, providerTransactionId: string | null = '987') => {
+      const { fetch, provider } = listing(data);
+      return { fetch, result: provider.findRefund({ reference: 'HHP-1', providerTransactionId }) };
+    };
+    const unknownOutcome = async (data: unknown, providerTransactionId: string | null = '987') => {
+      const error = await lookup(data, providerTransactionId).result.then(
+        () => null,
+        (e: unknown) => e,
+      );
+      expect(error).toBeInstanceOf(PaymentProviderError);
+      expect((error as PaymentProviderError).outcomeUnknown).toBe(true);
     };
 
     it('lists refunds by transaction id and prefers a completed one', async () => {
       const { fetch, result } = lookup([
-        { id: 1, status: 'failed' },
-        { id: 2, status: 'processed' },
+        { id: 1, status: 'failed', ...ours },
+        { id: 2, status: 'processed', ...ours },
       ]);
       expect(await result).toEqual({ status: 'completed', providerRefundId: '2', message: null });
       const [url, init] = fetch.mock.calls[0] as [string, RequestInit];
@@ -204,11 +217,11 @@ describe('PaystackProvider', () => {
     });
 
     it('reports one in progress, only-failed and none', async () => {
-      expect(await lookup([{ id: 3, status: 'pending' }]).result).toMatchObject({
+      expect(await lookup([{ id: 3, status: 'pending', ...ours }]).result).toMatchObject({
         status: 'processing',
         providerRefundId: '3',
       });
-      expect(await lookup([{ id: 4, status: 'failed' }]).result).toMatchObject({
+      expect(await lookup([{ id: 4, status: 'failed', ...ours }]).result).toMatchObject({
         status: 'failed',
       });
       expect(await lookup([]).result).toEqual({
@@ -216,6 +229,75 @@ describe('PaystackProvider', () => {
         providerRefundId: null,
         message: null,
       });
+    });
+
+    it('adopts a refund that names this transaction (A)', async () => {
+      expect(await lookup([{ id: 10, status: 'processed', ...ours }]).result).toMatchObject({
+        status: 'completed',
+        providerRefundId: '10',
+      });
+      // Either identifier alone is enough when the other is not available.
+      expect(
+        await lookup([{ id: 11, status: 'processed', transaction_reference: 'HHP-1' }], null)
+          .result,
+      ).toMatchObject({ status: 'completed', providerRefundId: '11' });
+      expect(
+        await lookup([{ id: 12, status: 'processed', transaction: '987' }]).result,
+      ).toMatchObject({ status: 'completed', providerRefundId: '12' });
+    });
+
+    it('skips refunds of other transactions and keeps looking (B)', async () => {
+      expect(
+        await lookup([
+          { id: 20, status: 'processed', ...other },
+          { id: 21, status: 'processed', ...ours },
+        ]).result,
+      ).toMatchObject({ status: 'completed', providerRefundId: '21' });
+      expect(
+        await lookup([
+          { id: 22, status: 'processed', ...other },
+          { id: 23, status: 'pending', ...ours },
+        ]).result,
+      ).toMatchObject({ status: 'processing', providerRefundId: '23' });
+    });
+
+    it('reports none when no listed refund is for this transaction (C)', async () => {
+      const none = { status: 'none', providerRefundId: null, message: null };
+      expect(
+        await lookup([
+          { id: 30, status: 'processed', ...other },
+          { id: 31, status: 'pending', ...other },
+          { id: 32, status: 'failed', ...other },
+        ]).result,
+      ).toEqual(none);
+      // One matching identifier is not enough if the other contradicts it.
+      expect(
+        await lookup([
+          { id: 33, status: 'processed', transaction: 987, transaction_reference: 'HHP-OTHER' },
+          { id: 34, status: 'processed', transaction: 555, transaction_reference: 'HHP-1' },
+        ]).result,
+      ).toEqual(none);
+      // References are compared exactly.
+      expect(
+        await lookup([{ id: 35, status: 'processed', transaction_reference: 'hhp-1' }]).result,
+      ).toEqual(none);
+    });
+
+    it('treats an unreadable or unattributable listing as outcome unknown (D)', async () => {
+      await unknownOutcome({ id: 40, status: 'processed', ...ours }); // not a list
+      await unknownOutcome(null);
+      await unknownOutcome(['refund']);
+      await unknownOutcome([{ id: 41, status: 'processed' }]); // names no transaction
+      await unknownOutcome([{ status: 'processed', ...ours }]); // no refund id
+      await unknownOutcome([{ id: 42, ...ours }]); // no status
+      await unknownOutcome([{ id: 43, status: 'processed', transaction: { id: 987 } }]);
+      await unknownOutcome([{ id: 44, status: 'processed', transaction: 987.5 }]);
+      await unknownOutcome([{ id: 49, status: 'processed', transaction: '0987' }]);
+      await unknownOutcome([{ id: 45, status: 'processed', transaction_reference: 7 }]);
+      // Only a transaction id, and the payment has none to compare with.
+      await unknownOutcome([{ id: 46, status: 'processed', transaction: 987 }], null);
+      // A matching refund does not excuse an unreadable one beside it.
+      await unknownOutcome([{ id: 47, status: 'processed', ...ours }, { id: 48 }]);
     });
   });
 });

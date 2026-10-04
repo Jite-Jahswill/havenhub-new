@@ -161,10 +161,12 @@ idempotent, row-locked settlement, so a payment settles once whichever arrives f
    most 25 of each kind per run.
 
 **Webhook endpoint:** `POST https://<api-host>/api/v1/payments/webhooks/paystack`. Authenticated by
-the `x-paystack-signature` header — an HMAC-SHA512 of the raw body with `PAYSTACK_SECRET_KEY`. The
-body is never trusted for amounts or status; it only says which payment to re-verify. Handled
-events: `charge.success`, `refund.processed`, `refund.failed`. It stays available in maintenance
-mode.
+the `x-paystack-signature` header — an HMAC-SHA512 of the raw body with `PAYSTACK_SECRET_KEY`.
+Handled events: `charge.success`, `refund.processed`, `refund.failed`. For `charge.success` the body
+is never trusted for amounts or status: it only says which payment to re-verify with Paystack. The
+refund events are acted on directly once the signature is valid, without another Paystack lookup:
+`refund.processed` completes the payment's PROCESSING refund (idempotently) and `refund.failed`
+marks it FAILED. It stays available in maintenance mode.
 
 **When webhooks fail** — look for these log events:
 

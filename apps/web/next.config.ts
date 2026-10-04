@@ -1,20 +1,16 @@
-import { unsafeProductionUrl } from '@havenhub/shared';
 import type { NextConfig } from 'next';
 
+import { productionBuildProblems } from './src/lib/build-checks';
 import { securityHeaders } from './src/lib/security-headers';
 
 const apiUrl = (process.env.API_INTERNAL_URL ?? 'http://localhost:4000').replace(/\/$/, '');
 
-// The /api rewrite destination is fixed at build time: a Vercel production
-// build must not bake in a localhost or plain-http API (fail closed).
+// The /api rewrite destination, the realtime URL and the map token are fixed
+// at build time: a Vercel production build must not bake in localhost,
+// plain-http or development fallbacks (fail closed).
 if (process.env.VERCEL_ENV === 'production') {
-  for (const [key, value] of [
-    ['API_INTERNAL_URL', apiUrl],
-    ['NEXT_PUBLIC_SITE_URL', process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'],
-  ] as const) {
-    const problem = unsafeProductionUrl(value);
-    if (problem) throw new Error(`Invalid ${key} for a production build: ${value} ${problem}`);
-  }
+  const problems = productionBuildProblems(process.env);
+  if (problems.length) throw new Error(problems.join('\n'));
 }
 
 const headers = securityHeaders({

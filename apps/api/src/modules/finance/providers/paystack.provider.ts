@@ -86,16 +86,31 @@ export class PaystackProvider implements PaymentProvider {
    * Lists the refunds of a transaction (GET /refund?transaction=…). Any
    * completed refund wins, then one still in progress; "none" only when the
    * provider has no refund for it at all.
+   *
+   * The list filter is not trusted: only refunds that name this payment's
+   * transaction (`transaction`, Paystack's transaction id, or
+   * `transaction_reference`, our reference) are considered, so a refund of
+   * another payment is never adopted. A response, or a listed refund, that
+   * cannot be attributed makes the outcome unknown rather than "none".
    */
   async findRefund(input: {
     reference: string;
     providerTransactionId: string | null;
   }): Promise<ProviderRefundLookup> {
     const transaction = encodeURIComponent(input.providerTransactionId ?? input.reference);
-    const refunds = await this.call<{ id: number; status: string }[]>(
+    const listed = await this.call<unknown>(
       'GET',
       `/refund?transaction=${transaction}&perPage=100`,
     );
+    if (!Array.isArray(listed)) throw unreadableRefunds();
+    const refunds: ListedRefund[] = [];
+    for (const item of listed) {
+      const refund = readListedRefund(item);
+      if (!refund) throw unreadableRefunds();
+      const ours = refundBelongsTo(refund, input);
+      if (ours === null) throw unreadableRefunds();
+      if (ours) refunds.push(refund);
+    }
     const pick = (statuses: string[]) => refunds.find((r) => statuses.includes(r.status));
     const done = pick(['processed']);
     if (done) return { status: 'completed', providerRefundId: String(done.id), message: null };
@@ -176,3 +191,60 @@ export class PaystackProvider implements PaymentProvider {
 }
 
 const FAILED = new Set(['failed', 'reversed']);
+
+/** A refund from GET /refund, reduced to what is needed to attribute it. */
+interface ListedRefund {
+  id: string;
+  status: string;
+  /** Paystack's id of the refunded transaction (`transaction`, an integer). */
+  transactionId: string | null;
+  /** Our reference of the refunded transaction (`transaction_reference`). */
+  reference: string | null;
+}
+
+/** The listed refund, or null when it is unreadable or names no transaction. */
+function readListedRefund(item: unknown): ListedRefund | null {
+  if (typeof item !== 'object' || item === null) return null;
+  const r = item as Record<string, unknown>;
+  const id = typeof r.id === 'number' || typeof r.id === 'string' ? String(r.id) : '';
+  if (!id || typeof r.status !== 'string') return null;
+  let transactionId: string | null = null;
+  if (typeof r.transaction === 'number' && Number.isSafeInteger(r.transaction)) {
+    transactionId = String(r.transaction);
+  } else if (typeof r.transaction === 'string' && /^(0|[1-9]\d*)$/.test(r.transaction)) {
+    transactionId = r.transaction;
+  } else if (r.transaction !== undefined && r.transaction !== null) {
+    return null; // present but not a transaction id: cannot be attributed
+  }
+  let reference: string | null = null;
+  if (typeof r.transaction_reference === 'string' && r.transaction_reference !== '') {
+    reference = r.transaction_reference;
+  } else if (r.transaction_reference !== undefined && r.transaction_reference !== null) {
+    return null;
+  }
+  if (transactionId === null && reference === null) return null;
+  return { id, status: r.status, transactionId, reference };
+}
+
+/**
+ * Whether a listed refund is for this payment: every identifier both sides
+ * know must agree, and at least one must. Null when nothing can be compared
+ * (the refund names only a transaction id and the payment has none).
+ */
+function refundBelongsTo(
+  refund: ListedRefund,
+  payment: { reference: string; providerTransactionId: string | null },
+): boolean | null {
+  const byId =
+    refund.transactionId !== null && payment.providerTransactionId !== null
+      ? refund.transactionId === payment.providerTransactionId
+      : null;
+  const byReference = refund.reference !== null ? refund.reference === payment.reference : null;
+  if (byId === false || byReference === false) return false;
+  return byId === true || byReference === true ? true : null;
+}
+
+const unreadableRefunds = () =>
+  new PaymentProviderError('Paystack refund list could not be attributed to the transaction', {
+    outcomeUnknown: true,
+  });

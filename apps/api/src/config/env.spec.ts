@@ -16,6 +16,7 @@ const productionExtras = {
   STORAGE_BUCKET: 'havenhub',
   STORAGE_ACCESS_KEY: 'key',
   STORAGE_SECRET_KEY: 'secret',
+  STORAGE_PUBLIC_BASE_URL: 'https://media.example.com',
   PAYMENT_PROVIDER: 'paystack',
   PAYSTACK_SECRET_KEY: 'sk_live_example',
   WEB_APP_URL: 'https://havenhub.ng',
@@ -142,6 +143,50 @@ describe('loadEnv', () => {
     it('refuses insecure cookies', () => {
       expect(prod({ COOKIE_SECURE: 'false' })).toThrow(/COOKIE_SECURE/);
       expect(prod({ COOKIE_SECURE: 'true' })).not.toThrow();
+    });
+
+    it('requires a live Paystack key, without echoing the key', () => {
+      for (const key of ['sk_test_0123456789abcdef', 'pk_live_0123456789', 'live-key-0123']) {
+        let message = '';
+        try {
+          loadEnv({ ...valid, ...productionExtras, PAYSTACK_SECRET_KEY: key });
+        } catch (error) {
+          message = (error as Error).message;
+        }
+        expect(message).toMatch(/PAYSTACK_SECRET_KEY: Production requires a live Paystack/);
+        expect(message).not.toContain(key);
+      }
+      expect(prod({ PAYSTACK_SECRET_KEY: 'sk_live_0123456789abcdef' })).not.toThrow();
+      // Test keys stay usable outside production.
+      expect(() =>
+        loadEnv({ ...valid, PAYMENT_PROVIDER: 'paystack', PAYSTACK_SECRET_KEY: 'sk_test_x' }),
+      ).not.toThrow();
+    });
+
+    it('requires the public https bucket/CDN URL for s3 storage', () => {
+      for (const url of [
+        undefined,
+        '/api/media',
+        'http://media.example.com',
+        'https://localhost/m',
+      ]) {
+        expect(prod({ STORAGE_PUBLIC_BASE_URL: url }), String(url)).toThrow(
+          /STORAGE_PUBLIC_BASE_URL: .*set the bucket or CDN URL/,
+        );
+      }
+      expect(prod({ STORAGE_PUBLIC_BASE_URL: 'https://cdn.example.com/media/' })).not.toThrow();
+      expect(prod({ STORAGE_PUBLIC_BASE_URL: 'https://bucket.s3.example.com' })).not.toThrow();
+      // Development keeps the local default.
+      expect(loadEnv(valid).STORAGE_PUBLIC_BASE_URL).toBe('/api/media');
+      expect(() =>
+        loadEnv({
+          ...valid,
+          STORAGE_DRIVER: 's3',
+          STORAGE_BUCKET: 'b',
+          STORAGE_ACCESS_KEY: 'k',
+          STORAGE_SECRET_KEY: 's',
+        }),
+      ).not.toThrow();
     });
 
     it('does not apply to development or test', () => {

@@ -232,6 +232,30 @@ const envSchema = z
           message: 'Cookies must be Secure in production',
         });
       }
+      // Never echo the key itself: only whether it is a live one.
+      if (
+        env.PAYMENT_PROVIDER === 'paystack' &&
+        env.PAYSTACK_SECRET_KEY &&
+        !env.PAYSTACK_SECRET_KEY.startsWith('sk_live_')
+      ) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['PAYSTACK_SECRET_KEY'],
+          message: 'Production requires a live Paystack secret key (sk_live_…)',
+        });
+      }
+      // With S3, files are fetched from the bucket/CDN (the /api/media route
+      // only serves the local driver), so the default would break every image.
+      if (env.STORAGE_DRIVER === 's3') {
+        const problem = unsafeProductionUrl(env.STORAGE_PUBLIC_BASE_URL);
+        if (problem) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['STORAGE_PUBLIC_BASE_URL'],
+            message: `${env.STORAGE_PUBLIC_BASE_URL} ${problem} (set the bucket or CDN URL)`,
+          });
+        }
+      }
     }
   });
 
