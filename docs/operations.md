@@ -16,6 +16,7 @@ chats or logs.
 7. [Storage: public and private objects](#7-storage-public-and-private-objects)
 8. [Secret and key rotation](#8-secret-and-key-rotation)
 9. [Incident checklist](#9-incident-checklist)
+10. [Dependency audit failures](#10-dependency-audit-failures)
 
 ## 1. Health checks
 
@@ -264,3 +265,21 @@ together. **Requires data handling** = existing data depends on the key.
 10. **Recover and verify:** fix, redeploy or restore; re-run the §2 smoke test; watch logs for an hour.
 11. **Review:** within a week, a short blameless write-up — timeline, cause, what detected it, and
     follow-up actions.
+
+## 10. Dependency audit failures
+
+CI runs `pnpm audit --prod --audit-level high` and fails on a **high** or **critical** advisory in a
+production dependency. Dev-only dependencies are not audited. Dependabot opens weekly update PRs for
+npm and GitHub Actions (`.github/dependabot.yml`).
+
+1. **Reproduce:** `pnpm audit --prod` locally. Note the package, the advisory and the dependency
+   path (`pnpm why <package>`).
+2. **Is it reachable?** Read the advisory: does HavenHub use the affected function, input or
+   configuration? Record the answer in the PR.
+3. **Fix, in this order of preference:** merge the Dependabot PR; `pnpm update <package>` within the
+   allowed range; for a vulnerable transitive dependency add an entry under `overrides` in
+   `pnpm-workspace.yaml` pinning the patched version. Then run `pnpm check`.
+4. **No patch yet:** if the advisory is not reachable, ship a time-boxed exception: pin it in a
+   tracked issue with an owner and a review date, and add its GHSA id to `auditConfig.ignoreGhsas` in
+   `pnpm-workspace.yaml` with a comment linking that issue. Never lower `--audit-level` or remove the step to get green.
+5. **Moderate/low** advisories do not fail CI; review them when they appear in Dependabot PRs.

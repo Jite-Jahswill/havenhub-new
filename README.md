@@ -438,7 +438,8 @@ Web variables live in `apps/web/.env.example`. **Never commit `.env` files.**
   the required variables above, plus `NODE_ENV=production`, `TRUST_PROXY=1`, `INTERNAL_API_SECRET`
   and `CORS_ORIGINS` / `WEB_APP_URL` set to the web origin.
 - **Operations:** the production checklist, health-check semantics, migration policy and runbooks
-  (database recovery, Paystack webhooks, refunds, storage, secret rotation, incidents) are in
+  (database recovery, Paystack webhooks, refunds, storage, secret rotation, incidents, dependency
+  audit failures) are in
   [docs/operations.md](docs/operations.md).
 
 ## Roadmap
