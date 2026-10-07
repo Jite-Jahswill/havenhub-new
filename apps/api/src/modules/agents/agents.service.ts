@@ -33,6 +33,8 @@ import {
   canAdminTransition,
   permissionForTransition,
 } from './agent-verification';
+import { agentVerification } from '../notifications/notification-messages';
+import { NotificationsService } from '../notifications/notifications.service';
 
 type ProfileWithPayout = AgentProfile & { payoutAccount: PayoutAccount | null };
 
@@ -44,6 +46,7 @@ export class AgentsService {
     private readonly audit: AuditService,
     private readonly plans: PlanLimitsService,
     private readonly storage: StorageService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   // ── Agent self-service (always scoped to the caller's own profile) ──────
@@ -420,6 +423,13 @@ export class AgentsService {
         },
         tx,
       );
+      await this.notifications.notify(tx, [
+        agentVerification({
+          agentUserId: profile.userId,
+          status: input.status,
+          note: input.note ?? null,
+        }),
+      ]);
     });
     return this.adminGet(id);
   }

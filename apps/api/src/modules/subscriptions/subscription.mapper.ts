@@ -57,6 +57,8 @@ export const toSubscriptionPaymentView = (p: SubscriptionPayment): SubscriptionP
   planId: p.planId,
   planName: p.planName,
   amountKobo: koboToNumber(p.amountKobo),
+  discountKobo: koboToNumber(p.discountKobo),
+  discountCode: p.discountCode,
   currency: p.currency,
   billingInterval: p.billingInterval,
   provider: p.provider,

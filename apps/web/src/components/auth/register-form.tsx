@@ -1,12 +1,6 @@
 'use client';
 
-import {
-  ErrorCode,
-  PASSWORD_MIN_LENGTH,
-  Sex,
-  registerAgentSchema,
-  registerCustomerSchema,
-} from '@havenhub/shared';
+import { ErrorCode, Sex, registerAgentSchema, registerCustomerSchema } from '@havenhub/shared';
 import { Alert, Button, Field, Input, Select, cn } from '@havenhub/ui';
 import { useRouter } from 'next/navigation';
 import type { FormEvent } from 'react';
@@ -20,7 +14,14 @@ import { useApiAction } from '@/lib/use-api-action';
 import { PasswordInput } from './password-input';
 
 /** Public registration. The account type is fixed by the endpoint, never by the form. */
-export function RegisterForm({ variant }: { variant: 'customer' | 'agent' }) {
+export function RegisterForm({
+  variant,
+  passwordMinLength,
+}: {
+  variant: 'customer' | 'agent';
+  /** From the admin security policy; the API enforces it. */
+  passwordMinLength: number;
+}) {
   const router = useRouter();
   const { pending, error, fieldErrors, validate, run } = useApiAction();
   const isAgent = variant === 'agent';
@@ -125,7 +126,7 @@ export function RegisterForm({ variant }: { variant: 'customer' | 'agent' }) {
       <Field
         label="Password"
         error={fieldErrors.password}
-        hint={`At least ${PASSWORD_MIN_LENGTH} characters`}
+        hint={`At least ${passwordMinLength} characters`}
       >
         {(a) => <PasswordInput {...a} name="password" autoComplete="new-password" required />}
       </Field>

@@ -25,6 +25,7 @@ export const experienceCardSelect = (now: Date) =>
     slug: true,
     kind: true,
     title: true,
+    discountPercent: true,
     city: true,
     state: true,
     publishedAt: true,

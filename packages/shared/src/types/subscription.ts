@@ -1,3 +1,4 @@
+import type { AppliedDiscount } from '../schemas/discount.js';
 import type { Currency } from '../enums/property.js';
 import type { PaymentProviderName, PaymentStatus } from '../enums/booking.js';
 import type {
@@ -86,7 +87,11 @@ export interface CurrentSubscriptionView {
 export interface SubscriptionQuoteView {
   plan: SubscriptionPlanView;
   changeType: SubscriptionChangeType;
+  /** What is charged: the plan price minus any discount. */
   amountKobo: number;
+  /** The plan price before any discount. */
+  listPriceKobo: number;
+  discount: AppliedDiscount | null;
   /** True when the plan applies as soon as payment is verified. */
   startsImmediately: boolean;
   startsAt: string;
@@ -111,6 +116,9 @@ export interface SubscriptionPaymentView {
   planId: string;
   planName: string;
   amountKobo: number;
+  /** Taken off by a discount code (0 without one). */
+  discountKobo: number;
+  discountCode: string | null;
   currency: Currency;
   billingInterval: BillingInterval;
   provider: PaymentProviderName;

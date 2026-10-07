@@ -8,6 +8,7 @@ import {
   PropertyStatus,
   PropertyType,
   RENTAL_PERIODS,
+  SaleMode,
 } from '../enums/property.js';
 import { paginationQuerySchema } from './admin.js';
 
@@ -31,6 +32,8 @@ const propertyFields = {
   propertyType: z.enum(PropertyType),
   listingType: z.enum(ListingType),
   pricingPeriod: z.enum(PricingPeriod),
+  /** Sale listings only; ignored for rentals. */
+  saleMode: z.enum(SaleMode),
 
   addressLine: z.string().trim().min(3).max(240),
   city: z.string().trim().min(2).max(100),
@@ -93,6 +96,7 @@ const optionalShape = {
   cleaningFeeKobo: f.cleaningFeeKobo.nullable().optional(),
   availableFrom: f.availableFrom.nullable().optional(),
   amenityIds: propertyFields.amenityIds.optional(),
+  saleMode: propertyFields.saleMode.optional(),
 };
 
 interface Consistency {
@@ -192,7 +196,7 @@ const optionalNumber = (schema: z.ZodNumber) =>
     schema.optional(),
   );
 
-export const PROPERTY_SORTS = ['newest', 'price_asc', 'price_desc'] as const;
+export const PROPERTY_SORTS = ['newest', 'price_asc', 'price_desc', 'discount'] as const;
 export type PropertySort = (typeof PROPERTY_SORTS)[number];
 
 /** Public search. Every filter maps to a real, indexed column. */
@@ -214,6 +218,11 @@ export const propertySearchQuerySchema = paginationQuerySchema.extend({
     .transform(() => true)
     .optional(),
   cleaningIncluded: z
+    .enum(['true'])
+    .transform(() => true)
+    .optional(),
+  /** Only listings with a discount set by the agent ("special offers"). */
+  onOffer: z
     .enum(['true'])
     .transform(() => true)
     .optional(),
@@ -269,3 +278,12 @@ export const updateAmenitySchema = z
   .partial()
   .refine((v) => Object.keys(v).length > 0, { message: 'Nothing to update' });
 export type UpdateAmenityInput = z.input<typeof updateAmenitySchema>;
+
+/** The buyer accepts the off-platform notice (the exact version they saw). */
+export const acceptSaleContactSchema = z
+  .object({
+    accepted: z.literal(true, 'Tick that you accept the notice'),
+    disclaimerHash: z.string().regex(/^[0-9a-f]{64}$/),
+  })
+  .strict();
+export type AcceptSaleContactInput = z.input<typeof acceptSaleContactSchema>;

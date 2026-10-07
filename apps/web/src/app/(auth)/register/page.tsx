@@ -2,10 +2,11 @@ import type { Metadata } from 'next';
 
 import { AuthCard, TextLink } from '@/components/auth/auth-card';
 import { RegisterForm } from '@/components/auth/register-form';
+import { getPublicPolicies } from '@/lib/cms';
 
 export const metadata: Metadata = { title: 'Create an account' };
 
-export default function RegisterPage() {
+export default async function RegisterPage() {
   return (
     <AuthCard
       title="Create your account"
@@ -21,7 +22,10 @@ export default function RegisterPage() {
         </div>
       }
     >
-      <RegisterForm variant="customer" />
+      <RegisterForm
+        variant="customer"
+        passwordMinLength={(await getPublicPolicies()).passwordMinLength}
+      />
     </AuthCard>
   );
 }

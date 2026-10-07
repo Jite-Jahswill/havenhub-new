@@ -13,7 +13,7 @@ import type { z } from 'zod';
 
 import { Errors } from '../../common/errors/app.exception';
 import type { RequestMeta } from '../../common/http/request-meta';
-import type { HomepageSection, Prisma } from '../../generated/prisma/client';
+import { Prisma, type HomepageSection } from '../../generated/prisma/client';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import { StorageService } from '../../infrastructure/storage/storage.service';
 import { AuditService } from '../audit/audit.service';
@@ -23,7 +23,7 @@ import { toPropertyCard } from '../properties/property.mapper';
 import { PROPERTY_CARD_SELECT, PUBLIC_PROPERTY_WHERE } from '../properties/property.selects';
 import { BlogService } from './blog.service';
 import { CmsCacheService } from './cms-cache.service';
-import { toCmsImage, validationError } from './cms-helpers';
+import { assertMediaExists, toCmsImage, validationError } from './cms-helpers';
 import { SiteService } from './site.service';
 
 type Out<T extends z.ZodType> = z.output<T>;
@@ -58,9 +58,11 @@ export class HomepageService {
   async adminSections(): Promise<AdminHomepageSection[]> {
     const rows = await this.prisma.homepageSection.findMany({ orderBy: { sortOrder: 'asc' } });
     const byKey = new Map(rows.map((r) => [r.key, r]));
+    const heroImage = await this.heroImage(byKey.get('HERO'));
     return HOMEPAGE_SECTIONS.map((def, index) => {
       const row = byKey.get(def.key);
       return {
+        ...(def.key === 'HERO' ? { heroImage } : {}),
         key: def.key,
         label: def.label,
         available: def.available,
@@ -98,6 +100,13 @@ export class HomepageService {
           throw validationError(['config', ...issue.path].join('.'), issue.message);
         }
         config = parsed.data;
+        if (key === 'HERO') {
+          await assertMediaExists(
+            tx,
+            (parsed.data as { imageId?: string | null }).imageId,
+            'config.imageId',
+          );
+        }
       }
       const data = {
         ...(input.enabled !== undefined ? { enabled: input.enabled } : {}),
@@ -175,6 +184,14 @@ export class HomepageService {
     });
   }
 
+  /** The hero's library image; a missing one (deleted outside the app) is just no image. */
+  private async heroImage(row: HomepageSection | undefined) {
+    const id = (row?.config as { imageId?: unknown } | undefined)?.imageId;
+    if (typeof id !== 'string') return null;
+    const media = await this.prisma.cmsMedia.findUnique({ where: { id } });
+    return media ? toCmsImage(media, this.storage) : null;
+  }
+
   private async render(
     row: HomepageSection,
     blogEnabled: boolean,
@@ -195,6 +212,9 @@ export class HomepageService {
           showSearch: config.showSearch as boolean,
           searchPlaceholder: (config.searchPlaceholder as string | null | undefined) ?? null,
           links: config.links as { label: string; href: string }[],
+          image: await this.heroImage(row),
+          imageLayout: config.imageLayout as 'BACKGROUND' | 'SIDE',
+          overlay: config.overlay as 'LIGHT' | 'MEDIUM' | 'STRONG',
         };
       case 'EXPLORE': {
         const items = config.items as {
@@ -223,20 +243,27 @@ export class HomepageService {
       }
       case 'FEATURED_PROPERTIES':
       case 'RENT_PROPERTIES':
-      case 'SALE_PROPERTIES': {
+      case 'SALE_PROPERTIES':
+      case 'SPECIAL_OFFERS': {
         const where =
           row.key === 'FEATURED_PROPERTIES'
             ? { ...PUBLIC_PROPERTY_WHERE, featuredAt: { not: null } }
-            : {
-                ...PUBLIC_PROPERTY_WHERE,
-                listingType: row.key === 'RENT_PROPERTIES' ? ('RENT' as const) : ('SALE' as const),
-              };
+            : row.key === 'SPECIAL_OFFERS'
+              ? // Listings the agent has discounted, biggest discount first.
+                { ...PUBLIC_PROPERTY_WHERE, discountPercent: { gte: 1 } }
+              : {
+                  ...PUBLIC_PROPERTY_WHERE,
+                  listingType:
+                    row.key === 'RENT_PROPERTIES' ? ('RENT' as const) : ('SALE' as const),
+                };
         const properties = await this.prisma.property.findMany({
           where,
           orderBy:
             row.key === 'FEATURED_PROPERTIES'
               ? [{ featuredAt: 'desc' }, { id: 'asc' }]
-              : [{ publishedAt: 'desc' }, { id: 'asc' }],
+              : row.key === 'SPECIAL_OFFERS'
+                ? [{ discountPercent: 'desc' }, { publishedAt: 'desc' }, { id: 'asc' }]
+                : [{ publishedAt: 'desc' }, { id: 'asc' }],
           take: limit,
           select: PROPERTY_CARD_SELECT,
         });
@@ -307,7 +334,32 @@ export class HomepageService {
           })),
         };
       }
-      // SPECIAL_OFFERS and AWARDS have no backing feature yet: never rendered.
+      case 'AWARDS': {
+        // Holders of the chosen badge (or any active badge), best rated, then most stayed.
+        const badgeId = (config.badgeId as string | null | undefined) ?? null;
+        const ids = await this.prisma.$queryRaw<{ id: string }[]>`
+          SELECT p.id FROM properties p
+          WHERE EXISTS (
+            SELECT 1 FROM badge_awards a JOIN badges b ON b.id = a.badge_id
+            WHERE a.property_id = p.id AND b.active
+              ${badgeId ? Prisma.sql`AND b.id = ${badgeId}::uuid` : Prisma.empty}
+          )
+          ORDER BY p.rating_sum::float / NULLIF(p.review_count, 0) DESC NULLS LAST,
+                   p.completed_bookings DESC, p.id
+          LIMIT 200`;
+        const rows = await this.prisma.property.findMany({
+          where: { ...PUBLIC_PROPERTY_WHERE, id: { in: ids.map((r) => r.id) } },
+          select: PROPERTY_CARD_SELECT,
+        });
+        const order = new Map(ids.map((r, i) => [r.id, i]));
+        const properties = rows.sort((a, b) => order.get(a.id)! - order.get(b.id)!).slice(0, limit);
+        if (!properties.length) return null;
+        return {
+          key: 'AWARDS',
+          ...head,
+          properties: properties.map((p) => toPropertyCard(p, this.storage)),
+        };
+      }
       default:
         return null;
     }

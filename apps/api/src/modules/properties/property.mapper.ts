@@ -6,6 +6,8 @@ import {
   type PropertyCard,
   type PropertyImageView,
   type PropertyVideoView,
+  ratingSummary,
+  type SaleMode,
 } from '@havenhub/shared';
 
 import type { Amenity, PropertyImage, PropertyVideo } from '../../generated/prisma/client';
@@ -61,6 +63,7 @@ export function toPropertyCard(row: PropertyCardRow, urls: Urls): PropertyCard {
     title: row.title,
     propertyType: row.propertyType,
     listingType: row.listingType,
+    saleMode: row.saleMode as SaleMode | null,
     pricingPeriod: row.pricingPeriod!,
     priceKobo: num(row.priceKobo)!,
     discountPercent: row.discountPercent,
@@ -85,6 +88,13 @@ export function toPropertyCard(row: PropertyCardRow, urls: Urls): PropertyCard {
       verified: true,
     },
     featured: row.featuredAt !== null,
+    rating: ratingSummary(row.ratingSum, row.reviewCount),
+    badges: row.badgeAwards.map(({ badge }) => ({
+      id: badge.id,
+      name: badge.name,
+      description: badge.description,
+      imageUrl: urls.url(badge.image.storageKey),
+    })),
     publishedAt: row.publishedAt!.toISOString(),
   };
 }
@@ -105,6 +115,7 @@ export function toAgentPropertyView(
     description: row.description,
     propertyType: row.propertyType,
     listingType: row.listingType,
+    saleMode: row.saleMode as SaleMode | null,
     pricingPeriod: row.pricingPeriod,
     addressLine: row.addressLine,
     city: row.city,

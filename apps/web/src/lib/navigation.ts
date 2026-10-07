@@ -1,8 +1,11 @@
 import type { AccountType, AuthUser, Permission } from '@havenhub/shared';
 import {
+  AppWindow,
+  Award,
   BarChart3,
   BedDouble,
   Bell,
+  BellRing,
   BookOpen,
   Briefcase,
   CircleHelp,
@@ -33,6 +36,7 @@ import {
   ShieldCheck,
   Sparkles,
   Star,
+  Tag,
   Ticket,
   User,
   UserCheck,
@@ -53,8 +57,8 @@ export interface NavItem {
   icon: LucideIcon;
   /** Set for modules that arrive in a later phase; shown with a "Soon" tag. */
   phase?: number;
-  /** Shows the live unread-message count. */
-  unreadBadge?: boolean;
+  /** Shows a live unread count: chat messages or in-app notifications. */
+  badge?: 'messages' | 'notifications';
   description?: string;
   /** Admin items are hidden when the admin lacks this permission. The API enforces it regardless. */
   permission?: Permission;
@@ -68,15 +72,9 @@ export const CUSTOMER_NAV: NavItem[] = [
   { href: '/account', label: 'Profile', icon: User },
   { href: '/account/bookings', label: 'Bookings', icon: CalendarCheck },
   { href: '/account/favorites', label: 'Favourites', icon: Heart },
-  { href: '/account/messages', label: 'Messages', icon: MessageSquare, unreadBadge: true },
+  { href: '/account/messages', label: 'Messages', icon: MessageSquare, badge: 'messages' },
   { href: '/account/payments', label: 'Payments', icon: CreditCard },
-  {
-    href: '/account/notifications',
-    label: 'Notifications',
-    icon: Bell,
-    phase: 5,
-    description: 'Booking updates and messages in one place.',
-  },
+  { href: '/account/notifications', label: 'Notifications', icon: Bell, badge: 'notifications' },
   { href: '/account/settings', label: 'Settings', icon: Settings },
 ];
 
@@ -85,7 +83,9 @@ export const AGENT_NAV: NavItem[] = [
   { href: '/agent/properties', label: 'Properties', icon: Building2 },
   { href: '/agent/bookings', label: 'Bookings', icon: CalendarCheck },
   { href: '/agent/experiences', label: 'Experiences', icon: Ticket },
-  { href: '/agent/messages', label: 'Messages', icon: MessageSquare, unreadBadge: true },
+  { href: '/agent/messages', label: 'Messages', icon: MessageSquare, badge: 'messages' },
+  { href: '/agent/notifications', label: 'Notifications', icon: Bell, badge: 'notifications' },
+  { href: '/agent/promotions', label: 'Promotions', icon: Tag },
   { href: '/agent/earnings', label: 'Earnings', icon: Wallet },
   { href: '/agent/analytics', label: 'Analytics', icon: BarChart3 },
   { href: '/agent/subscription', label: 'Subscription', icon: Package },
@@ -141,13 +141,8 @@ export const ADMIN_NAV: NavItem[] = [
     icon: Palmtree,
     permission: 'vacation_zones.manage',
   },
-  {
-    href: '/admin/reviews',
-    label: 'Reviews',
-    icon: Star,
-    phase: 3,
-    description: 'Reviews are tied to completed bookings, which arrive with payments.',
-  },
+  { href: '/admin/reviews', label: 'Reviews', icon: Star, permission: 'reviews.moderate' },
+  { href: '/admin/badges', label: 'Badges', icon: Award, permission: 'badges.manage' },
   {
     href: '/admin/amenities',
     label: 'Amenities',
@@ -169,7 +164,12 @@ export const ADMIN_NAV: NavItem[] = [
     permission: 'subscriptions.view',
   },
   { href: '/admin/plans', label: 'Plans', icon: CalendarDays, permission: 'subscriptions.view' },
-  { href: '/admin/discounts', label: 'Discounts', icon: Percent, phase: 3 },
+  {
+    href: '/admin/discounts',
+    label: 'Discounts',
+    icon: Percent,
+    permission: 'discounts.manage',
+  },
 
   {
     href: '/admin/content',
@@ -197,6 +197,18 @@ export const ADMIN_NAV: NavItem[] = [
     icon: Megaphone,
     permission: 'marketing.campaigns',
   },
+  {
+    href: '/admin/popups',
+    label: 'Pop-ups',
+    icon: AppWindow,
+    permission: 'popups.manage',
+  },
+  {
+    href: '/admin/announcements',
+    label: 'Announcements',
+    icon: BellRing,
+    permission: 'notifications.send',
+  },
 
   {
     href: '/admin/conversations',
@@ -211,7 +223,7 @@ export const ADMIN_NAV: NavItem[] = [
     label: 'Messages',
     icon: MessageSquare,
     permission: 'support.respond',
-    unreadBadge: true,
+    badge: 'messages',
   },
   {
     href: '/admin/settings',

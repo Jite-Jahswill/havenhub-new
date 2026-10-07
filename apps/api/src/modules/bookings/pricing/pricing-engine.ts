@@ -7,7 +7,8 @@ import { CleaningOption, PriceLineKind, stayUnitLabel, type RentalPeriod } from 
  *
  *   rent            unit price × quantity
  *   listing discount  −(unit − discounted unit) × quantity
- *   = stay
+ *   promo code        −the agent's promo discount on the rent after the listing discount
+ *   = stay           (both discounts are agent-funded: fees and commission follow the stay)
  *   + cleaning        if offered for a fee and selected (once per booking)
  *   + caution         refundable deposit (once per booking; never revenue)
  *   + service fee     serviceFeeBps of the stay           → HavenHub
@@ -34,6 +35,8 @@ export interface PricingInput {
   cleaningFeeKobo: bigint | null;
   addCleaning: boolean;
   cautionFeeKobo: bigint | null;
+  /** An agent promo code already validated (DiscountsService); amount in kobo. */
+  promo?: { code: string; label: string; amountOffKobo: bigint } | null;
   rates: PricingRates;
 }
 
@@ -49,7 +52,8 @@ export interface PricingResult {
   lines: PricedLine[];
   rentKobo: bigint;
   discountKobo: bigint;
-  /** Rent after listing discount. */
+  promoKobo: bigint;
+  /** Rent after the listing discount and any promo code. */
   stayKobo: bigint;
   cleaningKobo: bigint;
   cautionKobo: bigint;
@@ -104,7 +108,20 @@ export function priceStay(input: PricingInput): PricingResult {
       amountKobo: -discountKobo,
     });
   }
-  const stayKobo = rentKobo - discountKobo;
+  const promoKobo = input.promo?.amountOffKobo ?? 0n;
+  if (promoKobo < 0n || (promoKobo > 0n && promoKobo >= rentKobo - discountKobo)) {
+    throw new PricingError('A promo code cannot exceed the rent');
+  }
+  if (input.promo && promoKobo > 0n) {
+    lines.push(
+      fixedLine(
+        PriceLineKind.PROMO_DISCOUNT,
+        `Promo code ${input.promo.code} (${input.promo.label})`,
+        -promoKobo,
+      ),
+    );
+  }
+  const stayKobo = rentKobo - discountKobo - promoKobo;
 
   let cleaningKobo = 0n;
   if (input.addCleaning) {
@@ -146,6 +163,7 @@ export function priceStay(input: PricingInput): PricingResult {
     lines,
     rentKobo,
     discountKobo,
+    promoKobo,
     stayKobo,
     cleaningKobo,
     cautionKobo,

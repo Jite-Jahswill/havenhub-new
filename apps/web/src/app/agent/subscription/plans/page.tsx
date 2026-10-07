@@ -7,9 +7,16 @@ import { PageHeader } from '@/components/dashboard/dashboard-shell';
 import { PlanComparison } from '@/components/subscriptions/plan-comparison';
 import { serverApi } from '@/lib/api/server';
 
+const CODE = /^[A-Za-z0-9][A-Za-z0-9-]{2,31}$/;
+
 export const metadata: Metadata = { title: 'Plans' };
 
-export default async function AgentPlansPage() {
+export default async function AgentPlansPage({
+  searchParams,
+}: PageProps<'/agent/subscription/plans'>) {
+  const sp = await searchParams;
+  // From a discount notification: applied at checkout, where the server validates it.
+  const code = typeof sp.code === 'string' && CODE.test(sp.code) ? sp.code.toUpperCase() : null;
   const [plans, current] = await Promise.all([
     serverApi<SubscriptionPlanView[]>('/subscriptions/plans'),
     serverApi<CurrentSubscriptionView>('/agents/me/subscription'),
@@ -37,6 +44,11 @@ export default async function AgentPlansPage() {
           description="Compare what each plan includes. You see the exact price and when it applies before you pay."
         />
       </div>
+      {code && !now.scheduled && (
+        <Alert tone="success" className="mb-6">
+          Discount code <strong>{code}</strong> will be applied when you choose a plan it covers.
+        </Alert>
+      )}
       {now.scheduled && (
         <Alert className="mb-6">
           You already have a plan change scheduled ({now.scheduled.plan.name}). You can choose
@@ -50,7 +62,7 @@ export default async function AgentPlansPage() {
           plan.isDefault || now.scheduled
             ? null
             : {
-                href: `/agent/subscription/checkout?plan=${plan.id}`,
+                href: `/agent/subscription/checkout?plan=${plan.id}${code ? `&code=${code}` : ''}`,
                 label:
                   plan.id === now.plan.id
                     ? 'Renew'

@@ -1,6 +1,15 @@
 import 'server-only';
 
-import type { ApiResponse, PublicSeoView, PublicSiteView, SeoRoutePath } from '@havenhub/shared';
+import {
+  POLICY_DEFAULTS,
+  publicPolicies,
+  type ApiResponse,
+  type PlatformStatusView,
+  type PublicPlatformPolicies,
+  type PublicSeoView,
+  type PublicSiteView,
+  type SeoRoutePath,
+} from '@havenhub/shared';
 import type { Metadata } from 'next';
 import { headers } from 'next/headers';
 import { cache } from 'react';
@@ -74,6 +83,17 @@ export const getSite = cache(
 );
 
 export const getSeo = cache(async () => cmsData<PublicSeoView>('/seo'));
+
+/**
+ * The admin policies the public site follows. Cached like CMS reads (the API
+ * revalidates the tag when they change); the built-in defaults are used when
+ * the API is unreachable, matching the API's own defaults.
+ */
+export const getPublicPolicies = cache(
+  async (): Promise<PublicPlatformPolicies> =>
+    (await cmsData<PlatformStatusView>('/platform/status'))?.policies ??
+    publicPolicies(POLICY_DEFAULTS),
+);
 
 export const absoluteUrl = (url: string) =>
   url.startsWith('http') ? url : `${env.NEXT_PUBLIC_SITE_URL}${url}`;

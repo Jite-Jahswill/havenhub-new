@@ -24,6 +24,7 @@ import { AuditService } from '../audit/audit.service';
 import { RbacService } from '../rbac/rbac.service';
 import { toAuthUser } from '../users/user.mapper';
 import { accountStatusError } from './guards/authentication.guard';
+import { PlatformPoliciesService } from '../platform/platform-policies.service';
 import { PasswordService } from './password.service';
 import { SessionService, type IssuedSession } from './session.service';
 import { TOKEN_TTL_MINUTES, VerificationTokenService } from './verification-token.service';
@@ -48,6 +49,7 @@ export class AuthService {
     private readonly audit: AuditService,
     private readonly storage: StorageService,
     @Inject(ENV) private readonly env: Env,
+    private readonly policies: PlatformPoliciesService,
   ) {}
 
   // ── Registration ──────────────────────────────────────────────────────────
@@ -97,6 +99,7 @@ export class AuthService {
     password: string,
     create: (passwordHash: string) => Promise<{ id: string; email: string; fullName: string }>,
   ): Promise<void> {
+    await this.assertPasswordPolicy(password, 'password');
     const passwordHash = await this.passwords.hash(password);
     try {
       const user = await create(passwordHash);
@@ -257,6 +260,7 @@ export class AuthService {
    * because the user proved control of the inbox, marks the email verified.
    */
   async resetPassword(input: ResetPasswordInput, meta: RequestMeta): Promise<void> {
+    await this.assertPasswordPolicy(input.password, 'password');
     const passwordHash = await this.passwords.hash(input.password);
     const user = await this.prisma.$transaction(async (tx) => {
       const userId = await this.tokens.consume(
@@ -309,6 +313,7 @@ export class AuthService {
         { issues: [{ path: 'currentPassword', message: 'Incorrect password' }] },
       );
     }
+    await this.assertPasswordPolicy(input.newPassword, 'newPassword');
     const passwordHash = await this.passwords.hash(input.newPassword);
     await this.prisma.$transaction(async (tx) => {
       await tx.user.update({ where: { id: userId }, data: { passwordHash } });
@@ -328,6 +333,18 @@ export class AuthService {
       );
     });
     await this.mail.send(MailTemplates.passwordChanged(user.email, firstName(user.fullName)));
+  }
+
+  /** The shared schema enforces the built-in minimum; administrators may require more. */
+  private async assertPasswordPolicy(password: string, field: string): Promise<void> {
+    const min = (await this.policies.get()).security.passwordMinLength;
+    if (password.length >= min) return;
+    throw new AppException(
+      HttpStatus.UNPROCESSABLE_ENTITY,
+      ErrorCode.VALIDATION_ERROR,
+      `Use at least ${min} characters for your password.`,
+      { issues: [{ path: field, message: `Use at least ${min} characters` }] },
+    );
   }
 }
 

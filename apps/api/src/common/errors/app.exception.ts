@@ -32,6 +32,9 @@ export const Errors = {
   conflict: (message: string) => new AppException(HttpStatus.CONFLICT, ErrorCode.CONFLICT, message),
   badRequest: (message: string, code: ErrorCode = ErrorCode.BAD_REQUEST) =>
     new AppException(HttpStatus.BAD_REQUEST, code, message),
+  /** A feature an administrator has turned off in the platform policies. */
+  featureDisabled: (message: string) =>
+    new AppException(HttpStatus.FORBIDDEN, ErrorCode.FEATURE_DISABLED, message),
   invalidToken: (message = 'This link is invalid or has expired.') =>
     new AppException(HttpStatus.BAD_REQUEST, ErrorCode.INVALID_TOKEN, message),
 };

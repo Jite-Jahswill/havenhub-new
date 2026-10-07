@@ -15,6 +15,7 @@ import {
 } from './chat.mapper';
 import { ChatAccessService } from './chat-access.service';
 import { UnreadService } from './unread.service';
+import { PlatformPoliciesService } from '../platform/platform-policies.service';
 
 /**
  * Publishes chat events to every participant's own room, each with a view
@@ -32,6 +33,7 @@ export class ChatEventsService {
     private readonly access: ChatAccessService,
     private readonly unread: UnreadService,
     private readonly storage: StorageService,
+    private readonly policies: PlatformPoliciesService,
   ) {}
 
   private send<E extends keyof ChatEventPayloads>(
@@ -63,11 +65,12 @@ export class ChatEventsService {
         include: MESSAGE_INCLUDE,
       });
       const eventId = randomUUID();
+      const { editWindowMinutes } = (await this.policies.get()).chat;
       for (const userId of await this.access.participantIds(message.conversationId)) {
         this.send(userId, event, {
           eventId,
           conversationId: message.conversationId,
-          message: toMessageView(message, userId, this.storage),
+          message: toMessageView(message, userId, this.storage, editWindowMinutes),
         });
       }
     });

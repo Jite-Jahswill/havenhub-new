@@ -1,11 +1,6 @@
 'use client';
 
-import {
-  ErrorCode,
-  PASSWORD_MIN_LENGTH,
-  changePasswordSchema,
-  type SessionView,
-} from '@havenhub/shared';
+import { ErrorCode, changePasswordSchema, type SessionView } from '@havenhub/shared';
 import { Alert, Badge, Button, Card, CardBody, CardHeader, Field } from '@havenhub/ui';
 import { Monitor, Smartphone } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -16,7 +11,14 @@ import { ThemeToggle } from '@/components/theme-toggle';
 import { api } from '@/lib/api/client';
 import { useApiAction } from '@/lib/use-api-action';
 
-export function SecuritySettings({ sessions }: { sessions: SessionView[] }) {
+export function SecuritySettings({
+  sessions,
+  passwordMinLength,
+}: {
+  sessions: SessionView[];
+  /** From the admin security policy; the API enforces it. */
+  passwordMinLength: number;
+}) {
   return (
     <div className="flex flex-col gap-6">
       <Card>
@@ -25,7 +27,7 @@ export function SecuritySettings({ sessions }: { sessions: SessionView[] }) {
           description="Changing your password signs you out of every other device."
         />
         <CardBody>
-          <ChangePasswordForm />
+          <ChangePasswordForm passwordMinLength={passwordMinLength} />
         </CardBody>
       </Card>
       <Card>
@@ -47,7 +49,7 @@ export function SecuritySettings({ sessions }: { sessions: SessionView[] }) {
   );
 }
 
-function ChangePasswordForm() {
+function ChangePasswordForm({ passwordMinLength }: { passwordMinLength: number }) {
   const { pending, error, fieldErrors, validate, run } = useApiAction();
   const [done, setDone] = useState(false);
 
@@ -79,7 +81,7 @@ function ChangePasswordForm() {
       <Field
         label="New password"
         error={fieldErrors.newPassword}
-        hint={`At least ${PASSWORD_MIN_LENGTH} characters`}
+        hint={`At least ${passwordMinLength} characters`}
       >
         {(a) => <PasswordInput {...a} name="newPassword" autoComplete="new-password" />}
       </Field>

@@ -148,6 +148,38 @@ describe('priceStay', () => {
     }
   });
 
+  it('takes an agent promo code off after the listing discount; fees follow the reduced stay', () => {
+    const r = priceStay(
+      base({
+        unitPriceKobo: 1_000_000n,
+        discountPercent: 10,
+        quantity: 2,
+        promo: { code: 'STAY10', label: '10% off', amountOffKobo: 180_000n },
+      }),
+    );
+    expect(r.rentKobo).toBe(2_000_000n);
+    expect(r.discountKobo).toBe(200_000n);
+    expect(r.promoKobo).toBe(180_000n);
+    expect(r.stayKobo).toBe(1_620_000n);
+    const promo = r.lines.find((l) => l.kind === 'PROMO_DISCOUNT')!;
+    expect(promo).toMatchObject({ amountKobo: -180_000n, label: 'Promo code STAY10 (10% off)' });
+    expect(r.serviceFeeKobo).toBe(applyBps(1_620_000n, rates.serviceFeeBps));
+    expect(r.agentCommissionKobo).toBe(applyBps(1_620_000n, rates.agentCommissionBps));
+    expect(sum(r)).toBe(r.totalKobo);
+  });
+
+  it('refuses a promo that would take the whole stay', () => {
+    expect(() =>
+      priceStay(
+        base({
+          unitPriceKobo: 100_000n,
+          quantity: 1,
+          promo: { code: 'ALL', label: '₦1,000 off', amountOffKobo: 100_000n },
+        }),
+      ),
+    ).toThrow(PricingError);
+  });
+
   it('rejects unpriced properties and bad quantities', () => {
     expect(() => priceStay(base({ unitPriceKobo: 0n }))).toThrow(PricingError);
     expect(() => priceStay(base({ quantity: 0 }))).toThrow(PricingError);

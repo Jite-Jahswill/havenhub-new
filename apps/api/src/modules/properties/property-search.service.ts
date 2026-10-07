@@ -16,7 +16,14 @@ import { RedisService } from '../../infrastructure/redis/redis.service';
 import { StorageService } from '../../infrastructure/storage/storage.service';
 import type { AuthContext } from '../auth/auth.types';
 import { num, toAmenityView, toImageView, toPropertyCard, toVideoView } from './property.mapper';
-import { PROPERTY_CARD_SELECT, PUBLIC_PROPERTY_WHERE, agentDisplayName } from './property.selects';
+import {
+  BADGE_AWARDS_SELECT,
+  PROPERTY_CARD_SELECT,
+  PUBLIC_PROPERTY_WHERE,
+  agentDisplayName,
+} from './property.selects';
+import { PlatformPoliciesService } from '../platform/platform-policies.service';
+import { disclaimerHash } from './sale-contact.service';
 
 const VIEW_DEDUPE_SECONDS = 30 * 60;
 
@@ -33,6 +40,7 @@ export class PropertySearchService {
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
     private readonly redis: RedisService,
+    private readonly policies: PlatformPoliciesService,
   ) {}
 
   async search(params: PropertySearchParams, viewer?: AuthContext): Promise<PropertySearchResult> {
@@ -42,7 +50,13 @@ export class PropertySearchService {
         ? [{ priceKobo: 'asc' }, { id: 'asc' }]
         : params.sort === 'price_desc'
           ? [{ priceKobo: 'desc' }, { id: 'asc' }]
-          : [{ publishedAt: 'desc' }, { id: 'asc' }];
+          : params.sort === 'discount'
+            ? [
+                { discountPercent: { sort: 'desc', nulls: 'last' } },
+                { publishedAt: 'desc' },
+                { id: 'asc' },
+              ]
+            : [{ publishedAt: 'desc' }, { id: 'asc' }];
 
     const [total, rows] = await this.prisma.$transaction([
       this.prisma.property.count({ where }),
@@ -82,6 +96,7 @@ export class PropertySearchService {
         agentProfile: {
           include: { user: { select: { fullName: true, avatarKey: true, createdAt: true } } },
         },
+        badgeAwards: BADGE_AWARDS_SELECT,
       },
     });
     if (!row) throw Errors.notFound('Property');
@@ -98,8 +113,19 @@ export class PropertySearchService {
       this.storage,
     );
 
+    const { sales } = await this.policies.get();
+    // Contact for sale needs the admin's notice: no notice, no direct contact details.
+    const saleContact =
+      row.listingType === 'SALE' &&
+      row.saleMode === 'CONTACT' &&
+      sales.contactEnabled &&
+      sales.disclaimer
+        ? { disclaimer: sales.disclaimer, disclaimerHash: disclaimerHash(sales.disclaimer) }
+        : null;
+
     return {
       ...card,
+      saleContact,
       description: row.description!,
       addressLine: row.addressLine!,
       lga: row.lga!,
@@ -230,6 +256,7 @@ export function buildWhere(params: PropertySearchParams): Prisma.PropertyWhereIn
   if (params.minGuests !== undefined) and.push({ maxGuests: { gte: params.minGuests } });
   if (params.furnished) and.push({ furnished: true });
   if (params.cleaningIncluded) and.push({ cleaningOption: 'INCLUDED' });
+  if (params.onOffer) and.push({ discountPercent: { gte: 1 } });
   for (const slug of params.amenities ?? []) {
     and.push({ amenities: { some: { amenity: { slug, isActive: true } } } });
   }

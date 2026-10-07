@@ -144,6 +144,11 @@ export class RealtimeGateway
     this.io?.to(userRoom(userId)).emit(event, payload);
   }
 
+  /** Emits to every connected socket, on every API instance (a content-free hint only). */
+  emitToAll(event: string, payload: unknown): void {
+    this.io?.emit(event, payload);
+  }
+
   /**
    * Disconnects local sockets whose session was revoked or expired, or whose
    * user is no longer active. Each instance checks its own sockets.

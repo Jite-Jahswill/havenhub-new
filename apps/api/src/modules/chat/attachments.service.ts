@@ -10,6 +10,7 @@ import { StorageService } from '../../infrastructure/storage/storage.service';
 import { detectAttachmentType, maxBytesFor, safeFileName } from './attachment-types';
 import { attachmentUrl } from './chat.mapper';
 import { ChatAccessService } from './chat-access.service';
+import { PlatformPoliciesService } from '../platform/platform-policies.service';
 import { ConversationsService } from './conversations.service';
 
 /** Uploads not sent in a message within this window are deleted. */
@@ -36,6 +37,7 @@ export class AttachmentsService {
     private readonly conversations: ConversationsService,
     private readonly images: ImageProcessor,
     private readonly storage: StorageService,
+    private readonly policies: PlatformPoliciesService,
   ) {}
 
   async upload(
@@ -44,6 +46,10 @@ export class AttachmentsService {
     file: Express.Multer.File,
   ): Promise<MessageAttachmentView> {
     await this.access.participant(conversationId, userId);
+    const policies = await this.policies.get();
+    if (!policies.chat.attachments) {
+      throw Errors.featureDisabled('Attachments are turned off in chat right now.');
+    }
     const conversation = await this.prisma.conversation.findUniqueOrThrow({
       where: { id: conversationId },
       select: { status: true },
@@ -64,6 +70,10 @@ export class AttachmentsService {
     }
     if (file.size > maxBytesFor(detected.kind)) {
       throw invalid(`That file is too large. ${ATTACHMENT_LIMITS[detected.kind].label}.`);
+    }
+    const policyMb = policies.storage.chatAttachmentMaxMb;
+    if (file.size > policyMb * 1024 * 1024) {
+      throw invalid(`That file is too large. Attachments can be up to ${policyMb} MB.`);
     }
 
     const prefix = `chat/${conversationId}`;

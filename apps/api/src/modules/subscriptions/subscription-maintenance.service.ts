@@ -15,6 +15,7 @@ import { DistributedLockService } from '../../infrastructure/redis/distributed-l
 import { SubscriptionLifecycleService } from './subscription-lifecycle.service';
 import { SubscriptionNotifier } from './subscription-notifier';
 import { SubscriptionsService } from './subscriptions.service';
+import { PlatformPoliciesService } from '../platform/platform-policies.service';
 
 export const SUBSCRIPTION_JOBS = {
   reconcile: 'jobs:subscriptions:reconcile',
@@ -22,7 +23,6 @@ export const SUBSCRIPTION_JOBS = {
 } as const;
 
 /** Reminder lead time before a term ends (plans do not renew automatically). */
-export const EXPIRY_REMINDER_DAYS = 3;
 const DAY_MS = 24 * 3600 * 1000;
 
 /**
@@ -47,6 +47,7 @@ export class SubscriptionMaintenanceService
     private readonly notifier: SubscriptionNotifier,
     private readonly locks: DistributedLockService,
     @Inject(ENV) private readonly env: Env,
+    private readonly policies: PlatformPoliciesService,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -110,12 +111,15 @@ export class SubscriptionMaintenanceService
   }
 
   /**
-   * One reminder per term, a few days before it ends — unless a paid
+   * One reminder per term, the notification policy's number of days before it
+   * ends (0 = none) — unless a paid
    * follow-on term is already queued. The claim (`expiryReminderAt`) is a
    * conditional update, so concurrent runs never send twice.
    */
   async sendReminders(now = new Date()): Promise<number> {
-    const horizon = new Date(now.getTime() + EXPIRY_REMINDER_DAYS * DAY_MS);
+    const days = (await this.policies.get()).notifications.subscriptionExpiryReminderDays;
+    if (days === 0) return 0;
+    const horizon = new Date(now.getTime() + days * DAY_MS);
     const ending = await this.prisma.agentSubscription.findMany({
       where: {
         status: S.ACTIVE,

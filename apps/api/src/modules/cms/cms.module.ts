@@ -21,6 +21,8 @@ import { PagesService } from './pages.service';
 import { PublicCmsController } from './public-cms.controller';
 import { RevalidationService } from './revalidation.service';
 import { SiteService } from './site.service';
+import { AdminPopupsController, PublicPopupsController } from './popups.controller';
+import { PopupsService } from './popups.service';
 import { TestimonialsService } from './testimonials.service';
 
 /**
@@ -31,6 +33,8 @@ import { TestimonialsService } from './testimonials.service';
 @Module({
   imports: [ExperiencesModule],
   controllers: [
+    PublicPopupsController,
+    AdminPopupsController,
     PublicCmsController,
     AdminCmsController,
     AdminBlogController,
@@ -44,6 +48,7 @@ import { TestimonialsService } from './testimonials.service';
     SiteService,
     HomepageService,
     TestimonialsService,
+    PopupsService,
     CmsMediaService,
     PagesService,
     BlogService,
@@ -53,6 +58,6 @@ import { TestimonialsService } from './testimonials.service';
     CampaignsService,
     CmsMaintenanceService,
   ],
-  exports: [SiteService],
+  exports: [SiteService, CmsCacheService],
 })
 export class CmsModule {}

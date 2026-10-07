@@ -5,7 +5,12 @@ import { Errors } from '../../common/errors/app.exception';
 import type { RequestMeta } from '../../common/http/request-meta';
 import type { Booking, Prisma } from '../../generated/prisma/client';
 import { AuditService } from '../audit/audit.service';
+import { BadgesService } from '../badges/badges.service';
+import { DiscountsService } from '../discounts/discounts.service';
+import { bookingMessages } from '../notifications/notification-messages';
+import { NotificationsService } from '../notifications/notifications.service';
 import { assertTransition } from './booking-lifecycle';
+import type { StoredPropertySnapshot } from './booking.mapper';
 
 type Tx = Prisma.TransactionClient;
 
@@ -16,7 +21,12 @@ type Tx = Prisma.TransactionClient;
  */
 @Injectable()
 export class BookingStateService {
-  constructor(private readonly audit: AuditService) {}
+  constructor(
+    private readonly audit: AuditService,
+    private readonly notifications: NotificationsService,
+    private readonly discounts: DiscountsService,
+    private readonly badges: BadgesService,
+  ) {}
 
   async lock(tx: Tx, bookingId: string): Promise<Booking> {
     await tx.$queryRaw`SELECT id FROM bookings WHERE id = ${bookingId}::uuid FOR UPDATE`;
@@ -53,7 +63,49 @@ export class BookingStateService {
       },
       tx,
     );
+    await this.notify(tx, updated, booking.status, options.actorId);
+    // A promo code is used once the booking is paid; given back if it never is (or is cancelled).
+    if (to === BookingStatus.CONFIRMED) {
+      await this.discounts.settle(tx, { bookingId: booking.id }, 'REDEEMED');
+    } else if (to === BookingStatus.CANCELLED || to === BookingStatus.EXPIRED) {
+      await this.discounts.settle(tx, { bookingId: booking.id }, 'RELEASED');
+    } else if (to === BookingStatus.COMPLETED) {
+      // A completed stay counts towards booking-based badges.
+      await tx.property.update({
+        where: { id: booking.propertyId },
+        data: { completedBookings: { increment: 1 } },
+      });
+      await this.badges.recompute(tx, { propertyIds: [booking.propertyId] });
+    }
     return updated;
+  }
+
+  /** In-app notifications for the change, in the same transaction. */
+  private async notify(tx: Tx, booking: Booking, from: BookingStatus, actorId: string | null) {
+    const build = {
+      [BookingStatus.CONFIRMED]: bookingMessages.confirmed,
+      [BookingStatus.CANCELLED]: (b: Parameters<typeof bookingMessages.confirmed>[0]) =>
+        bookingMessages.cancelled(b, actorId, from === BookingStatus.CONFIRMED),
+      [BookingStatus.EXPIRED]: bookingMessages.expired,
+    }[booking.status as string];
+    if (!build) return;
+    const agent = await tx.agentProfile.findUniqueOrThrow({
+      where: { id: booking.agentProfileId },
+      select: { userId: true },
+    });
+    const snapshot = booking.propertySnapshot as unknown as StoredPropertySnapshot;
+    await this.notifications.notify(
+      tx,
+      build({
+        id: booking.id,
+        reference: booking.reference,
+        title: snapshot.title,
+        startDate: booking.startDate,
+        endDate: booking.endDate,
+        customerId: booking.customerId,
+        agentUserId: agent.userId,
+      }),
+    );
   }
 
   /**

@@ -145,6 +145,8 @@ const envSchema = z
     // ── CMS (Phase 7) ──
     /** CMS sweep: due email campaigns and CV retention; 0 disables it (tests). */
     CMS_SWEEP_INTERVAL_SECONDS: z.coerce.number().int().min(0).max(3600).default(60),
+    /** In-app notification retention sweep; 0 disables it. */
+    NOTIFICATION_SWEEP_INTERVAL_SECONDS: z.coerce.number().int().min(0).max(86400).default(3600),
     /** Campaign emails sent per sweep tick (throttles SMTP). */
     CAMPAIGN_BATCH_SIZE: z.coerce.number().int().min(1).max(1000).default(50),
     /**

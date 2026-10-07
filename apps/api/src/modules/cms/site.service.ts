@@ -28,6 +28,7 @@ import { PUBLIC_EXPERIENCE_WHERE } from '../experiences/experience.selects';
 import { PUBLIC_PROPERTY_WHERE } from '../properties/property.selects';
 import { CmsCacheService } from './cms-cache.service';
 import { assertMediaExists, iso, mediaBase, toCmsImage } from './cms-helpers';
+import { PlatformPoliciesService } from '../platform/platform-policies.service';
 
 type Db = Prisma.TransactionClient | PrismaService;
 type Out<T extends z.ZodType> = z.output<T>;
@@ -56,6 +57,7 @@ export class SiteService {
     private readonly images: ImageProcessor,
     private readonly audit: AuditService,
     private readonly cache: CmsCacheService,
+    private readonly policies: PlatformPoliciesService,
   ) {}
 
   /** The settings row (created with defaults if the seed has not run). */
@@ -381,6 +383,8 @@ export class SiteService {
           await this.prisma.seoRoute.findMany({ where: { noIndex: true }, select: { path: true } })
         ).map((r) => r.path),
       );
+      // Experience kinds turned off in the events policy are not listed.
+      const offered = await this.policies.enabledExperienceKinds();
       const entries: SitemapEntry[] = [];
       const add = (path: string, at: Date | null) => {
         if (entries.length < SITEMAP_LIMIT) entries.push({ path, lastModified: iso(at) });
@@ -389,10 +393,10 @@ export class SiteService {
         ['/', true],
         ['/properties', on.has('properties')],
         ['/experiences', true],
-        ['/events', on.has('events')],
-        ['/tours', on.has('tours')],
-        ['/hotels', on.has('hotels')],
-        ['/cleaning', on.has('cleaning')],
+        ['/events', on.has('events') && offered.includes('EVENT')],
+        ['/tours', on.has('tours') && offered.includes('TOUR')],
+        ['/hotels', on.has('hotels') && offered.includes('HOTEL')],
+        ['/cleaning', on.has('cleaning') && offered.includes('CLEANING')],
         ['/destinations', on.has('destinations')],
         ['/blog', on.has('blog') && s.blogEnabled],
         ['/help', on.has('help') && s.helpCenterEnabled],
@@ -418,7 +422,7 @@ export class SiteService {
         ['CLEANING', 'cleaning'],
       ] as const;
       for (const [kind, segment] of kinds) {
-        if (!on.has(segment)) continue;
+        if (!on.has(segment) || !offered.includes(kind)) continue;
         const rows = await this.prisma.experience.findMany({
           where: { ...PUBLIC_EXPERIENCE_WHERE, kind },
           select: { slug: true, updatedAt: true },

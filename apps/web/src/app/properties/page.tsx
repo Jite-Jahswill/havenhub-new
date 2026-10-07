@@ -35,6 +35,7 @@ const KEYS = [
   'minGuests',
   'furnished',
   'cleaningIncluded',
+  'onOffer',
   'amenities',
   'bbox',
   'sort',

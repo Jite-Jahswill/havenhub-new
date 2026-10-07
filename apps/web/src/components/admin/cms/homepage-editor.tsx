@@ -1,13 +1,15 @@
 'use client';
 
-import type { AdminHomepageSection, ApiError } from '@havenhub/shared';
-import { Alert, Badge, Button, Card, CardBody, Field, Input } from '@havenhub/ui';
+import type { AdminHomepageSection, ApiError, CmsImage } from '@havenhub/shared';
+import { Alert, Badge, Button, Card, CardBody, Field, Input, Select } from '@havenhub/ui';
 import { ArrowDown, ArrowUp, ChevronDown, Plus, Trash2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
 import { api } from '@/lib/api/client';
 import { fieldErrors as toFieldErrors } from '@/lib/api/errors';
+
+import { ImageField } from './image-field';
 
 type Link = { label: string; href: string };
 type Item = { title: string; description: string | null; href: string };
@@ -16,7 +18,14 @@ type Item = { title: string; description: string | null; href: string };
  * The homepage builder: switch sections on or off, order them (buttons, so
  * it works by touch and keyboard), and edit each one's wording and links.
  */
-export function HomepageEditor({ sections }: { sections: AdminHomepageSection[] }) {
+export function HomepageEditor({
+  sections,
+  canUpload,
+}: {
+  sections: AdminHomepageSection[];
+  /** Whether the admin may upload new images to the media library. */
+  canUpload: boolean;
+}) {
   const router = useRouter();
   const [order, setOrder] = useState(sections);
   const [error, setError] = useState<string | null>(null);
@@ -49,6 +58,7 @@ export function HomepageEditor({ sections }: { sections: AdminHomepageSection[] 
               last={index === order.length - 1}
               moving={moving}
               onMove={(d) => void move(index, d)}
+              canUpload={canUpload}
             />
           </li>
         ))}
@@ -63,13 +73,16 @@ function SectionCard({
   last,
   moving,
   onMove,
+  canUpload,
 }: {
   section: AdminHomepageSection;
   first: boolean;
   last: boolean;
   moving: boolean;
   onMove: (delta: number) => void;
+  canUpload: boolean;
 }) {
+  const [heroImage, setHeroImage] = useState<CmsImage | null>(section.heroImage ?? null);
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [enabled, setEnabled] = useState(section.enabled);
@@ -228,6 +241,57 @@ function SectionCard({
                     )}
                   </Field>
                 </div>
+                <ImageField
+                  label="Hero image (optional)"
+                  value={heroImage}
+                  onChange={(image) => {
+                    setHeroImage(image);
+                    set('imageId', image?.id ?? null);
+                  }}
+                  canUpload={canUpload}
+                />
+                {errors['config.imageId'] && (
+                  <p className="text-sm text-error">{errors['config.imageId']}</p>
+                )}
+                {heroImage && (
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <Field label="Image layout" error={errors['config.imageLayout']}>
+                      {(a) => (
+                        <Select
+                          {...a}
+                          value={(config.imageLayout as string) ?? 'BACKGROUND'}
+                          onChange={(e) => set('imageLayout', e.target.value)}
+                        >
+                          <option value="BACKGROUND">Behind the text (full width)</option>
+                          <option value="SIDE">Beside the text</option>
+                        </Select>
+                      )}
+                    </Field>
+                    {((config.imageLayout as string) ?? 'BACKGROUND') === 'BACKGROUND' && (
+                      <Field
+                        label="Darken the image"
+                        hint="Keeps the headline readable over busy photos."
+                        error={errors['config.overlay']}
+                      >
+                        {(a) => (
+                          <Select
+                            {...a}
+                            value={(config.overlay as string) ?? 'MEDIUM'}
+                            onChange={(e) => set('overlay', e.target.value)}
+                          >
+                            <option value="LIGHT">A little</option>
+                            <option value="MEDIUM">Medium</option>
+                            <option value="STRONG">A lot</option>
+                          </Select>
+                        )}
+                      </Field>
+                    )}
+                  </div>
+                )}
+                <p className="text-xs text-text-muted">
+                  Use a wide photo (at least 1600 px across). Upload it in Media first, or here if
+                  you can upload. The alt text set in Media describes it to screen readers.
+                </p>
                 <label className="flex items-center gap-2 text-sm text-text">
                   <input
                     type="checkbox"

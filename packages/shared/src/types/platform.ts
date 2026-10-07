@@ -1,5 +1,6 @@
 import type { ModeratedListingType, SmtpSecurity, SmtpSource } from '../enums/platform.js';
 import type { Permission } from '../rbac/permissions.js';
+import type { PublicPlatformPolicies } from '../schemas/platform-policies.js';
 
 // ── RBAC ──
 
@@ -137,4 +138,6 @@ export interface PlatformStatusView {
     contactPhone: string | null;
     contactAddress: string | null;
   };
+  /** Admin policies the public site follows (password length, enabled features). */
+  policies: PublicPlatformPolicies;
 }

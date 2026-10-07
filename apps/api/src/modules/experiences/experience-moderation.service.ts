@@ -25,6 +25,8 @@ import { agentDisplayName } from '../properties/property.selects';
 import { MODERATION, moderationTarget } from './experience-lifecycle';
 import { toAgentExperienceView } from './experience.mapper';
 import { AGENT_EXPERIENCE_INCLUDE } from './experience.selects';
+import { listingModerated } from '../notifications/notification-messages';
+import { NotificationsService } from '../notifications/notifications.service';
 
 /** Admin review of events, tours, hotels and cleaning services — the property flow, reused. */
 @Injectable()
@@ -33,6 +35,7 @@ export class ExperienceModerationService {
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
     private readonly audit: AuditService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async list(
@@ -204,6 +207,15 @@ export class ExperienceModerationService {
         },
         tx,
       );
+      await this.notifications.notify(tx, [
+        listingModerated({
+          agentUserId: listing.agentProfile.user.id,
+          action: input.action,
+          title: listing.title,
+          note: input.note ?? null,
+          link: `/agent/experiences/${id}`,
+        }),
+      ]);
     });
     return this.get(id);
   }

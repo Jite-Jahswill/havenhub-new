@@ -41,6 +41,10 @@ export function BookingWidget({ property, viewer }: { property: PropertyDetail; 
   const [addCleaning, setAddCleaning] = useState(false);
   const [quote, setQuote] = useState<BookingQuote | null>(null);
   const [quoteError, setQuoteError] = useState<ApiError | null>(null);
+  // The agent's promo code: typed in `codeInput`, applied as `code` (the server validates it).
+  const [codeInput, setCodeInput] = useState('');
+  const [code, setCode] = useState('');
+  const [codeError, setCodeError] = useState<string | null>(null);
   const [refresh, setRefresh] = useState(0);
   const reserve = useApiAction();
 
@@ -69,8 +73,15 @@ export function BookingWidget({ property, viewer }: { property: PropertyDetail; 
         quantity,
         guests: daily ? guests : undefined,
         addCleaning,
+        ...(code ? { code } : {}),
       }).then((res) => {
         if (!active) return;
+        if (!res.success && res.code === ErrorCode.DISCOUNT_CODE_INVALID) {
+          // Show why, then quote again without the code.
+          setCodeError(res.message);
+          setCode('');
+          return;
+        }
         setQuote(res.success ? res.data : null);
         setQuoteError(res.success ? null : res);
       });
@@ -79,7 +90,7 @@ export function BookingWidget({ property, viewer }: { property: PropertyDetail; 
       active = false;
       clearTimeout(timer);
     };
-  }, [property.id, startDate, quantity, guests, addCleaning, daily, refresh]);
+  }, [property.id, startDate, quantity, guests, addCleaning, daily, code, refresh]);
 
   if (loadError) {
     return <Alert>{loadError.message}</Alert>;
@@ -98,10 +109,16 @@ export function BookingWidget({ property, viewer }: { property: PropertyDetail; 
         guests: daily ? guests : undefined,
         addCleaning,
         expectedTotalKobo: quote.totalKobo,
+        ...(quote.promo ? { code: quote.promo.code } : {}),
       }),
     );
     if (booking) router.push(`/account/bookings/${booking.id}`);
     else setRefresh((n) => n + 1);
+  }
+
+  function applyCode() {
+    setCodeError(null);
+    setCode(codeInput.trim().toUpperCase());
   }
 
   const { limits } = availability;
@@ -175,6 +192,58 @@ export function BookingWidget({ property, viewer }: { property: PropertyDetail; 
           </span>
         </label>
       )}
+
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="promo-code" className="text-sm font-medium text-text">
+          Promo code
+        </label>
+        <div className="flex gap-2">
+          <Input
+            id="promo-code"
+            value={codeInput}
+            onChange={(e) => setCodeInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                applyCode();
+              }
+            }}
+            maxLength={32}
+            autoComplete="off"
+            className="uppercase"
+            aria-invalid={codeError ? true : undefined}
+            aria-describedby={codeError ? 'promo-code-error' : undefined}
+          />
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={applyCode}
+            disabled={!codeInput.trim()}
+          >
+            Apply
+          </Button>
+        </div>
+        {codeError && (
+          <p id="promo-code-error" className="text-xs text-error">
+            {codeError}
+          </p>
+        )}
+        {quote?.promo && (
+          <p className="text-xs text-success">
+            {quote.promo.code} applied: {quote.promo.label}.{' '}
+            <button
+              type="button"
+              className="underline"
+              onClick={() => {
+                setCode('');
+                setCodeInput('');
+              }}
+            >
+              Remove
+            </button>
+          </p>
+        )}
+      </div>
 
       {upcoming.length > 0 && (
         <div className="text-xs text-text-secondary">

@@ -1,6 +1,6 @@
 import type { HomepageSectionView } from '@havenhub/shared';
 import { Container, buttonClasses } from '@havenhub/ui';
-import { MapPin, Quote, Search } from 'lucide-react';
+import { MapPin, Quote } from 'lucide-react';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 
@@ -10,11 +10,13 @@ import { PropertyCard } from '@/components/properties/property-card';
 import type { Viewer } from '@/components/properties/favorite-button';
 
 import { BlogCard } from './blog-card';
+import { HeroSection } from './hero-section';
 
 const MORE: Partial<Record<HomepageSectionView['key'], string>> = {
   FEATURED_PROPERTIES: '/properties',
   RENT_PROPERTIES: '/properties?listingType=RENT',
   SALE_PROPERTIES: '/properties?listingType=SALE',
+  SPECIAL_OFFERS: '/properties?onOffer=true&sort=discount',
   VACATION_ZONES: '/destinations',
   HOTELS: '/hotels',
   EVENTS: '/events',
@@ -35,70 +37,7 @@ export function HomeSection({
 }) {
   switch (section.key) {
     case 'HERO':
-      return (
-        <section className="py-20 sm:py-28 lg:py-36">
-          <Container>
-            <div className="max-w-3xl">
-              {section.eyebrow && (
-                <p className="text-sm font-semibold tracking-wide text-primary-text uppercase">
-                  {section.eyebrow}
-                </p>
-              )}
-              {section.title &&
-                (index === 0 ? (
-                  <h1 className="mt-5 text-4xl leading-[1.08] font-bold tracking-tight text-balance text-text sm:text-6xl">
-                    {section.title}
-                  </h1>
-                ) : (
-                  <h2 className="mt-5 text-4xl leading-[1.08] font-bold tracking-tight text-balance text-text sm:text-6xl">
-                    {section.title}
-                  </h2>
-                ))}
-              {section.subtitle && (
-                <p className="mt-6 max-w-2xl text-lg leading-relaxed text-pretty text-text-secondary">
-                  {section.subtitle}
-                </p>
-              )}
-              {section.showSearch && (
-                /* A plain GET form: works before JavaScript loads. */
-                <form action="/properties" role="search" className="relative mt-10 max-w-xl">
-                  <Search
-                    aria-hidden
-                    className="pointer-events-none absolute top-1/2 left-5 size-5 -translate-y-1/2 text-text-muted"
-                  />
-                  <input
-                    name="q"
-                    placeholder={section.searchPlaceholder ?? 'Where do you want to live or stay?'}
-                    aria-label="Search by area, city or street"
-                    className="h-14 w-full rounded-full border border-border-strong bg-surface pr-32 pl-13 text-text shadow-raised placeholder:text-text-muted focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none"
-                  />
-                  <button
-                    type="submit"
-                    className={buttonClasses({
-                      className: 'absolute top-1/2 right-2 -translate-y-1/2 rounded-full',
-                    })}
-                  >
-                    Search
-                  </button>
-                </form>
-              )}
-              {section.links.length > 0 && (
-                <div className="mt-5 flex flex-wrap gap-2 text-sm">
-                  {section.links.map((link) => (
-                    <Link
-                      key={`${link.label}-${link.href}`}
-                      href={link.href}
-                      className="rounded-full border border-border px-4 py-2 font-medium text-text-secondary hover:border-border-strong hover:text-text"
-                    >
-                      {link.label}
-                    </Link>
-                  ))}
-                </div>
-              )}
-            </div>
-          </Container>
-        </section>
-      );
+      return <HeroSection section={section} headingLevel={index === 0 ? 1 : 2} />;
     case 'EXPLORE':
       return (
         <Band title={section.title} subtitle={section.subtitle} tinted>
@@ -127,6 +66,8 @@ export function HomeSection({
     case 'FEATURED_PROPERTIES':
     case 'RENT_PROPERTIES':
     case 'SALE_PROPERTIES':
+    case 'SPECIAL_OFFERS':
+    case 'AWARDS':
       return (
         <Band title={section.title} subtitle={section.subtitle} more={MORE[section.key]}>
           <Grid>

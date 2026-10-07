@@ -69,6 +69,8 @@ export type CancelledBy = (typeof CancelledBy)[keyof typeof CancelledBy];
 export const PriceLineKind = {
   RENT: 'RENT',
   LISTING_DISCOUNT: 'LISTING_DISCOUNT',
+  /** The agent's promo code (agent-funded, like the listing discount). */
+  PROMO_DISCOUNT: 'PROMO_DISCOUNT',
   CLEANING_FEE: 'CLEANING_FEE',
   CAUTION_FEE: 'CAUTION_FEE',
   SERVICE_FEE: 'SERVICE_FEE',

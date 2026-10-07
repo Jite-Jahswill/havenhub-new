@@ -6,8 +6,10 @@ import { notFound } from 'next/navigation';
 
 import { CancelBooking, PayButton, PaymentReturn } from '@/components/bookings/booking-actions';
 import { PriceBreakdown } from '@/components/bookings/price-breakdown';
+import { ReviewForm } from '@/components/bookings/review-form';
 import { StayDetails } from '@/components/bookings/stay-details';
 import { StartConversationButton } from '@/components/chat/start-conversation-button';
+import { Stars } from '@/components/properties/rating';
 import { PageHeader } from '@/components/dashboard/dashboard-shell';
 import {
   BookingStatusBadge,
@@ -158,6 +160,31 @@ export default async function CustomerBookingPage({
                 {b.refund.status === 'REQUESTED' && (
                   <p className="text-xs text-text-muted">
                     HavenHub reviews refunds before they are paid out.
+                  </p>
+                )}
+              </CardBody>
+            </Card>
+          )}
+
+          {b.canReview && (
+            <Card>
+              <CardHeader title="How was your stay?" />
+              <CardBody>
+                <ReviewForm bookingId={b.id} reviewBy={b.reviewBy} />
+              </CardBody>
+            </Card>
+          )}
+          {b.review && (
+            <Card>
+              <CardHeader title="Your review" />
+              <CardBody className="flex flex-col gap-2 text-sm">
+                <Stars value={b.review.rating} />
+                {b.review.comment && (
+                  <p className="whitespace-pre-line text-text-secondary">{b.review.comment}</p>
+                )}
+                {b.review.hidden && (
+                  <p className="text-xs text-text-muted">
+                    HavenHub has hidden this review from the property page.
                   </p>
                 )}
               </CardBody>

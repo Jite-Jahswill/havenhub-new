@@ -136,6 +136,9 @@ export function ExperienceForm({
     const values = {
       title: formText(form, 'title'),
       description: text('description'),
+      discountPercent: formText(form, 'discountPercent')
+        ? Number(formText(form, 'discountPercent'))
+        : null,
       addressLine: text('addressLine'),
       city: text('city'),
       state: text('state'),
@@ -200,6 +203,26 @@ export function ExperienceForm({
                 defaultValue={e?.description ?? ''}
                 rows={6}
                 maxLength={5000}
+              />
+            )}
+          </Field>
+          <Field
+            label="Discount (%)"
+            optional
+            hint="Shown as “X% off” next to your price (1–90). Leave empty for no discount."
+            error={err('discountPercent')}
+          >
+            {(a) => (
+              <Input
+                {...a}
+                name="discountPercent"
+                type="number"
+                inputMode="numeric"
+                min={1}
+                max={90}
+                step={1}
+                defaultValue={e?.discountPercent ?? ''}
+                className="max-w-32"
               />
             )}
           </Field>

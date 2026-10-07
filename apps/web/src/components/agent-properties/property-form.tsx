@@ -106,6 +106,8 @@ export function PropertyForm({
       listingType,
       description: text('description'),
       pricingPeriod: listingType === 'SALE' ? 'SALE' : period || null,
+      // Only contact for sale for now; buying on HavenHub is coming.
+      ...(listingType === 'SALE' ? { saleMode: 'CONTACT' as const } : {}),
       addressLine: text('addressLine'),
       city: text('city'),
       lga: text('lga'),
@@ -391,6 +393,41 @@ export function PropertyForm({
                 />
               )}
             </Field>
+            {listingType === 'SALE' && (
+              <fieldset className="flex flex-col gap-2 text-sm text-text sm:col-span-2">
+                <legend className="mb-1 font-medium">How buyers purchase</legend>
+                <label className="flex items-start gap-3">
+                  <input
+                    type="radio"
+                    name="saleMode"
+                    value="CONTACT"
+                    defaultChecked
+                    className="mt-0.5 size-4 accent-primary"
+                  />
+                  <span>
+                    Buyers contact me directly
+                    <span className="block text-text-muted">
+                      They see your phone and email after accepting HavenHub’s notice that deals
+                      made outside HavenHub are between you and them. They can also message you on
+                      HavenHub.
+                    </span>
+                  </span>
+                </label>
+                <label className="flex items-start gap-3 text-text-muted">
+                  <input
+                    type="radio"
+                    name="saleMode"
+                    value="IN_APP"
+                    disabled
+                    className="mt-0.5 size-4"
+                  />
+                  <span>
+                    Buyers pay on HavenHub{' '}
+                    <span className="text-xs font-semibold">(coming soon)</span>
+                  </span>
+                </label>
+              </fieldset>
+            )}
             {listingType === 'RENT' && period === 'DAILY' && (
               <Field label="Maximum guests" error={err('maxGuests')}>
                 {(a) => (

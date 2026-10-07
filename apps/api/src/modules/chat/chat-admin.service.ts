@@ -146,7 +146,7 @@ export class ChatAdminService {
       closedReason: row.closedReason,
       hasMore: messages.length > ADMIN_PAGE,
       messages: page.map((m): AdminMessageView => {
-        const view = toMessageView(m, actorId, this.storage);
+        const view = toMessageView(m, actorId, this.storage, 0);
         return {
           ...view,
           canEdit: false,

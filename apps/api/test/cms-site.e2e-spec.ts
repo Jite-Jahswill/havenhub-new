@@ -4,6 +4,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { adminAuth } from './helpers/booking-helpers';
 import {
   createAgent,
+  createDraft,
   createPublished,
   createTestContext,
   testImage,
@@ -229,15 +230,8 @@ describe('homepage builder', () => {
     });
   });
 
-  it('validates settings per section and never enables unavailable sections', async () => {
+  it('validates settings per section; every section is available', async () => {
     const auth = await content();
-    await ctx
-      .http()
-      .patch(`${CMS}/homepage/SPECIAL_OFFERS`)
-      .set(auth)
-      .send({ enabled: true })
-      .expect(422);
-    await ctx.http().patch(`${CMS}/homepage/AWARDS`).set(auth).send({ enabled: true }).expect(422);
     await ctx
       .http()
       .patch(`${CMS}/homepage/HERO`)
@@ -256,10 +250,15 @@ describe('homepage builder', () => {
     const sections: AdminHomepageSection[] = (
       await ctx.http().get(`${CMS}/homepage`).set(auth).expect(200)
     ).body.data;
-    expect(sections.find((s) => s.key === 'SPECIAL_OFFERS')).toMatchObject({
-      available: false,
-      enabled: false,
-    });
+    // Every section now has a backing feature (special offers, awards).
+    expect(sections.every((s) => s.available)).toBe(true);
+    // Awards settings are validated like any other section's.
+    await ctx
+      .http()
+      .patch(`${CMS}/homepage/AWARDS`)
+      .set(auth)
+      .send({ config: { limit: 6, badgeId: 'not-a-uuid' } })
+      .expect(422);
   });
 
   it('listing sections appear only with public data; toggles and order apply immediately', async () => {
@@ -424,5 +423,172 @@ describe('SEO, robots and sitemap', () => {
 
     await ctx.http().patch(`${CMS}/seo`).set(seo).send({ allowIndexing: false }).expect(200);
     expect((await ctx.http().get('/api/v1/seo/sitemap').expect(200)).body.data).toEqual([]);
+  });
+});
+
+describe('homepage hero image', () => {
+  const hero = async () =>
+    (
+      (await ctx.http().get('/api/v1/homepage').expect(200)).body.data as {
+        key: string;
+        image?: { url: string; altText: string | null } | null;
+        imageLayout?: string;
+        overlay?: string;
+      }[]
+    ).find((s) => s.key === 'HERO');
+
+  it('can be set from the media library, laid out, and removed; the image is protected while used', async () => {
+    const auth = await content();
+    // Text-only by default (older settings keep working).
+    expect(await hero()).toMatchObject({
+      image: null,
+      imageLayout: 'BACKGROUND',
+      overlay: 'MEDIUM',
+    });
+
+    const media = await uploadMedia(auth);
+    const res = await ctx
+      .http()
+      .patch(`${CMS}/homepage/HERO`)
+      .set(auth)
+      .send({
+        enabled: true,
+        title: 'Find your next place',
+        config: {
+          showSearch: true,
+          links: [],
+          imageId: media.id,
+          imageLayout: 'SIDE',
+          overlay: 'STRONG',
+        },
+      });
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    const adminHero = (res.body.data as AdminHomepageSection[]).find((s) => s.key === 'HERO')!;
+    expect(adminHero.heroImage?.id).toBe(media.id);
+    expect(await hero()).toMatchObject({
+      image: { url: media.url },
+      imageLayout: 'SIDE',
+      overlay: 'STRONG',
+    });
+
+    // In use: the media library refuses to delete it, and says where.
+    const blocked = await ctx.http().delete(`${CMS}/media/${media.id}`).set(auth).expect(409);
+    expect(blocked.body.message).toContain('the homepage hero');
+
+    // Removing the image from the hero frees it.
+    await ctx
+      .http()
+      .patch(`${CMS}/homepage/HERO`)
+      .set(auth)
+      .send({ config: { showSearch: true, links: [], imageId: null } })
+      .expect(200);
+    expect((await hero())!.image).toBeNull();
+    await ctx.http().delete(`${CMS}/media/${media.id}`).set(auth).expect(200);
+  });
+
+  it('refuses images that are not in the media library and unknown layouts', async () => {
+    const auth = await content();
+    for (const config of [
+      { imageId: '0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b' },
+      { imageLayout: 'TILED' },
+      { overlay: 'BLACK' },
+    ]) {
+      await ctx
+        .http()
+        .patch(`${CMS}/homepage/HERO`)
+        .set(auth)
+        .send({ config: { showSearch: true, links: [], ...config } })
+        .expect(422);
+    }
+  });
+
+  it('protects library images used by pop-ups too', async () => {
+    const auth = await content();
+    const media = await uploadMedia(auth);
+    const admin = (await adminAuth(ctx, ['super_admin'])).auth;
+    await ctx
+      .http()
+      .post('/api/v1/admin/popups')
+      .set(admin)
+      .send({ name: 'With image', kind: 'ANNOUNCEMENT', title: 'Hello', imageId: media.id })
+      .expect(201);
+    const blocked = await ctx.http().delete(`${CMS}/media/${media.id}`).set(auth).expect(409);
+    expect(blocked.body.message).toContain('pop-ups');
+  });
+});
+
+describe('special offers', () => {
+  it('lists public discounted properties, biggest discount first, and hides when there are none', async () => {
+    const auth = await content();
+    await ctx
+      .http()
+      .patch(`${CMS}/homepage/SPECIAL_OFFERS`)
+      .set(auth)
+      .send({ enabled: true, config: { limit: 6 } })
+      .expect(200);
+    const offers = async () =>
+      (
+        (await ctx.http().get('/api/v1/homepage').expect(200)).body.data as {
+          key: string;
+          properties?: { title: string; discountPercent: number | null }[];
+        }[]
+      ).find((s) => s.key === 'SPECIAL_OFFERS');
+    // Nothing discounted yet: the section is left out rather than shown empty.
+    expect(await offers()).toBeUndefined();
+
+    // One property per agent: the free plan allows one active listing each.
+    await createPublished(ctx, await createAgent(ctx), {
+      title: 'Ten off flat in Yaba',
+      discountPercent: 10,
+    });
+    await createPublished(ctx, await createAgent(ctx), {
+      title: 'Quarter off duplex Lekki',
+      discountPercent: 25,
+    });
+    await createPublished(ctx, await createAgent(ctx), { title: 'Full price home in Ikeja' });
+    // A discounted listing that is not public never appears.
+    const hidden = await createDraft(ctx, await createAgent(ctx), {
+      title: 'Draft discounted home',
+      discountPercent: 40,
+    });
+    expect(hidden.id).toBeDefined();
+    // Changing listings does not touch the CMS cache, so refresh it the way an edit would.
+    await ctx
+      .http()
+      .patch(`${CMS}/homepage/SPECIAL_OFFERS`)
+      .set(auth)
+      .send({ title: 'Deals' })
+      .expect(200);
+
+    const section = await offers();
+    expect(section!.properties!.map((p) => [p.title, p.discountPercent])).toEqual([
+      ['Quarter off duplex Lekki', 25],
+      ['Ten off flat in Yaba', 10],
+    ]);
+  });
+
+  it('the "on offer" search filter and "biggest discount" sort back the "see all" link', async () => {
+    await createPublished(ctx, await createAgent(ctx), {
+      title: 'Ten off flat in Yaba',
+      discountPercent: 10,
+    });
+    await createPublished(ctx, await createAgent(ctx), {
+      title: 'Quarter off duplex Lekki',
+      discountPercent: 25,
+    });
+    await createPublished(ctx, await createAgent(ctx), { title: 'Full price home in Ikeja' });
+    const res = await ctx.http().get('/api/v1/properties?onOffer=true&sort=discount').expect(200);
+    expect(res.body.data.items.map((p: { title: string }) => p.title)).toEqual([
+      'Quarter off duplex Lekki',
+      'Ten off flat in Yaba',
+    ]);
+    const all = await ctx.http().get('/api/v1/properties?sort=discount').expect(200);
+    // Undiscounted listings come after discounted ones.
+    expect(all.body.data.items.map((p: { title: string }) => p.title)).toEqual([
+      'Quarter off duplex Lekki',
+      'Ten off flat in Yaba',
+      'Full price home in Ikeja',
+    ]);
+    await ctx.http().get('/api/v1/properties?onOffer=yes').expect(422);
   });
 });

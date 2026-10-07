@@ -49,7 +49,7 @@ export const SYSTEM_ROLES: SystemRoleDefinition[] = [
     key: 'finance_admin',
     name: 'Finance Admin',
     description:
-      'Payments, refunds, agent withdrawals, subscription plans and financial analytics.',
+      'Payments, refunds, agent withdrawals, subscription plans, discount codes and financial analytics.',
     permissions: [
       'analytics.view',
       'analytics.financial',
@@ -61,6 +61,7 @@ export const SYSTEM_ROLES: SystemRoleDefinition[] = [
       'subscriptions.view',
       'subscriptions.manage',
       'subscriptions.plans',
+      'discounts.manage',
       'users.view',
       'agents.view',
       'audit.view',
@@ -71,6 +72,8 @@ export const SYSTEM_ROLES: SystemRoleDefinition[] = [
     name: 'Property Manager',
     description: 'Property moderation and featuring.',
     permissions: [
+      'reviews.moderate',
+      'badges.manage',
       'properties.view',
       'properties.create',
       'properties.update',
@@ -90,6 +93,7 @@ export const SYSTEM_ROLES: SystemRoleDefinition[] = [
     name: 'Support Admin',
     description: 'Customer and agent support.',
     permissions: [
+      'reviews.moderate',
       'users.view',
       'users.update',
       'users.block',
@@ -105,7 +109,7 @@ export const SYSTEM_ROLES: SystemRoleDefinition[] = [
   {
     key: 'content_manager',
     name: 'Content Manager',
-    description: 'Site content, pages, blog, help centre, careers and destinations.',
+    description: 'Site content, pages, blog, help centre, careers, destinations and pop-ups.',
     permissions: [
       'blog.create',
       'blog.edit',
@@ -117,12 +121,15 @@ export const SYSTEM_ROLES: SystemRoleDefinition[] = [
       'help.manage',
       'careers.manage',
       'vacation_zones.manage',
+      'popups.manage',
+      'badges.manage',
     ],
   },
   {
     key: 'marketing_manager',
     name: 'Marketing Manager',
-    description: 'Marketing content, newsletter subscribers and email campaigns.',
+    description:
+      'Marketing content, newsletter subscribers, email campaigns, in-app announcements, discount codes and pop-ups.',
     permissions: [
       'blog.create',
       'blog.edit',
@@ -130,6 +137,9 @@ export const SYSTEM_ROLES: SystemRoleDefinition[] = [
       'marketing.subscribers',
       'marketing.campaigns',
       'marketing.send',
+      'notifications.send',
+      'discounts.manage',
+      'popups.manage',
       'users.view',
     ],
   },

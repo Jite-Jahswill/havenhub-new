@@ -48,6 +48,7 @@ import {
   toSubscriptionView,
 } from './subscription.mapper';
 import { SubscriptionNotifier } from './subscription-notifier';
+import { DiscountsService } from '../discounts/discounts.service';
 
 type Tx = Prisma.TransactionClient;
 
@@ -76,6 +77,7 @@ export class SubscriptionsService {
     private readonly notifier: SubscriptionNotifier,
     private readonly audit: AuditService,
     @Inject(ENV) private readonly env: Env,
+    private readonly discounts: DiscountsService,
   ) {}
 
   async agentFor(userId: string): Promise<AgentProfile> {
@@ -111,14 +113,15 @@ export class SubscriptionsService {
     };
   }
 
-  async quote(userId: string, planId: string): Promise<SubscriptionQuoteView> {
+  async quote(userId: string, planId: string, code?: string): Promise<SubscriptionQuoteView> {
     const agent = await this.agentFor(userId);
-    return this.quoteFor(agent, planId);
+    return this.quoteFor(agent, planId, code);
   }
 
   async checkout(
     user: { id: string; email: string },
     planId: string,
+    code: string | undefined,
     meta: RequestMeta,
   ): Promise<SubscriptionCheckoutView> {
     const agent = await this.agentFor(user.id);
@@ -130,33 +133,67 @@ export class SubscriptionsService {
       );
     }
     // Priced by the server from the plan record; nothing about the amount comes from the client.
-    const quote = await this.quoteFor(agent, planId);
+    const quote = await this.quoteFor(agent, planId, code);
     const provider = this.providers.active();
-    const payment = await this.prisma.subscriptionPayment.create({
-      data: {
-        agentProfileId: agent.id,
-        planId: quote.plan.id,
-        provider: provider.name,
-        reference: `HHS-${randomBytes(12).toString('hex')}`,
-        amountKobo: BigInt(quote.amountKobo),
-        currency: quote.plan.currency,
-        billingInterval: quote.plan.billingInterval!,
-        planName: quote.plan.name,
-      },
-    });
-    await this.audit.record({
-      actorId: user.id,
-      action: 'subscription_payment.initiated',
-      resourceType: 'subscription_payment',
-      resourceId: payment.id,
-      after: {
-        reference: payment.reference,
-        planId: payment.planId,
-        provider: payment.provider,
-        amountKobo: payment.amountKobo.toString(),
-        changeType: quote.changeType,
-      },
-      meta,
+    const payment = await this.prisma.$transaction(async (tx) => {
+      // Re-checked under a lock on the code, so its last use cannot be taken twice.
+      const discount = code
+        ? await this.discounts.apply(tx, {
+            code,
+            userId: user.id,
+            target: {
+              kind: 'PLAN',
+              agentProfileId: agent.id,
+              planId: quote.plan.id,
+              planName: quote.plan.name,
+            },
+            priceKobo: quote.listPriceKobo,
+            lock: true,
+          })
+        : null;
+      const amountOff = discount?.applied.amountOffKobo ?? 0;
+      const created = await tx.subscriptionPayment.create({
+        data: {
+          agentProfileId: agent.id,
+          planId: quote.plan.id,
+          provider: provider.name,
+          reference: `HHS-${randomBytes(12).toString('hex')}`,
+          amountKobo: BigInt(quote.listPriceKobo - amountOff),
+          discountKobo: BigInt(amountOff),
+          discountCode: discount?.applied.code ?? null,
+          currency: quote.plan.currency,
+          billingInterval: quote.plan.billingInterval!,
+          planName: quote.plan.name,
+        },
+      });
+      if (discount) {
+        await this.discounts.reserve(tx, {
+          discountCodeId: discount.discountCodeId,
+          userId: user.id,
+          subscriptionPaymentId: created.id,
+          amountOffKobo: amountOff,
+        });
+      }
+      await this.audit.record(
+        {
+          actorId: user.id,
+          action: 'subscription_payment.initiated',
+          resourceType: 'subscription_payment',
+          resourceId: created.id,
+          after: {
+            reference: created.reference,
+            planId: created.planId,
+            provider: created.provider,
+            amountKobo: created.amountKobo.toString(),
+            discountKobo: created.discountKobo.toString(),
+            discountCode: created.discountCode,
+            changeType: quote.changeType,
+          },
+          meta,
+        },
+        tx,
+      );
+      return created;
     });
 
     try {
@@ -173,7 +210,7 @@ export class SubscriptionsService {
         provider: payment.provider,
         authorizationUrl,
         amountKobo: koboToNumber(payment.amountKobo),
-        quote,
+        quote: { ...quote, amountKobo: koboToNumber(payment.amountKobo) },
       };
     } catch (error) {
       this.logger.error('Could not start a payment with the provider', {
@@ -182,9 +219,12 @@ export class SubscriptionsService {
         reference: payment.reference,
         ...describeError(error),
       });
-      await this.prisma.subscriptionPayment.update({
-        where: { id: payment.id },
-        data: { status: PaymentStatus.FAILED, failureReason: 'Could not start the payment' },
+      await this.prisma.$transaction(async (tx) => {
+        await tx.subscriptionPayment.update({
+          where: { id: payment.id },
+          data: { status: PaymentStatus.FAILED, failureReason: 'Could not start the payment' },
+        });
+        await this.discounts.settle(tx, { subscriptionPaymentId: payment.id }, 'RELEASED');
       });
       throw new AppException(
         HttpStatus.BAD_GATEWAY,
@@ -276,6 +316,7 @@ export class SubscriptionsService {
         },
         tx,
       );
+      await this.discounts.settle(tx, { subscriptionPaymentId: current.id }, 'REDEEMED');
       return { failed: false as const, events: await this.apply(tx, current, now) };
     });
 
@@ -477,7 +518,11 @@ export class SubscriptionsService {
 
   // ── Internals ────────────────────────────────────────────────────────────
 
-  private async quoteFor(agent: AgentProfile, planId: string): Promise<SubscriptionQuoteView> {
+  private async quoteFor(
+    agent: AgentProfile,
+    planId: string,
+    code?: string,
+  ): Promise<SubscriptionQuoteView> {
     const plan = await this.prisma.subscriptionPlan.findUnique({
       where: { id: planId },
       include: PLAN_INCLUDE,
@@ -511,10 +556,28 @@ export class SubscriptionsService {
       null,
       now,
     );
+    const listPriceKobo = koboToNumber(plan.priceKobo);
+    const discount = code
+      ? (
+          await this.discounts.apply(this.prisma, {
+            code,
+            userId: agent.userId,
+            target: {
+              kind: 'PLAN',
+              agentProfileId: agent.id,
+              planId: plan.id,
+              planName: plan.name,
+            },
+            priceKobo: listPriceKobo,
+          })
+        ).applied
+      : null;
     return {
       plan: toPlanView(plan),
       changeType: change.changeType,
-      amountKobo: koboToNumber(plan.priceKobo),
+      amountKobo: listPriceKobo - (discount?.amountOffKobo ?? 0),
+      listPriceKobo,
+      discount,
       startsImmediately: change.startsImmediately,
       startsAt: change.startsAt.toISOString(),
       endsAt: change.endsAt.toISOString(),
@@ -571,6 +634,8 @@ export class SubscriptionsService {
         verifiedAt: new Date(),
       },
     });
+    // A failed payment gives its discount use back.
+    await this.discounts.settle(tx, { subscriptionPaymentId: payment.id }, 'RELEASED');
     await this.audit.record(
       {
         actorId: null,

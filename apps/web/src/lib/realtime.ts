@@ -1,6 +1,6 @@
 'use client';
 
-import type { ChatEventPayloads, RealtimeTicketView } from '@havenhub/shared';
+import type { RealtimeEventPayloads, RealtimeTicketView } from '@havenhub/shared';
 import { useEffect, useRef, useSyncExternalStore } from 'react';
 import { io, type Socket } from 'socket.io-client';
 
@@ -46,9 +46,9 @@ class RealtimeClient {
     };
   }
 
-  on<E extends keyof ChatEventPayloads>(
+  on<E extends keyof RealtimeEventPayloads>(
     event: E,
-    handler: (payload: ChatEventPayloads[E]) => void,
+    handler: (payload: RealtimeEventPayloads[E]) => void,
   ) {
     const socket = this.socket;
     socket?.on(event, handler as never);
@@ -117,9 +117,9 @@ export function useRealtimeConnection(): RealtimeStatus {
 }
 
 /** Subscribes to a server event while mounted (handler may change between renders). */
-export function useRealtimeEvent<E extends keyof ChatEventPayloads>(
+export function useRealtimeEvent<E extends keyof RealtimeEventPayloads>(
   event: E,
-  handler: (payload: ChatEventPayloads[E]) => void,
+  handler: (payload: RealtimeEventPayloads[E]) => void,
   status: RealtimeStatus,
 ) {
   const ref = useRef(handler);

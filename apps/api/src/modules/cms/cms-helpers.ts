@@ -156,6 +156,11 @@ export async function mediaUsage(tx: Tx, media: CmsMedia): Promise<string[]> {
       },
     }),
     tx.emailCampaign.count({ where: { body: like(media.storageKey) } }),
+    tx.homepageSection.count({
+      where: { key: 'HERO', config: { path: ['imageId'], equals: media.id } },
+    }),
+    tx.popup.count({ where: { imageId: media.id } }),
+    tx.badge.count({ where: { imageId: media.id } }),
   ]);
   const names = [
     'pages',
@@ -167,6 +172,9 @@ export async function mediaUsage(tx: Tx, media: CmsMedia): Promise<string[]> {
     'site settings',
     'job postings',
     'email campaigns',
+    'the homepage hero',
+    'pop-ups',
+    'badges',
   ];
   return names.filter((_, i) => refs[i]! > 0);
 }

@@ -14,6 +14,7 @@ import {
   AccountType,
   updateMaintenanceSchema,
   updateModerationPolicySchema,
+  updatePlatformPoliciesSchema,
   updateSmtpSettingsSchema,
 } from '@havenhub/shared';
 import type { Request } from 'express';
@@ -93,6 +94,25 @@ export class AdminSettingsController {
     @Req() req: Request,
   ) {
     return ok(await this.platform.updateModeration(auth, body, requestMeta(req)));
+  }
+
+  // ── Platform policies (security, storage, booking, refunds, chat, events, notifications) ──
+
+  @Get('policies')
+  @RequirePermissions('settings.manage')
+  async policies() {
+    return ok(await this.platform.viewPolicies());
+  }
+
+  @Patch('policies')
+  @RequirePermissions('settings.manage')
+  async updatePolicies(
+    @CurrentAuth() auth: AuthContext,
+    @Body(validate(updatePlatformPoliciesSchema))
+    body: z.output<typeof updatePlatformPoliciesSchema>,
+    @Req() req: Request,
+  ) {
+    return ok(await this.platform.updatePolicies(auth, body, requestMeta(req)));
   }
 
   // ── SMTP ──

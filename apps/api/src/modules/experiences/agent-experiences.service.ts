@@ -1,6 +1,7 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import {
   EXPERIENCE_ENTITLEMENT,
+  EXPERIENCE_KIND_LABELS,
   EXPERIENCE_KINDS,
   ErrorCode,
   ExperienceStatus,
@@ -16,7 +17,7 @@ import {
 } from '@havenhub/shared';
 import type { z } from 'zod';
 
-import { AppException } from '../../common/errors/app.exception';
+import { AppException, Errors } from '../../common/errors/app.exception';
 import type { RequestMeta } from '../../common/http/request-meta';
 import type { AgentProfile, Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
@@ -33,6 +34,7 @@ import {
   toAgentExperienceView,
 } from './experience.mapper';
 import { AGENT_EXPERIENCE_INCLUDE, type AgentExperienceRow } from './experience.selects';
+import { PlatformPoliciesService } from '../platform/platform-policies.service';
 
 type CreateInput = z.output<typeof createExperienceSchema>;
 type UpdateInput = z.output<typeof updateExperienceSchema>;
@@ -54,6 +56,7 @@ export class AgentExperiencesService {
     private readonly plans: PlanLimitsService,
     private readonly audit: AuditService,
     private readonly storage: StorageService,
+    private readonly policies: PlatformPoliciesService,
   ) {}
 
   async list(userId: string, kind?: ExperienceKind): Promise<AgentExperienceList> {
@@ -115,6 +118,11 @@ export class AgentExperiencesService {
   ): Promise<AgentExperienceView> {
     const agent = await this.agents.agentFor(userId);
     this.agents.assertCanManage(agent);
+    if (!(await this.policies.enabledExperienceKinds()).includes(input.kind)) {
+      throw Errors.featureDisabled(
+        `HavenHub is not accepting new ${EXPERIENCE_KIND_LABELS[input.kind].many.toLowerCase()} right now.`,
+      );
+    }
 
     const row = await this.prisma.$transaction(async (tx) => {
       // Locks the agent, then checks the kind's allowance (cleaning: never limited).
@@ -456,6 +464,7 @@ function commonColumns(input: Partial<UpdateInput>): Columns {
   };
   assign('title', input.title);
   assign('description', input.description);
+  assign('discountPercent', input.discountPercent);
   assign('addressLine', input.addressLine);
   assign('city', input.city);
   assign('state', input.state);

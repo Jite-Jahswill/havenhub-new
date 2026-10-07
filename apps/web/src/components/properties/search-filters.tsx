@@ -47,6 +47,7 @@ export function SearchFilters({
     'amenities',
     'furnished',
     'cleaningIncluded',
+    'onOffer',
   ].filter((key) => state[key]).length;
 
   function submitMore(event: FormEvent<HTMLFormElement>) {
@@ -73,6 +74,7 @@ export function SearchFilters({
           .join(',') || undefined,
       furnished: form.get('furnished') ? 'true' : undefined,
       cleaningIncluded: form.get('cleaningIncluded') ? 'true' : undefined,
+      onOffer: form.get('onOffer') ? 'true' : undefined,
     });
     dialog.current?.close();
   }
@@ -297,6 +299,15 @@ export function SearchFilters({
                   className="size-4 accent-primary"
                 />
                 Cleaning included
+              </label>
+              <label className="flex items-center gap-3 text-sm">
+                <input
+                  type="checkbox"
+                  name="onOffer"
+                  defaultChecked={Boolean(state.onOffer)}
+                  className="size-4 accent-primary"
+                />
+                On offer (discounted)
               </label>
             </fieldset>
 

@@ -7,6 +7,7 @@ import {
   SubscriptionPlanStatus,
 } from '../enums/subscription.js';
 import { paginationQuerySchema } from './admin.js';
+import { discountCodeField } from './discount.js';
 
 /** Upper bound for any single limit — a typo guard, not a business rule. */
 export const MAX_ENTITLEMENT_LIMIT = 1_000_000;
@@ -103,10 +104,13 @@ export type AdminSubscriptionActionInput = z.input<typeof adminSubscriptionActio
 /** The agent picks a plan; the server prices it and decides how it applies. */
 export const subscriptionCheckoutSchema = z.object({
   planId: z.uuid(),
+  /** Optional discount code; the server validates and prices it. */
+  code: discountCodeField.optional(),
 });
 
 export const subscriptionQuoteQuerySchema = z.object({
   planId: z.uuid(),
+  code: discountCodeField.optional(),
 });
 
 export const cancelSubscriptionSchema = z.object({

@@ -27,6 +27,7 @@ const SORTS = [
   ['newest', 'Newest'],
   ['price_asc', 'Price: low to high'],
   ['price_desc', 'Price: high to low'],
+  ['discount', 'Biggest discount'],
 ] as const;
 
 export function SearchResults({

@@ -32,6 +32,7 @@ import { getCurrentUser } from '@/lib/session';
 
 import { HotelAvailability } from './hotel-availability';
 import { PurchaseUnavailable } from './purchase-unavailable';
+import { discountedKobo } from '@/lib/format';
 
 /** Public page of one event, tour, hotel or cleaning service. */
 export async function ExperienceDetailPage({ item }: { item: ExperienceDetail }) {
@@ -264,13 +265,25 @@ export async function ExperienceDetailPage({ item }: { item: ExperienceDetail })
                   ? 'Price on request'
                   : item.priceFromKobo === 0
                     ? 'Free'
-                    : formatKobo(item.priceFromKobo)}
+                    : formatKobo(
+                        discountedKobo(item.priceFromKobo, item.discountPercent) ??
+                          item.priceFromKobo,
+                      )}
                 {item.priceFromKobo !== null && item.priceFromKobo > 0 && (
                   <span className="ml-1.5 text-sm font-normal text-text-secondary">
                     {item.kind === 'HOTEL' ? 'per night' : (item.priceNote ?? '')}
                   </span>
                 )}
               </p>
+              {item.discountPercent && item.priceFromKobo ? (
+                <p className="mt-1 text-sm">
+                  <s className="text-text-muted">{formatKobo(item.priceFromKobo)}</s>{' '}
+                  <span className="font-semibold text-success">{item.discountPercent}% off</span>
+                  <span className="block text-xs text-text-muted">
+                    Offered by the provider. Arrange payment with them directly.
+                  </span>
+                </p>
+              ) : null}
             </div>
             {item.startsAt && (
               <p className="flex items-start gap-2 text-sm text-text-secondary">

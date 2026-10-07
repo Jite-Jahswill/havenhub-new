@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 
+import { DiscountsModule } from '../discounts/discounts.module';
 import { FinanceModule } from '../finance/finance.module';
+import { ReviewsModule } from '../reviews/reviews.module';
 import { AdminBookingsController } from './admin-bookings.controller';
 import { AgentBookingsController } from './agent-bookings.controller';
 import { AvailabilityService } from './availability.service';
@@ -11,7 +13,7 @@ import { BookingDiscoveryController, CustomerBookingsController } from './bookin
 import { BookingsService } from './bookings.service';
 
 @Module({
-  imports: [FinanceModule],
+  imports: [FinanceModule, DiscountsModule, ReviewsModule],
   controllers: [
     BookingDiscoveryController,
     CustomerBookingsController,

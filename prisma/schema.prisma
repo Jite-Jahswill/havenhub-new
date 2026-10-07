@@ -81,6 +81,15 @@ model User {
   siteSettingsUpdated     SiteSettings[]            @relation("SiteSettingsUpdater")
   smtpSettingsUpdated     SmtpSettings[]            @relation("SmtpSettingsUpdater")
   platformSettingsUpdated PlatformSettings[]        @relation("PlatformSettingsUpdater")
+  notifications           Notification[]
+  notificationBroadcasts  NotificationBroadcast[]   @relation("NotificationBroadcastSender")
+  discountCodesCreated    DiscountCode[]            @relation("DiscountCodeCreator")
+  discountRedemptions     DiscountRedemption[]
+  popupsCreated           Popup[]                   @relation("PopupCreator")
+  reviewsWritten          Review[]                  @relation("ReviewAuthor")
+  reviewsHidden           Review[]                  @relation("ReviewModerator")
+  badgesAwarded           BadgeAward[]              @relation("BadgeAwardAssigner")
+  saleContactAcceptances  SaleContactAcceptance[]
   messageReactions        MessageReaction[]
 
   @@index([accountType, status])
@@ -279,6 +288,7 @@ model AgentProfile {
   earnings             AgentEarning[]
   subscriptions        AgentSubscription[]
   subscriptionPayments SubscriptionPayment[]
+  discountCodesOwned   DiscountCode[]        @relation("DiscountCodeOwner")
   experiences          Experience[]
 
   @@index([verificationStatus, verificationSubmittedAt])
@@ -424,27 +434,38 @@ model Property {
   availableFrom   DateTime?       @map("available_from") @db.Date
 
   // Moderation
-  moderationNote String?   @map("moderation_note") @db.VarChar(1000)
-  submittedAt    DateTime? @map("submitted_at") @db.Timestamptz(3)
-  reviewedAt     DateTime? @map("reviewed_at") @db.Timestamptz(3)
-  reviewerId     String?   @map("reviewer_id") @db.Uuid
-  publishedAt    DateTime? @map("published_at") @db.Timestamptz(3)
-  archivedAt     DateTime? @map("archived_at") @db.Timestamptz(3)
+  moderationNote    String?   @map("moderation_note") @db.VarChar(1000)
+  submittedAt       DateTime? @map("submitted_at") @db.Timestamptz(3)
+  reviewedAt        DateTime? @map("reviewed_at") @db.Timestamptz(3)
+  reviewerId        String?   @map("reviewer_id") @db.Uuid
+  publishedAt       DateTime? @map("published_at") @db.Timestamptz(3)
+  archivedAt        DateTime? @map("archived_at") @db.Timestamptz(3)
   /// Set while the agent features the listing; bounded by their plan's
   /// FEATURED_PROPERTY_COUNT entitlement.
-  featuredAt     DateTime? @map("featured_at") @db.Timestamptz(3)
+  featuredAt        DateTime? @map("featured_at") @db.Timestamptz(3)
+  /// Published reviews: sum of stars and count (average = sum / count).
+  ratingSum         Int       @default(0) @map("rating_sum")
+  reviewCount       Int       @default(0) @map("review_count")
+  /// Bookings of this property that reached COMPLETED.
+  completedBookings Int       @default(0) @map("completed_bookings")
+  /// SALE listings: IN_APP (bought on HavenHub) or CONTACT (buyer contacts the agent).
+  saleMode          String?   @map("sale_mode") @db.VarChar(20)
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  agentProfile  AgentProfile        @relation(fields: [agentProfileId], references: [id], onDelete: Restrict)
-  reviewer      User?               @relation("PropertyReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
+  agentProfile  AgentProfile            @relation(fields: [agentProfileId], references: [id], onDelete: Restrict)
+  reviews       Review[]
+  badgeAwards   BadgeAward[]
+  saleContacts  SaleContactAcceptance[]
+  reviewer      User?                   @relation("PropertyReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
   images        PropertyImage[]
   videos        PropertyVideo[]
   amenities     PropertyAmenity[]
   favorites     PropertyFavorite[]
   dailyViews    PropertyViewDaily[]
   bookings      Booking[]
+  popups        Popup[]
   conversations Conversation[]
 
   @@index([agentProfileId, status])
@@ -639,6 +660,9 @@ model Booking {
   pricingConfigId     String   @map("pricing_config_id") @db.Uuid
   /// Title, address, unit price, discount and cleaning terms at booking time.
   propertySnapshot    Json     @map("property_snapshot")
+  /// The agent's promo code used for this booking, and what it took off the stay.
+  promoCode           String?  @map("promo_code") @db.VarChar(32)
+  promoDiscountKobo   BigInt   @default(0) @map("promo_discount_kobo")
 
   /// Dates are held for an unpaid booking until this moment.
   holdExpiresAt      DateTime?    @map("hold_expires_at") @db.Timestamptz(3)
@@ -652,16 +676,18 @@ model Booking {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  customer      User              @relation("BookingCustomer", fields: [customerId], references: [id], onDelete: Restrict)
-  property      Property          @relation(fields: [propertyId], references: [id], onDelete: Restrict)
-  agentProfile  AgentProfile      @relation(fields: [agentProfileId], references: [id], onDelete: Restrict)
-  pricingConfig PricingConfig     @relation(fields: [pricingConfigId], references: [id], onDelete: Restrict)
-  lines         BookingLineItem[]
-  payments      Payment[]
-  refunds       Refund[]
-  ledgerEntries LedgerEntry[]
-  earning       AgentEarning?
-  conversations Conversation[]
+  customer           User                @relation("BookingCustomer", fields: [customerId], references: [id], onDelete: Restrict)
+  property           Property            @relation(fields: [propertyId], references: [id], onDelete: Restrict)
+  agentProfile       AgentProfile        @relation(fields: [agentProfileId], references: [id], onDelete: Restrict)
+  pricingConfig      PricingConfig       @relation(fields: [pricingConfigId], references: [id], onDelete: Restrict)
+  lines              BookingLineItem[]
+  payments           Payment[]
+  refunds            Refund[]
+  ledgerEntries      LedgerEntry[]
+  earning            AgentEarning?
+  conversations      Conversation[]
+  discountRedemption DiscountRedemption?
+  review             Review?
 
   @@index([customerId, createdAt(sort: Desc)])
   @@index([agentProfileId, createdAt(sort: Desc)])
@@ -675,6 +701,7 @@ model Booking {
 enum PriceLineKind {
   RENT
   LISTING_DISCOUNT
+  PROMO_DISCOUNT
   CLEANING_FEE
   CAUTION_FEE
   SERVICE_FEE
@@ -983,6 +1010,10 @@ model SubscriptionPayment {
   billingInterval       BillingInterval     @map("billing_interval")
   /// Plan name at checkout, for receipts if the plan is renamed later.
   planName              String              @map("plan_name") @db.VarChar(60)
+  /// Taken off the plan price by a discount code; amountKobo is what was charged.
+  discountKobo          BigInt              @default(0) @map("discount_kobo")
+  /// The code as entered (snapshot for receipts).
+  discountCode          String?             @map("discount_code") @db.VarChar(32)
   status                PaymentStatus       @default(PENDING)
   providerTransactionId String?             @map("provider_transaction_id") @db.VarChar(64)
   failureReason         String?             @map("failure_reason") @db.VarChar(300)
@@ -991,9 +1022,10 @@ model SubscriptionPayment {
   createdAt             DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt             DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  agentProfile AgentProfile       @relation(fields: [agentProfileId], references: [id], onDelete: Restrict)
-  plan         SubscriptionPlan   @relation(fields: [planId], references: [id], onDelete: Restrict)
-  subscription AgentSubscription? @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
+  agentProfile       AgentProfile        @relation(fields: [agentProfileId], references: [id], onDelete: Restrict)
+  plan               SubscriptionPlan    @relation(fields: [planId], references: [id], onDelete: Restrict)
+  subscription       AgentSubscription?  @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
+  discountRedemption DiscountRedemption?
 
   @@index([agentProfileId, createdAt])
   @@index([status, createdAt])
@@ -1248,13 +1280,16 @@ enum Weekday {
 /// ownership, lifecycle, moderation, location and media. Kind-specific
 /// details live in the 1:1 tables below.
 model Experience {
-  id             String           @id @default(uuid(7)) @db.Uuid
-  kind           ExperienceKind
-  agentProfileId String           @map("agent_profile_id") @db.Uuid
-  slug           String           @unique @db.VarChar(160)
-  status         ExperienceStatus @default(DRAFT)
-  title          String           @db.VarChar(120)
-  description    String?          @db.VarChar(5000)
+  id              String           @id @default(uuid(7)) @db.Uuid
+  kind            ExperienceKind
+  agentProfileId  String           @map("agent_profile_id") @db.Uuid
+  slug            String           @unique @db.VarChar(160)
+  status          ExperienceStatus @default(DRAFT)
+  title           String           @db.VarChar(120)
+  description     String?          @db.VarChar(5000)
+  /// "X% off" shown on the listing (1–90). Customers arrange payment with the
+  /// provider; there is no experience checkout yet.
+  discountPercent Int?             @map("discount_percent") @db.SmallInt
 
   addressLine String?  @map("address_line") @db.VarChar(240)
   city        String?  @db.VarChar(100)
@@ -1686,6 +1721,8 @@ model CmsMedia {
   testimonials Testimonial[]
   seoRoutes    SeoRoute[]
   siteOg       SiteSettings[] @relation("SiteOgImage")
+  popups       Popup[]
+  badges       Badge[]
 
   @@index([createdAt(sort: Desc)])
   @@map("cms_media")
@@ -2068,10 +2105,276 @@ model PlatformSettings {
   reviewTours           Boolean   @default(true) @map("review_tours")
   reviewHotels          Boolean   @default(true) @map("review_hotels")
   reviewCleaning        Boolean   @default(true) @map("review_cleaning")
+  /// Admin policies by area (security, storage, booking, refunds, chat, events,
+  /// notifications). Validated by the shared schema; missing values take
+  /// their built-in defaults, so `{}` is HavenHub's default behaviour.
+  policies              Json      @default("{}") @db.JsonB
+  policiesUpdatedAt     DateTime? @map("policies_updated_at") @db.Timestamptz(3)
   updatedById           String?   @map("updated_by_id") @db.Uuid
   updatedAt             DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   updatedBy User? @relation("PlatformSettingsUpdater", fields: [updatedById], references: [id], onDelete: SetNull)
 
   @@map("platform_settings")
+}
+
+// ── Notifications (in-app) ──────────────────────────────────────────────────
+
+/// One entry in a user's in-app inbox. Written in the same transaction as the
+/// change it describes; title/body are stored as shown (no re-rendering).
+model Notification {
+  id          String    @id @default(uuid(7)) @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  /// A NotificationType from the shared package (kept as text so new types
+  /// need no migration).
+  type        String    @db.VarChar(60)
+  title       String    @db.VarChar(160)
+  body        String    @db.VarChar(1000)
+  /// Relative path inside the web app (always starts with "/").
+  link        String?   @db.VarChar(500)
+  broadcastId String?   @map("broadcast_id") @db.Uuid
+  readAt      DateTime? @map("read_at") @db.Timestamptz(3)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user      User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  broadcast NotificationBroadcast? @relation(fields: [broadcastId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([userId, readAt])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+/// An announcement an administrator sent to an audience (history + audit).
+model NotificationBroadcast {
+  id             String   @id @default(uuid(7)) @db.Uuid
+  /// ALL | CUSTOMERS | AGENTS | USER
+  audience       String   @db.VarChar(20)
+  /// Set when audience = USER.
+  recipientEmail String?  @map("recipient_email") @db.VarChar(254)
+  title          String   @db.VarChar(160)
+  body           String   @db.VarChar(1000)
+  link           String?  @db.VarChar(500)
+  recipientCount Int      @map("recipient_count")
+  sentById       String?  @map("sent_by_id") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  sentBy        User?          @relation("NotificationBroadcastSender", fields: [sentById], references: [id], onDelete: SetNull)
+  notifications Notification[]
+
+  @@index([createdAt(sort: Desc)])
+  @@map("notification_broadcasts")
+}
+
+// ── Discount codes ──────────────────────────────────────────────────────────
+
+/// A discount code. `scope` says what it discounts: SUBSCRIPTION (agent
+/// plans; offered by administrators) or BOOKING (property stays; offered by
+/// the agent who owns them). Exactly one of percentOff / amountOffKobo.
+model DiscountCode {
+  id                  String    @id @default(uuid(7)) @db.Uuid
+  /// Upper-case; unique per owner.
+  code                String    @db.VarChar(32)
+  scope               String    @db.VarChar(20)
+  /// "PLATFORM" or the owning agent profile's id (codes are unique per owner).
+  ownerKey            String    @default("PLATFORM") @map("owner_key") @db.VarChar(40)
+  /// Set for BOOKING codes: the agent who offers (and pays for) the discount.
+  ownerAgentProfileId String?   @map("owner_agent_profile_id") @db.Uuid
+  /// BOOKING codes: the owner's properties it applies to; empty = all of them.
+  propertyIds         String[]  @default([]) @map("property_ids") @db.Uuid
+  /// Internal note for administrators (never shown to agents).
+  description         String?   @db.VarChar(300)
+  percentOff          Int?      @map("percent_off")
+  amountOffKobo       BigInt?   @map("amount_off_kobo")
+  /// Plans it applies to; empty = every paid plan.
+  planIds             String[]  @default([]) @map("plan_ids") @db.Uuid
+  /// Agents who may use it; empty = any agent.
+  agentProfileIds     String[]  @default([]) @map("agent_profile_ids") @db.Uuid
+  startsAt            DateTime? @map("starts_at") @db.Timestamptz(3)
+  endsAt              DateTime? @map("ends_at") @db.Timestamptz(3)
+  /// Total uses; null = unlimited.
+  maxRedemptions      Int?      @map("max_redemptions")
+  /// Uses per person (agent for plans, customer for bookings).
+  perUserLimit        Int       @default(1) @map("per_user_limit")
+  active              Boolean   @default(true)
+  createdById         String?   @map("created_by_id") @db.Uuid
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  createdBy   User?                @relation("DiscountCodeCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  ownerAgent  AgentProfile?        @relation("DiscountCodeOwner", fields: [ownerAgentProfileId], references: [id], onDelete: Restrict)
+  redemptions DiscountRedemption[]
+
+  @@unique([ownerKey, code])
+  @@index([scope, active])
+  @@index([ownerAgentProfileId])
+  @@map("discount_codes")
+}
+
+/// One use of a code, for one subscription payment or one booking. PENDING
+/// while unpaid (it holds a use), REDEEMED once paid, RELEASED when the
+/// payment failed or the booking expired or was cancelled.
+model DiscountRedemption {
+  id                    String   @id @default(uuid(7)) @db.Uuid
+  discountCodeId        String   @map("discount_code_id") @db.Uuid
+  /// Who used it: the agent (plans) or the customer (bookings).
+  userId                String   @map("user_id") @db.Uuid
+  subscriptionPaymentId String?  @unique @map("subscription_payment_id") @db.Uuid
+  bookingId             String?  @unique @map("booking_id") @db.Uuid
+  amountOffKobo         BigInt   @map("amount_off_kobo")
+  status                String   @db.VarChar(20)
+  createdAt             DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt             DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  discountCode        DiscountCode         @relation(fields: [discountCodeId], references: [id], onDelete: Restrict)
+  user                User                 @relation(fields: [userId], references: [id], onDelete: Restrict)
+  subscriptionPayment SubscriptionPayment? @relation(fields: [subscriptionPaymentId], references: [id], onDelete: Restrict)
+  booking             Booking?             @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+
+  @@index([discountCodeId, status])
+  @@index([userId, discountCodeId])
+  @@map("discount_redemptions")
+}
+
+// ── Pop-ups ─────────────────────────────────────────────────────────────────
+
+/// A modal shown on the public site: an announcement, what's new, an offer or
+/// a featured property. One is shown per page view (highest priority first),
+/// to its audience, on its pages, within its window, as often as `frequency`.
+model Popup {
+  id           String    @id @default(uuid(7)) @db.Uuid
+  /// For administrators only.
+  name         String    @db.VarChar(120)
+  /// ANNOUNCEMENT | WHATS_NEW | OFFER | PROPERTY
+  kind         String    @db.VarChar(20)
+  title        String    @db.VarChar(120)
+  /// Plain text; line breaks are kept.
+  body         String?   @db.VarChar(600)
+  imageId      String?   @map("image_id") @db.Uuid
+  /// PROPERTY pop-ups: the listing shown (only while it is publicly visible).
+  propertyId   String?   @map("property_id") @db.Uuid
+  /// Shown with a copy button (display only; checkout validates codes).
+  discountCode String?   @map("discount_code") @db.VarChar(32)
+  ctaLabel     String?   @map("cta_label") @db.VarChar(40)
+  /// A path on this site ("/…").
+  ctaLink      String?   @map("cta_link") @db.VarChar(500)
+  /// ALL | GUESTS | CUSTOMERS | AGENTS
+  audience     String    @default("ALL") @db.VarChar(20)
+  /// Path prefixes it appears on ("/" = homepage only); empty = all public pages.
+  paths        String[]  @default([])
+  /// ONCE | DAILY | EVERY_VISIT
+  frequency    String    @default("ONCE") @db.VarChar(20)
+  delaySeconds Int       @default(2) @map("delay_seconds")
+  priority     Int       @default(0)
+  active       Boolean   @default(false)
+  startsAt     DateTime? @map("starts_at") @db.Timestamptz(3)
+  endsAt       DateTime? @map("ends_at") @db.Timestamptz(3)
+  views        Int       @default(0)
+  clicks       Int       @default(0)
+  dismissals   Int       @default(0)
+  createdById  String?   @map("created_by_id") @db.Uuid
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  image     CmsMedia? @relation(fields: [imageId], references: [id], onDelete: Restrict)
+  property  Property? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  createdBy User?     @relation("PopupCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([active, priority(sort: Desc)])
+  @@map("popups")
+}
+
+// ── Reviews & badges ────────────────────────────────────────────────────────
+
+/// A customer's rating of a property after a completed stay: one per booking.
+/// Published at once; administrators can hide it (it then stops counting).
+model Review {
+  id           String    @id @default(uuid(7)) @db.Uuid
+  bookingId    String    @unique @map("booking_id") @db.Uuid
+  propertyId   String    @map("property_id") @db.Uuid
+  customerId   String    @map("customer_id") @db.Uuid
+  rating       Int       @db.SmallInt
+  comment      String?   @db.VarChar(2000)
+  /// PUBLISHED | HIDDEN
+  status       String    @default("PUBLISHED") @db.VarChar(20)
+  hiddenReason String?   @map("hidden_reason") @db.VarChar(500)
+  hiddenById   String?   @map("hidden_by_id") @db.Uuid
+  hiddenAt     DateTime? @map("hidden_at") @db.Timestamptz(3)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  booking  Booking  @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Restrict)
+  customer User     @relation("ReviewAuthor", fields: [customerId], references: [id], onDelete: Restrict)
+  hiddenBy User?    @relation("ReviewModerator", fields: [hiddenById], references: [id], onDelete: SetNull)
+
+  @@index([propertyId, status, createdAt(sort: Desc)])
+  @@index([status, createdAt(sort: Desc)])
+  @@map("reviews")
+}
+
+/// A badge administrators design (name + image). MANUAL badges are given to
+/// chosen properties; AUTOMATIC ones go to every property meeting the rules.
+model Badge {
+  id                   String   @id @default(uuid(7)) @db.Uuid
+  name                 String   @db.VarChar(60)
+  description          String?  @db.VarChar(200)
+  imageId              String   @map("image_id") @db.Uuid
+  /// MANUAL | AUTOMATIC
+  mode                 String   @db.VarChar(20)
+  /// AUTOMATIC rules (all that are set must hold).
+  minRating            Decimal? @map("min_rating") @db.Decimal(2, 1)
+  minReviews           Int?     @map("min_reviews")
+  minCompletedBookings Int?     @map("min_completed_bookings")
+  active               Boolean  @default(true)
+  sortOrder            Int      @default(0) @map("sort_order")
+  createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt            DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  image  CmsMedia     @relation(fields: [imageId], references: [id], onDelete: Restrict)
+  awards BadgeAward[]
+
+  @@map("badges")
+}
+
+/// A badge a property holds now: given by hand (MANUAL) or earned (AUTOMATIC,
+/// recalculated when reviews, completed bookings or the badge's rules change).
+model BadgeAward {
+  badgeId      String   @map("badge_id") @db.Uuid
+  propertyId   String   @map("property_id") @db.Uuid
+  /// MANUAL | AUTOMATIC
+  source       String   @db.VarChar(20)
+  assignedById String?  @map("assigned_by_id") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  badge      Badge    @relation(fields: [badgeId], references: [id], onDelete: Cascade)
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  assignedBy User?    @relation("BadgeAwardAssigner", fields: [assignedById], references: [id], onDelete: SetNull)
+
+  @@id([badgeId, propertyId])
+  @@index([propertyId])
+  @@map("badge_awards")
+}
+
+// ── Property sales ──────────────────────────────────────────────────────────
+
+/// A buyer accepted the "dealing outside HavenHub" notice before seeing an
+/// agent's direct contact details. The exact wording is kept as evidence.
+model SaleContactAcceptance {
+  id             String   @id @default(uuid(7)) @db.Uuid
+  propertyId     String   @map("property_id") @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  disclaimerText String   @map("disclaimer_text") @db.VarChar(5000)
+  /// SHA-256 of the wording, to group acceptances of the same version.
+  disclaimerHash String   @map("disclaimer_hash") @db.Char(64)
+  ipAddress      String?  @map("ip_address") @db.VarChar(64)
+  userAgent      String?  @map("user_agent") @db.VarChar(512)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Restrict)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([propertyId, createdAt(sort: Desc)])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("sale_contact_acceptances")
 }

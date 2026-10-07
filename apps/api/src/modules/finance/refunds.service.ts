@@ -15,6 +15,8 @@ import type { Payment, Prisma, Refund } from '../../generated/prisma/client';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import { describeError } from '../../common/logging/describe-error';
 import { AuditService } from '../audit/audit.service';
+import { refundMessages } from '../notifications/notification-messages';
+import { NotificationsService } from '../notifications/notifications.service';
 import { LedgerService } from './ledger.service';
 import { DistributedLockService } from '../../infrastructure/redis/distributed-lock.service';
 import { PaymentProviderError } from './providers/payment-provider';
@@ -51,6 +53,7 @@ export class RefundsService {
     private readonly ledger: LedgerService,
     private readonly audit: AuditService,
     private readonly locks: DistributedLockService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   /**
@@ -149,6 +152,12 @@ export class RefundsService {
         },
         tx,
       );
+      const facts = await this.facts(tx, updated);
+      await this.notifications.notify(tx, [
+        input.action === 'APPROVE'
+          ? refundMessages.approved(facts)
+          : refundMessages.rejected(facts),
+      ]);
       return updated;
     });
     if (refund.status !== RefundStatus.PROCESSING) return refund;
@@ -387,6 +396,9 @@ export class RefundsService {
         },
         tx,
       );
+      await this.notifications.notify(tx, [
+        refundMessages.completed(await this.facts(tx, completed)),
+      ]);
       return completed;
     });
   }
@@ -432,6 +444,21 @@ export class RefundsService {
       );
       return failed;
     });
+  }
+
+  /** What a customer notification about this refund needs. */
+  private async facts(tx: Tx, refund: Refund) {
+    const booking = await tx.booking.findUniqueOrThrow({
+      where: { id: refund.bookingId },
+      select: { id: true, reference: true, customerId: true },
+    });
+    return {
+      customerId: booking.customerId,
+      bookingId: booking.id,
+      reference: booking.reference,
+      amountKobo: refund.amountKobo,
+      note: refund.reviewNote,
+    };
   }
 
   private async lock(tx: Tx, refundId: string): Promise<Refund> {

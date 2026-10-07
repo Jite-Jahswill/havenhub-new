@@ -1,3 +1,5 @@
+import type { PublicBadge } from '../schemas/badge.js';
+import type { RatingSummary } from '../schemas/review.js';
 import type {
   AmenityCategory,
   CleaningOption,
@@ -6,6 +8,7 @@ import type {
   PropertyStatus,
   PropertyType,
   VideoProvider,
+  SaleMode,
 } from '../enums/property.js';
 
 /** All money values are integer kobo. */
@@ -60,6 +63,8 @@ export interface PropertyCard {
   title: string;
   propertyType: PropertyType;
   listingType: ListingType;
+  /** Sale listings: how buyers purchase; null for rentals. */
+  saleMode: SaleMode | null;
   pricingPeriod: PricingPeriod;
   priceKobo: number;
   discountPercent: number | null;
@@ -75,6 +80,10 @@ export interface PropertyCard {
   agent: { id: string; displayName: string; verified: true };
   /** Featured by its agent (within their plan's featured allowance). */
   featured: boolean;
+  /** Published reviews; null until the first one. */
+  rating: RatingSummary | null;
+  /** Badges it holds now (given by HavenHub or earned). */
+  badges: PublicBadge[];
   publishedAt: string;
 }
 
@@ -89,6 +98,11 @@ export interface PropertySearchResult {
 }
 
 export interface PropertyDetail extends PropertyCard {
+  /**
+   * Contact for sale: the notice the buyer must accept to see the agent's
+   * direct contact details; null when that is not offered for this listing.
+   */
+  saleContact: { disclaimer: string; disclaimerHash: string } | null;
   description: string;
   addressLine: string;
   lga: string;
@@ -122,6 +136,8 @@ export interface AgentPropertyView {
   description: string | null;
   propertyType: PropertyType;
   listingType: ListingType;
+  /** Sale listings: how buyers purchase; null for rentals. */
+  saleMode: SaleMode | null;
   pricingPeriod: PricingPeriod | null;
   addressLine: string | null;
   city: string | null;
@@ -202,4 +218,11 @@ export interface AdminPropertyDetail extends AgentPropertyView {
   };
   amenities: AmenityView[];
   reviewedAt: string | null;
+}
+
+/** An agent's direct contact details, shown after the buyer accepts the notice. */
+export interface SaleContactView {
+  agentName: string;
+  phone: string | null;
+  email: string;
 }

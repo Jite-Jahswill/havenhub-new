@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 
+import { DiscountsModule } from '../discounts/discounts.module';
 import { FinanceModule } from '../finance/finance.module';
 import {
   AdminSubscriptionPlansController,
@@ -23,7 +24,7 @@ import { SubscriptionsService } from './subscriptions.service';
  * PlansModule, which every listing module already uses.
  */
 @Module({
-  imports: [FinanceModule],
+  imports: [FinanceModule, DiscountsModule],
   controllers: [
     SubscriptionPlansController,
     AgentSubscriptionController,

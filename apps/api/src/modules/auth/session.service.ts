@@ -14,6 +14,7 @@ import {
   sha256,
 } from '../../infrastructure/crypto/tokens';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
+import { PlatformPoliciesService } from '../platform/platform-policies.service';
 
 /** Concurrent refreshes (e.g. two tabs) within this window are not treated as theft. */
 const REFRESH_REUSE_GRACE_MS = 30_000;
@@ -46,12 +47,13 @@ export class SessionService {
   constructor(
     private readonly prisma: PrismaService,
     @Inject(ENV) private readonly env: Env,
+    private readonly policies: PlatformPoliciesService,
   ) {}
 
   async create(userId: string, clientType: ClientType, meta: RequestMeta): Promise<IssuedSession> {
     const accessSecret = generateSecret();
     const refreshSecret = generateSecret();
-    const { accessExpiresAt, refreshExpiresAt } = this.expiries();
+    const { accessExpiresAt, refreshExpiresAt } = await this.expiries();
 
     const session = await this.prisma.session.create({
       data: {
@@ -133,7 +135,7 @@ export class SessionService {
 
     const accessSecret = generateSecret();
     const refreshSecret = generateSecret();
-    const { accessExpiresAt, refreshExpiresAt } = this.expiries();
+    const { accessExpiresAt, refreshExpiresAt } = await this.expiries();
 
     // Conditional update: if two requests race with the same token, only one wins.
     const { count } = await this.prisma.session.updateMany({
@@ -227,11 +229,14 @@ export class SessionService {
       throw new AppException(HttpStatus.NOT_FOUND, ErrorCode.NOT_FOUND, 'Session not found.');
   }
 
-  private expiries() {
+  /** The refresh lifetime (admin policy, else REFRESH_TOKEN_TTL_DAYS) restarts on every refresh. */
+  private async expiries() {
+    const days =
+      (await this.policies.get()).security.sessionDays ?? this.env.REFRESH_TOKEN_TTL_DAYS;
     const now = Date.now();
     return {
       accessExpiresAt: new Date(now + this.env.ACCESS_TOKEN_TTL_MINUTES * 60_000),
-      refreshExpiresAt: new Date(now + this.env.REFRESH_TOKEN_TTL_DAYS * 86_400_000),
+      refreshExpiresAt: new Date(now + days * 86_400_000),
     };
   }
 

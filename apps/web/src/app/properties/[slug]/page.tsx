@@ -1,6 +1,10 @@
-import type { PropertyCard as PropertyCardData, PropertyDetail } from '@havenhub/shared';
+import type {
+  PropertyCard as PropertyCardData,
+  PropertyDetail,
+  PropertyReviewsPage,
+} from '@havenhub/shared';
 import { videoEmbedUrl } from '@havenhub/shared';
-import { Alert, Badge, Card, Container } from '@havenhub/ui';
+import { Badge, Card, Container } from '@havenhub/ui';
 import {
   Bath,
   BadgeCheck,
@@ -25,7 +29,10 @@ import { LocationMapLazy } from '@/components/map/location-map-lazy';
 import { AgentAvatar } from '@/components/properties/agent-avatar';
 import { FavoriteButton } from '@/components/properties/favorite-button';
 import { Gallery } from '@/components/properties/gallery';
+import { PropertyBadges } from '@/components/properties/property-badges';
 import { PropertyCard } from '@/components/properties/property-card';
+import { Rating, Stars } from '@/components/properties/rating';
+import { SaleContact } from '@/components/properties/sale-contact';
 import { ShareButton } from '@/components/properties/share-button';
 import { ViewBeacon } from '@/components/properties/view-beacon';
 import { serverApi, serverApiData } from '@/lib/api/server';
@@ -74,13 +81,28 @@ export async function generateMetadata({
   };
 }
 
-export default async function PropertyPage({ params }: PageProps<'/properties/[slug]'>) {
+const REVIEW_DATE = new Intl.DateTimeFormat('en-NG', {
+  month: 'long',
+  year: 'numeric',
+  timeZone: 'Africa/Lagos',
+});
+
+export default async function PropertyPage({
+  params,
+  searchParams,
+}: PageProps<'/properties/[slug]'>) {
   const { slug } = await params;
+  const reviewPage = Number((await searchParams).reviews) || 1;
   const [property, user] = await Promise.all([getProperty(slug), getCurrentUser()]);
   if (!property) notFound();
-  const similar =
-    (await serverApiData<PropertyCardData[]>(`/properties/${encodeURIComponent(slug)}/similar`)) ??
-    [];
+  const [similar, reviews] = await Promise.all([
+    serverApiData<PropertyCardData[]>(`/properties/${encodeURIComponent(slug)}/similar`).then(
+      (r) => r ?? [],
+    ),
+    serverApiData<PropertyReviewsPage>(
+      `/properties/${encodeURIComponent(slug)}/reviews?page=${Math.max(1, Math.trunc(reviewPage))}`,
+    ),
+  ]);
   const viewer = !user ? 'guest' : user.accountType === 'CUSTOMER' ? 'customer' : 'other';
   const discounted = discountedKobo(property.priceKobo, property.discountPercent);
 
@@ -119,6 +141,12 @@ export default async function PropertyPage({ params }: PageProps<'/properties/[s
           <p className="mt-1.5 text-text-secondary">
             {property.lga}, {property.city}, {property.state}
           </p>
+          {(property.rating || property.badges.length > 0) && (
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <Rating rating={property.rating} long />
+              <PropertyBadges badges={property.badges} />
+            </div>
+          )}
         </div>
         <div className="flex gap-2">
           <ShareButton title={property.title} />
@@ -212,6 +240,49 @@ export default async function PropertyPage({ params }: PageProps<'/properties/[s
             </Section>
           )}
 
+          {reviews && reviews.total > 0 && (
+            <Section title="Reviews">
+              <div id="reviews" className="flex flex-col gap-6">
+                <Rating rating={reviews.rating} long className="text-base" />
+                <ul className="flex flex-col gap-6">
+                  {reviews.items.map((r) => (
+                    <li key={r.id} className="flex flex-col gap-1.5">
+                      <div className="flex flex-wrap items-center gap-3">
+                        <Stars value={r.rating} />
+                        <span className="text-sm font-semibold text-text">{r.authorName}</span>
+                        <span className="text-xs text-text-muted">
+                          {REVIEW_DATE.format(new Date(r.createdAt))}
+                        </span>
+                      </div>
+                      {r.comment && (
+                        <p className="text-sm leading-relaxed whitespace-pre-line text-text-secondary">
+                          {r.comment}
+                        </p>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+                {reviews.totalPages > 1 && (
+                  <nav aria-label="More reviews" className="flex gap-4 text-sm">
+                    {reviews.page > 1 && (
+                      <Link href={`?reviews=${reviews.page - 1}#reviews`} className="underline">
+                        Newer reviews
+                      </Link>
+                    )}
+                    {reviews.page < reviews.totalPages && (
+                      <Link href={`?reviews=${reviews.page + 1}#reviews`} className="underline">
+                        Older reviews
+                      </Link>
+                    )}
+                  </nav>
+                )}
+                <p className="text-xs text-text-muted">
+                  Only guests who completed a paid stay booked on HavenHub can review.
+                </p>
+              </div>
+            </Section>
+          )}
+
           <Section title="Location">
             <p className="mb-4 text-text-secondary">
               {property.addressLine}, {property.lga}, {property.city}, {property.state}
@@ -273,7 +344,18 @@ export default async function PropertyPage({ params }: PageProps<'/properties/[s
               </p>
             )}
             {property.listingType === 'SALE' ? (
-              <Alert>Purchase enquiries and secure payments are coming soon to HavenHub.</Alert>
+              property.saleContact && viewer !== 'other' ? (
+                <SaleContact
+                  slug={property.slug}
+                  notice={property.saleContact.disclaimer}
+                  noticeHash={property.saleContact.disclaimerHash}
+                  signedIn={viewer !== 'guest'}
+                />
+              ) : (
+                <p className="text-sm text-text-secondary">
+                  Interested in buying? Message the agent through HavenHub.
+                </p>
+              )
             ) : (
               <BookingWidget property={property} viewer={viewer} />
             )}

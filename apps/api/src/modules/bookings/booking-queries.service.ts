@@ -37,6 +37,8 @@ import {
   type BookingDetailRow,
   type BookingSummaryRow,
 } from './booking.mapper';
+import { PlatformPoliciesService } from '../platform/platform-policies.service';
+import { ReviewsService } from '../reviews/reviews.service';
 
 type ListQuery = z.output<typeof listBookingsQuerySchema>;
 
@@ -50,6 +52,8 @@ export class BookingQueriesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
+    private readonly policies: PlatformPoliciesService,
+    private readonly reviews: ReviewsService,
   ) {}
 
   // ── Customer ─────────────────────────────────────────────────────────────
@@ -70,10 +74,12 @@ export class BookingQueriesService {
       include: BOOKING_DETAIL_INCLUDE,
     });
     if (!row) throw Errors.notFound('Booking');
-    const decision = cancelDecisionFor(row, 'CUSTOMER');
+    const cutoff = (await this.policies.get()).refunds.customerCancelCutoffDays;
+    const decision = cancelDecisionFor(row, 'CUSTOMER', cutoff);
     const latestRefund = row.refunds.at(-1);
     return {
       ...toSummary(row, this.storage),
+      ...(await this.reviews.stateFor(row)),
       snapshot: toSnapshotView(row, this.storage),
       guests: row.guests,
       cleaningSelected: row.cleaningSelected,
@@ -141,7 +147,8 @@ export class BookingQueriesService {
       confirmedAt: row.confirmedAt?.toISOString() ?? null,
       cancellation: toCancellation(row),
       refund: latestRefund ? toRefundView(latestRefund) : null,
-      canCancel: cancelDecisionFor(row, 'AGENT').allowed,
+      // The refunds policy's cut-off applies to customers only.
+      canCancel: cancelDecisionFor(row, 'AGENT', 0).allowed,
     };
   }
 
@@ -261,7 +268,7 @@ export class BookingQueriesService {
       refunds: finance ? row.refunds.map(toRefundView) : [],
       ledger: finance ? ledger : [],
       ledgerSummary: finance ? summarizeLedger(ledger) : null,
-      canCancel: cancelDecisionFor(row, 'ADMIN').allowed,
+      canCancel: cancelDecisionFor(row, 'ADMIN', 0).allowed,
     };
   }
 

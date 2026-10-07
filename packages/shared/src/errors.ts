@@ -13,6 +13,8 @@ export const ErrorCode = {
   SERVICE_UNAVAILABLE: 'SERVICE_UNAVAILABLE',
   /** The platform is in maintenance mode; retry later (see Retry-After). */
   MAINTENANCE_MODE: 'MAINTENANCE_MODE',
+  /** An administrator has turned this feature off (platform policies). */
+  FEATURE_DISABLED: 'FEATURE_DISABLED',
 
   // Authentication
   UNAUTHENTICATED: 'UNAUTHENTICATED',
@@ -50,6 +52,8 @@ export const ErrorCode = {
   // Subscriptions
   /** The plan does not exist or is not offered. */
   PLAN_NOT_AVAILABLE: 'PLAN_NOT_AVAILABLE',
+  /** The discount code cannot be used (unknown, expired, used up, wrong plan…). */
+  DISCOUNT_CODE_INVALID: 'DISCOUNT_CODE_INVALID',
   /** A plan change is already paid for and waiting to start. */
   SUBSCRIPTION_CHANGE_SCHEDULED: 'SUBSCRIPTION_CHANGE_SCHEDULED',
   /** No default (free) plan is configured, so allowances cannot be resolved. */

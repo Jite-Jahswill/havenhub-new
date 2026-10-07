@@ -1,4 +1,4 @@
-import type { Permission } from '@havenhub/shared';
+import { POLICY_AREA_META, POLICY_AREAS, type Permission } from '@havenhub/shared';
 import { Card } from '@havenhub/ui';
 import { ChevronRight } from 'lucide-react';
 import type { Metadata } from 'next';
@@ -37,6 +37,12 @@ const PLATFORM: Entry[] = [
     description: 'Whether each listing type needs admin review before it is published.',
     permission: 'settings.manage',
   },
+  ...POLICY_AREAS.map((area): Entry => ({
+    href: `/admin/settings/policies/${area}`,
+    title: POLICY_AREA_META[area].title,
+    description: POLICY_AREA_META[area].description,
+    permission: 'settings.manage',
+  })),
 ];
 
 /** Already managed elsewhere — linked, not duplicated. */
@@ -85,17 +91,8 @@ const ELSEWHERE: Entry[] = [
   },
 ];
 
-const NOT_YET = [
-  'Security',
-  'Storage',
-  'Booking',
-  'Refunds',
-  'Withdrawals',
-  'Reviews',
-  'Chat',
-  'Events',
-  'Notifications',
-];
+/** Features not built yet: their settings arrive with them. */
+const NOT_YET = ['Withdrawals'];
 
 function EntryCard({ entry }: { entry: Entry }) {
   return (
@@ -155,8 +152,8 @@ export default async function SettingsHubPage() {
               Not configurable yet
             </h2>
             <p className="max-w-2xl text-sm text-text-secondary">
-              {NOT_YET.join(', ')} have no admin settings in this version; they follow the
-              platform’s built-in behaviour.
+              {NOT_YET.join(' and ')} {NOT_YET.length === 1 ? 'is' : 'are'} not part of HavenHub
+              yet; settings will appear here when {NOT_YET.length === 1 ? 'it is' : 'they are'}.
             </p>
           </section>
         </div>

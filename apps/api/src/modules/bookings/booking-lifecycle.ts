@@ -1,5 +1,11 @@
 import { HttpStatus } from '@nestjs/common';
-import { BookingStatus as S, CancelledBy, ErrorCode, type BookingStatus } from '@havenhub/shared';
+import {
+  BookingStatus as S,
+  CancelledBy,
+  daysBetween,
+  ErrorCode,
+  type BookingStatus,
+} from '@havenhub/shared';
 
 import { AppException } from '../../common/errors/app.exception';
 
@@ -43,13 +49,14 @@ export interface CancellationDecision {
 }
 
 /**
- * Phase 3's deliberately simple cancellation policy. It lives in one pure
- * function so a configurable policy can replace it later without touching
- * callers.
+ * The cancellation policy, in one pure function. `customerCancelCutoffDays`
+ * comes from the admin refunds policy (default 0).
  *
  *  - Unpaid bookings: anyone involved may cancel; nothing to refund.
- *  - Paid bookings before the stay starts: customer, agent or admin may
- *    cancel; the customer is refunded in full (caution deposit included).
+ *  - Paid bookings before the stay starts: agent or admin may cancel; the
+ *    customer may cancel until `customerCancelCutoffDays` days before
+ *    check-in (0 = until the stay starts). The customer is refunded in full
+ *    (caution deposit included).
  *  - Once the stay has started only an administrator may cancel (full
  *    refund) — customers and agents must contact support.
  */
@@ -57,6 +64,7 @@ export function cancellationDecision(
   booking: { status: BookingStatus; startDate: string },
   actor: CancellationActor,
   today: string,
+  customerCancelCutoffDays = 0,
 ): CancellationDecision {
   if (booking.status === S.AWAITING_PAYMENT) return { allowed: true, reason: null, refund: 'NONE' };
   if (booking.status !== S.CONFIRMED) {
@@ -71,6 +79,17 @@ export function cancellationDecision(
     return {
       allowed: false,
       reason: 'This stay has already started. Please contact HavenHub support.',
+      refund: 'NONE',
+    };
+  }
+  if (
+    actor === CancelledBy.CUSTOMER &&
+    customerCancelCutoffDays > 0 &&
+    daysBetween(today, booking.startDate) < customerCancelCutoffDays
+  ) {
+    return {
+      allowed: false,
+      reason: `Paid bookings can be cancelled up to ${customerCancelCutoffDays} day${customerCancelCutoffDays === 1 ? '' : 's'} before check-in. Please contact HavenHub support.`,
       refund: 'NONE',
     };
   }

@@ -10,6 +10,7 @@ import Link from 'next/link';
 
 import { Photo } from '@/components/properties/photo';
 import { experiencePath, formatEventTime } from '@/lib/experiences';
+import { discountedKobo } from '@/lib/format';
 
 /** Public card for an event, tour, hotel or cleaning service. Prices are listed, not sold. */
 export function ExperienceCard({
@@ -72,7 +73,19 @@ export function ExperienceCard({
         {item.priceFromKobo !== null && (
           <p className="mt-1 text-text">
             <span className="text-sm text-text-secondary">From </span>
-            <span className="font-semibold">{formatKobo(item.priceFromKobo)}</span>
+            {item.discountPercent && item.priceFromKobo > 0 ? (
+              <>
+                <span className="font-semibold">
+                  {formatKobo(discountedKobo(item.priceFromKobo, item.discountPercent)!)}
+                </span>{' '}
+                <s className="text-sm text-text-muted">{formatKobo(item.priceFromKobo)}</s>{' '}
+                <span className="text-xs font-semibold text-success">
+                  {item.discountPercent}% off
+                </span>
+              </>
+            ) : (
+              <span className="font-semibold">{formatKobo(item.priceFromKobo)}</span>
+            )}
             {(item.priceNote || item.kind === 'HOTEL') && (
               <span className="text-sm text-text-secondary">
                 {' '}

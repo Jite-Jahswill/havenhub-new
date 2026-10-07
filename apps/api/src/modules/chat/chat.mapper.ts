@@ -1,5 +1,4 @@
 import {
-  MESSAGE_EDIT_WINDOW_MINUTES,
   MESSAGE_REACTIONS,
   type AttachmentKind,
   type ChatUserView,
@@ -253,6 +252,8 @@ export function toMessageView(
   m: MessageRow,
   viewerId: string,
   urls: Urls,
+  /** The edit window from the chat policy, in minutes (0 = no editing). */
+  editWindowMinutes: number,
   now = new Date(),
 ): MessageView {
   const deleted = m.deletedAt !== null;
@@ -262,7 +263,7 @@ export function toMessageView(
     !deleted &&
     m.type !== 'SYSTEM' &&
     m.body !== null &&
-    now.getTime() - m.createdAt.getTime() < MESSAGE_EDIT_WINDOW_MINUTES * 60_000;
+    now.getTime() - m.createdAt.getTime() < editWindowMinutes * 60_000;
   return {
     id: m.id,
     conversationId: m.conversationId,

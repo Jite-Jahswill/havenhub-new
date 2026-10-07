@@ -2,10 +2,11 @@ import type { Metadata } from 'next';
 
 import { AuthCard, TextLink } from '@/components/auth/auth-card';
 import { RegisterForm } from '@/components/auth/register-form';
+import { getPublicPolicies } from '@/lib/cms';
 
 export const metadata: Metadata = { title: 'Join as an agent' };
 
-export default function RegisterAgentPage() {
+export default async function RegisterAgentPage() {
   return (
     <AuthCard
       title="Join HavenHub as an agent"
@@ -17,7 +18,10 @@ export default function RegisterAgentPage() {
         </>
       }
     >
-      <RegisterForm variant="agent" />
+      <RegisterForm
+        variant="agent"
+        passwordMinLength={(await getPublicPolicies()).passwordMinLength}
+      />
     </AuthCard>
   );
 }

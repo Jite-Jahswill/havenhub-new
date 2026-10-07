@@ -3,6 +3,7 @@ import { ErrorCode } from '@havenhub/shared';
 import sharp, { type Metadata } from 'sharp';
 
 import { AppException } from '../../common/errors/app.exception';
+import { PlatformPoliciesService } from '../../modules/platform/platform-policies.service';
 
 export const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const ACCEPTED_FORMATS = new Set(['jpeg', 'png', 'webp', 'avif', 'heif']);
@@ -21,6 +22,8 @@ export interface Rendition {
  */
 @Injectable()
 export class ImageProcessor {
+  constructor(private readonly policies: PlatformPoliciesService) {}
+
   async listingRenditions(input: Buffer): Promise<{ large: Rendition; thumbnail: Rendition }> {
     await this.inspect(input);
     const [large, thumbnail] = await Promise.all([
@@ -32,7 +35,8 @@ export class ImageProcessor {
 
   /** Chat photos: any size, re-encoded for display plus a thumbnail. */
   async chatRenditions(input: Buffer): Promise<{ display: Rendition; thumbnail: Rendition }> {
-    await this.inspect(input, { minWidth: 1, minHeight: 1 });
+    // The chat attachment policy limits these (AttachmentsService), not the image policy.
+    await this.inspect(input, { minWidth: 1, minHeight: 1 }, false);
     const [display, thumbnail] = await Promise.all([
       this.render(input, 1600, 80),
       this.render(input, 480, 72),
@@ -85,9 +89,16 @@ export class ImageProcessor {
   private async inspect(
     input: Buffer,
     min: { minWidth: number; minHeight: number } = { minWidth: 320, minHeight: 240 },
+    applyPolicy = true,
   ): Promise<void> {
     if (input.length === 0) throw invalidFile('The file is empty.');
-    if (input.length > MAX_IMAGE_BYTES) throw invalidFile('Images must be 10 MB or smaller.');
+    // MAX_IMAGE_BYTES is the hard ceiling (the upload parser stops there); admins may set less.
+    const maxMb = applyPolicy
+      ? (await this.policies.get()).storage.imageMaxMb
+      : MAX_IMAGE_BYTES / (1024 * 1024);
+    if (input.length > Math.min(MAX_IMAGE_BYTES, maxMb * 1024 * 1024)) {
+      throw invalidFile(`Images must be ${maxMb} MB or smaller.`);
+    }
     let meta: Metadata;
     try {
       meta = await sharp(input, { limitInputPixels: MAX_INPUT_PIXELS }).metadata();

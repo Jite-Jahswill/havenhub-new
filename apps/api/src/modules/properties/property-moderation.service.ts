@@ -24,6 +24,8 @@ import { AgentPropertiesService } from './agent-properties.service';
 import { MODERATION, moderationTarget } from './property-lifecycle';
 import { num, toAmenityView } from './property.mapper';
 import { AGENT_PROPERTY_INCLUDE, agentDisplayName } from './property.selects';
+import { listingModerated } from '../notifications/notification-messages';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class PropertyModerationService {
@@ -32,6 +34,7 @@ export class PropertyModerationService {
     private readonly storage: StorageService,
     private readonly audit: AuditService,
     private readonly agentProperties: AgentPropertiesService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   /** The moderation queue (oldest submissions first) or any filtered list. */
@@ -209,6 +212,15 @@ export class PropertyModerationService {
         },
         tx,
       );
+      await this.notifications.notify(tx, [
+        listingModerated({
+          agentUserId: property.agentProfile.user.id,
+          action: input.action,
+          title: property.title,
+          note: input.note ?? null,
+          link: `/agent/properties/${id}`,
+        }),
+      ]);
     });
     return this.get(id);
   }

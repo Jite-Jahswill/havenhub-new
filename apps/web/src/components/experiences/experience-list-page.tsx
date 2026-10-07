@@ -6,8 +6,10 @@ import {
 import { Alert, Container, buttonClasses } from '@havenhub/ui';
 import { SearchX } from 'lucide-react';
 import Link from 'next/link';
+import { notFound } from 'next/navigation';
 
 import { serverApi } from '@/lib/api/server';
+import { getPublicPolicies } from '@/lib/cms';
 import { KIND_SEGMENT } from '@/lib/experiences';
 
 import { ExperienceCard } from './experience-card';
@@ -30,6 +32,8 @@ export async function ExperienceListPage({
   kind: ExperienceKind;
   searchParams: Record<string, string | string[] | undefined>;
 }) {
+  // Turned off in Admin → Settings → Events & experiences.
+  if (!(await getPublicPolicies()).experiences[kind]) notFound();
   const state: ExperienceFilterState = {};
   for (const key of KEYS) {
     const value = searchParams[key];

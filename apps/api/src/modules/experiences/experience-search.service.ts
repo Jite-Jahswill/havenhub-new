@@ -24,6 +24,7 @@ import {
   toTourDetails,
 } from './experience.mapper';
 import { PUBLIC_EXPERIENCE_WHERE, experienceCardSelect } from './experience.selects';
+import { PlatformPoliciesService } from '../platform/platform-policies.service';
 
 /**
  * Public discovery of events, tours, hotels and cleaning services. Every
@@ -35,10 +36,15 @@ export class ExperienceSearchService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
+    private readonly policies: PlatformPoliciesService,
   ) {}
 
   async search(params: ExperienceSearchParams): Promise<ExperienceSearchResult> {
     const now = new Date();
+    // A kind turned off in the events policy is hidden from the public.
+    if (!(await this.policies.enabledExperienceKinds()).includes(params.kind)) {
+      return { items: [], page: params.page, pageSize: params.pageSize, total: 0, totalPages: 0 };
+    }
     const where = buildWhere(params, now);
     const pastEvents = params.kind === 'EVENT' && params.when === 'past';
     const orderBy: Prisma.ExperienceOrderByWithRelationInput[] =
@@ -69,7 +75,11 @@ export class ExperienceSearchService {
     const now = new Date();
     const ordered = { orderBy: [{ sortOrder: 'asc' as const }, { createdAt: 'asc' as const }] };
     const row = await this.prisma.experience.findFirst({
-      where: { ...PUBLIC_EXPERIENCE_WHERE, slug },
+      where: {
+        ...PUBLIC_EXPERIENCE_WHERE,
+        slug,
+        kind: { in: await this.policies.enabledExperienceKinds() },
+      },
       include: {
         images: ordered,
         videos: ordered,
@@ -146,7 +156,11 @@ export class ExperienceSearchService {
     query: z.output<typeof roomAvailabilityQuerySchema>,
   ): Promise<HotelAvailabilityView> {
     const hotel = await this.prisma.experience.findFirst({
-      where: { ...PUBLIC_EXPERIENCE_WHERE, slug, kind: 'HOTEL' },
+      where: {
+        ...PUBLIC_EXPERIENCE_WHERE,
+        slug,
+        kind: { in: (await this.policies.enabledExperienceKinds()).filter((k) => k === 'HOTEL') },
+      },
       select: {
         hotel: {
           select: {

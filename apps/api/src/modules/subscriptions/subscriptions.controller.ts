@@ -74,7 +74,7 @@ export class AgentSubscriptionController {
     @Query(validate(subscriptionQuoteQuerySchema))
     query: z.output<typeof subscriptionQuoteQuerySchema>,
   ) {
-    return ok(await this.subscriptions.quote(auth.user.id, query.planId));
+    return ok(await this.subscriptions.quote(auth.user.id, query.planId, query.code));
   }
 
   @Post('checkout')
@@ -88,6 +88,7 @@ export class AgentSubscriptionController {
       await this.subscriptions.checkout(
         { id: auth.user.id, email: auth.user.email },
         body.planId,
+        body.code,
         requestMeta(req),
       ),
     );

@@ -34,7 +34,10 @@ export default async function AdminHomepagePage() {
         <NoAccess />
       ) : (
         <div className="flex flex-col gap-8">
-          <HomepageEditor sections={sections.data} />
+          <HomepageEditor
+            sections={sections.data}
+            canUpload={hasPermission(user, 'content.media')}
+          />
           <TestimonialsManager
             items={testimonials.data}
             canUpload={hasPermission(user, 'content.media')}

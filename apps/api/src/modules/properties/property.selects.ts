@@ -20,12 +20,29 @@ const agentSummary = {
 } satisfies Prisma.AgentProfileDefaultArgs;
 
 /** Just what a card / map marker needs — no descriptions, no galleries. */
+/** Active badges a property holds, in the administrators' order. */
+export const BADGE_AWARDS_SELECT = {
+  where: { badge: { active: true } },
+  orderBy: [{ badge: { sortOrder: 'asc' } }, { badge: { name: 'asc' } }],
+  select: {
+    badge: {
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        image: { select: { storageKey: true } },
+      },
+    },
+  },
+} satisfies Prisma.Property$badgeAwardsArgs;
+
 export const PROPERTY_CARD_SELECT = {
   id: true,
   slug: true,
   title: true,
   propertyType: true,
   listingType: true,
+  saleMode: true,
   pricingPeriod: true,
   priceKobo: true,
   discountPercent: true,
@@ -39,6 +56,9 @@ export const PROPERTY_CARD_SELECT = {
   sizeSqm: true,
   publishedAt: true,
   featuredAt: true,
+  ratingSum: true,
+  reviewCount: true,
+  badgeAwards: BADGE_AWARDS_SELECT,
   images: {
     where: { isPrimary: true },
     take: 1,

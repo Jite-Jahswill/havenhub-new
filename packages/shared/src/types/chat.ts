@@ -1,3 +1,4 @@
+import type { NotificationEventPayloads } from '../schemas/notification.js';
 import type { BookingStatus } from '../enums/booking.js';
 import type { ExperienceKind } from '../enums/experience.js';
 import type {
@@ -210,6 +211,9 @@ export type ChatEventPayloads = {
   'typing.started': EventBase & { userId: string };
   'typing.stopped': EventBase & { userId: string };
 };
+
+/** Every real-time event the API sends (chat and notifications). */
+export type RealtimeEventPayloads = ChatEventPayloads & NotificationEventPayloads;
 
 /** Phase 7: the support queue (admins with `support.respond`). */
 export interface SupportConversationItem {

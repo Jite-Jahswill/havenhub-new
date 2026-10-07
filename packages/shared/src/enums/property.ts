@@ -27,6 +27,15 @@ export const ListingType = {
 } as const;
 export type ListingType = (typeof ListingType)[keyof typeof ListingType];
 
+/** How a property for sale is bought. */
+export const SaleMode = {
+  /** Bought and paid for on HavenHub. */
+  IN_APP: 'IN_APP',
+  /** The buyer contacts the agent; the deal happens outside HavenHub. */
+  CONTACT: 'CONTACT',
+} as const;
+export type SaleMode = (typeof SaleMode)[keyof typeof SaleMode];
+
 export const PricingPeriod = {
   DAILY: 'DAILY',
   MONTHLY: 'MONTHLY',

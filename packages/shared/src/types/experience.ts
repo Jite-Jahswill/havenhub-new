@@ -94,6 +94,8 @@ export interface ExperienceCard {
   agent: { id: string; displayName: string; verified: true };
   /** Lowest listed price (ticket, tour, room type or service); null if none. */
   priceFromKobo: number | null;
+  /** The provider's "X% off" (1–90), or null. Prices above are before it. */
+  discountPercent: number | null;
   priceNote: string | null;
   /** Event start, or a tour's next date. */
   startsAt: string | null;
@@ -150,6 +152,7 @@ export interface AgentExperienceView {
   publishedAt: string | null;
   title: string;
   description: string | null;
+  discountPercent: number | null;
   addressLine: string | null;
   city: string | null;
   state: string | null;

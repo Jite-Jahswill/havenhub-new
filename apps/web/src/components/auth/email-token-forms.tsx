@@ -1,11 +1,6 @@
 'use client';
 
-import {
-  ErrorCode,
-  PASSWORD_MIN_LENGTH,
-  emailOnlySchema,
-  resetPasswordSchema,
-} from '@havenhub/shared';
+import { ErrorCode, emailOnlySchema, resetPasswordSchema } from '@havenhub/shared';
 import { Alert, Button, Field, Input, Spinner, buttonClasses } from '@havenhub/ui';
 import Link from 'next/link';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
@@ -109,7 +104,14 @@ export function RequestEmailForm({
   );
 }
 
-export function ResetPasswordForm({ token }: { token: string | undefined }) {
+export function ResetPasswordForm({
+  token,
+  passwordMinLength,
+}: {
+  token: string | undefined;
+  /** From the admin security policy; the API enforces it. */
+  passwordMinLength: number;
+}) {
   const { pending, error, fieldErrors, validate, run } = useApiAction();
   const [done, setDone] = useState(false);
 
@@ -157,7 +159,7 @@ export function ResetPasswordForm({ token }: { token: string | undefined }) {
       <Field
         label="New password"
         error={fieldErrors.password}
-        hint={`At least ${PASSWORD_MIN_LENGTH} characters`}
+        hint={`At least ${passwordMinLength} characters`}
       >
         {(a) => <PasswordInput {...a} name="password" autoComplete="new-password" required />}
       </Field>

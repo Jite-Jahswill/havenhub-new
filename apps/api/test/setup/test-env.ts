@@ -36,6 +36,7 @@ export function resolveTestEnv(): Record<string, string> {
     PAYMENT_RECONCILE_INTERVAL_SECONDS: '0',
     CHAT_SWEEP_INTERVAL_SECONDS: '0',
     CMS_SWEEP_INTERVAL_SECONDS: '0',
+    NOTIFICATION_SWEEP_INTERVAL_SECONDS: '0',
   };
 }
 

@@ -22,6 +22,7 @@ import { ChatAccessService } from './chat-access.service';
 import { ChatEventsService } from './chat-events.service';
 import { ChatNotificationsService } from './chat-notifications.service';
 import { UnreadService } from './unread.service';
+import { PlatformPoliciesService } from '../platform/platform-policies.service';
 
 type ListQuery = z.output<typeof listConversationsQuerySchema>;
 
@@ -48,6 +49,7 @@ export class ConversationsService {
     private readonly unread: UnreadService,
     private readonly notifications: ChatNotificationsService,
     private readonly storage: StorageService,
+    private readonly policies: PlatformPoliciesService,
   ) {}
 
   async start(auth: AuthContext, input: StartConversationInput): Promise<ConversationSummary> {
@@ -76,7 +78,11 @@ export class ConversationsService {
         throw Errors.forbidden('Only customers can message an agent about a listing.');
       }
       const listing = await this.prisma.experience.findFirst({
-        where: { ...PUBLIC_EXPERIENCE_WHERE, id: input.experienceId },
+        where: {
+          ...PUBLIC_EXPERIENCE_WHERE,
+          id: input.experienceId,
+          kind: { in: await this.policies.enabledExperienceKinds() },
+        },
         select: { id: true, agentProfile: { select: { userId: true } } },
       });
       if (!listing) throw Errors.notFound('Listing');
@@ -118,6 +124,14 @@ export class ConversationsService {
 
     let created = false;
     let row = await this.prisma.conversation.findUnique({ where: { contextKey } });
+    // Support stays reachable when new conversations are turned off.
+    if (
+      !row &&
+      input.contextType !== 'SUPPORT' &&
+      !(await this.policies.get()).chat.newConversations
+    ) {
+      throw Errors.featureDisabled('Starting new conversations is turned off right now.');
+    }
     if (!row) {
       try {
         row = await this.prisma.conversation.create({

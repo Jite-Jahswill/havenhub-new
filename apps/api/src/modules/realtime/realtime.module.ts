@@ -5,7 +5,7 @@ import { RealtimeTicketsService } from './realtime-tickets.service';
 import { RealtimeController } from './realtime.controller';
 import { RealtimeGateway } from './realtime.gateway';
 
-/** Socket.IO delivery for any feature (chat today; notifications later). */
+/** Socket.IO delivery for any feature (chat and in-app notifications). */
 @Global()
 @Module({
   imports: [AuthModule],

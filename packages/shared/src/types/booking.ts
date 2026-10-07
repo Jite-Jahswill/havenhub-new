@@ -1,3 +1,5 @@
+import type { BookingReviewState } from '../schemas/review.js';
+import type { AppliedDiscount } from '../schemas/discount.js';
 import type {
   AgentEarningStatus,
   BookingStatus,
@@ -40,6 +42,8 @@ export interface BookingQuote {
   totalKobo: number;
   /** Part of the total that is a refundable caution deposit. */
   refundableDepositKobo: number;
+  /** The promo code applied, if one was given and is valid. */
+  promo: AppliedDiscount | null;
   currency: 'NGN';
 }
 
@@ -125,7 +129,7 @@ export interface BookingSummary {
   createdAt: string;
 }
 
-export interface CustomerBookingDetail extends BookingSummary {
+export interface CustomerBookingDetail extends BookingSummary, BookingReviewState {
   snapshot: BookingPropertySnapshot;
   guests: number | null;
   cleaningSelected: boolean;

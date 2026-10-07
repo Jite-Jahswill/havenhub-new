@@ -28,6 +28,7 @@ import { amenitySlug } from '../properties/slug';
 import { validationError } from './agent-experiences.service';
 import { toExperienceCard } from './experience.mapper';
 import { PUBLIC_EXPERIENCE_WHERE, experienceCardSelect } from './experience.selects';
+import { PlatformPoliciesService } from '../platform/platform-policies.service';
 
 type Out<T extends z.ZodType> = z.output<T>;
 
@@ -46,6 +47,7 @@ export class VacationZonesService {
     private readonly storage: StorageService,
     private readonly images: ImageProcessor,
     private readonly audit: AuditService,
+    private readonly policies: PlatformPoliciesService,
   ) {}
 
   // ── Public ──
@@ -76,7 +78,13 @@ export class VacationZonesService {
     const zone = await this.prisma.vacationZone.findFirst({ where: { slug, published: true } });
     if (!zone) throw Errors.notFound('Destination');
     const links = await this.prisma.vacationZoneExperience.findMany({
-      where: { zoneId: zone.id, experience: PUBLIC_EXPERIENCE_WHERE },
+      where: {
+        zoneId: zone.id,
+        experience: {
+          ...PUBLIC_EXPERIENCE_WHERE,
+          kind: { in: await this.policies.enabledExperienceKinds() },
+        },
+      },
       orderBy: { sortOrder: 'asc' },
       select: { experience: { select: experienceCardSelect(new Date()) } },
     });

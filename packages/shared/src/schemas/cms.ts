@@ -176,12 +176,21 @@ export const upsertSeoRouteSchema = z
 
 export const linkSchema = z.object({ label: plainText(1, 40), href: hrefField });
 
+/** How the hero image is used: behind the text, or beside it on wide screens. */
+export const HERO_IMAGE_LAYOUTS = ['BACKGROUND', 'SIDE'] as const;
+/** How much the background image is darkened so the text stays readable. */
+export const HERO_OVERLAYS = ['LIGHT', 'MEDIUM', 'STRONG'] as const;
+
 const heroConfig = z
   .object({
     eyebrow: optionalText(80),
     showSearch: z.boolean().default(true),
     searchPlaceholder: optionalText(80),
     links: z.array(linkSchema).max(CMS_LIMITS.heroLinks).default([]),
+    /** From the media library; null = no image (text only). */
+    imageId: z.uuid().nullable().default(null),
+    imageLayout: z.enum(HERO_IMAGE_LAYOUTS).default('BACKGROUND'),
+    overlay: z.enum(HERO_OVERLAYS).default('MEDIUM'),
   })
   .strict();
 const exploreConfig = z
@@ -196,6 +205,13 @@ const listingConfig = z
   .object({ limit: z.number().int().min(1).max(CMS_LIMITS.homepageItems).default(6) })
   .strict();
 const ctaConfig = z.object({ button: linkSchema.nullable().default(null) }).strict();
+/** Properties holding this badge (null = any badge), best rated first. */
+const awardsConfig = z
+  .object({
+    limit: z.number().int().min(1).max(CMS_LIMITS.homepageItems).default(6),
+    badgeId: z.uuid().nullable().default(null),
+  })
+  .strict();
 
 /** The config shape each homepage section accepts. */
 export function homepageConfigSchema(key: HomepageSectionKey) {
@@ -206,6 +222,8 @@ export function homepageConfigSchema(key: HomepageSectionKey) {
       return exploreConfig;
     case 'CTA':
       return ctaConfig;
+    case 'AWARDS':
+      return awardsConfig;
     default:
       return listingConfig;
   }

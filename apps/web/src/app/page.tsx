@@ -20,6 +20,9 @@ const FALLBACK: HomepageSectionView[] = [
     showSearch: true,
     searchPlaceholder: 'Where do you want to live or stay?',
     links: [],
+    image: null,
+    imageLayout: 'BACKGROUND',
+    overlay: 'MEDIUM',
   },
 ];
 

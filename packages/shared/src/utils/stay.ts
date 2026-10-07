@@ -15,7 +15,7 @@ export const STAY_LIMITS: Record<RentalPeriod, { min: number; max: number; unit:
   YEARLY: { min: 1, max: 5, unit: 'year' },
 };
 
-/** How far ahead a stay may start. */
+/** The furthest ahead a stay may ever start; the booking policy may set less. */
 export const MAX_ADVANCE_BOOKING_DAYS = 730;
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;

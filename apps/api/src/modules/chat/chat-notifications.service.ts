@@ -8,6 +8,7 @@ import { MailTemplates } from '../../infrastructure/mail/mail.templates';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import { RedisService } from '../../infrastructure/redis/redis.service';
 import { chatDisplayName } from './chat.mapper';
+import { PlatformPoliciesService } from '../platform/platform-policies.service';
 
 const DUE_KEY = 'chat:digest:due';
 
@@ -26,7 +27,7 @@ export interface ChatNotificationChannel {
  * Chat notifications without spam:
  * - every message reaches online participants instantly over the socket;
  * - email is a digest: when someone has unread messages in a conversation for
- *   CHAT_EMAIL_DELAY_SECONDS, they get one email (count + sender, no message
+ *   the notification policy's delay (default CHAT_EMAIL_DELAY_SECONDS), they get one email (count + sender, no message
  *   content), and no other until they read the conversation and fall behind
  *   again. Rapid-fire messages therefore produce at most one email.
  * - reactions are real-time only (never emailed).
@@ -43,15 +44,22 @@ export class ChatNotificationsService implements ChatNotificationChannel {
     private readonly redis: RedisService,
     private readonly mail: MailService,
     @Inject(ENV) private readonly env: Env,
+    private readonly policies: PlatformPoliciesService,
   ) {}
 
   async messageCreated(conversationId: string, _messageId: string, senderId: string) {
     try {
+      const { chatEmails, chatEmailDelayMinutes } = (await this.policies.get()).notifications;
+      if (!chatEmails) return;
       const recipients = await this.prisma.conversationParticipant.findMany({
         where: { conversationId, userId: { not: senderId } },
         select: { userId: true },
       });
-      const due = Date.now() + this.env.CHAT_EMAIL_DELAY_SECONDS * 1000;
+      const delaySeconds =
+        chatEmailDelayMinutes === null
+          ? this.env.CHAT_EMAIL_DELAY_SECONDS
+          : chatEmailDelayMinutes * 60;
+      const due = Date.now() + delaySeconds * 1000;
       for (const { userId } of recipients) {
         // NX: the first unread message of a burst sets the time; later ones don't push it back.
         await this.redis.client.zadd(DUE_KEY, 'NX', due, member(userId, conversationId));
@@ -75,9 +83,12 @@ export class ChatNotificationsService implements ChatNotificationChannel {
   /** Sends digests that are due. Returns how many emails were sent. */
   async sendDue(now = Date.now()): Promise<number> {
     const due = await this.redis.client.zrangebyscore(DUE_KEY, 0, now, 'LIMIT', 0, 200);
+    // Turned off after scheduling: due entries are claimed and dropped unsent.
+    const enabled = (await this.policies.get()).notifications.chatEmails;
     let sent = 0;
     for (const entry of due) {
       if ((await this.redis.client.zrem(DUE_KEY, entry)) !== 1) continue; // claimed elsewhere
+      if (!enabled) continue;
       const [userId, conversationId] = entry.split(':');
       try {
         if (await this.sendDigest(userId!, conversationId!)) sent++;

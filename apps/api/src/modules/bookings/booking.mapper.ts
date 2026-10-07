@@ -137,10 +137,15 @@ export const toCancellation = (b: Booking): CancellationView | null =>
       }
     : null;
 
-export function cancelDecisionFor(booking: Booking, actor: CancellationActor) {
+export function cancelDecisionFor(
+  booking: Booking,
+  actor: CancellationActor,
+  customerCancelCutoffDays: number,
+) {
   return cancellationDecision(
     { status: booking.status, startDate: isoDate(booking.startDate) },
     actor,
     todayInNigeria(),
+    customerCancelCutoffDays,
   );
 }

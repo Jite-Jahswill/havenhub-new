@@ -1,9 +1,10 @@
+import type { ExperienceKind } from '@havenhub/shared';
 import { Container } from '@havenhub/ui';
 import { BedDouble, Map, Palmtree, Sparkles, Ticket, type LucideIcon } from 'lucide-react';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 
-import { routeMetadata } from '@/lib/cms';
+import { getPublicPolicies, routeMetadata } from '@/lib/cms';
 import { env } from '@/lib/env';
 
 const BASE_METADATA: Metadata = {
@@ -17,17 +18,37 @@ export function generateMetadata(): Promise<Metadata> {
   return routeMetadata('/experiences', BASE_METADATA);
 }
 
-const SECTIONS: { href: string; title: string; text: string; icon: LucideIcon }[] = [
-  { href: '/events', title: 'Events', text: 'Concerts, festivals and gatherings.', icon: Ticket },
-  { href: '/tours', title: 'Tours', text: 'City walks, zoo trips and adventures.', icon: Map },
+const SECTIONS: {
+  href: string;
+  title: string;
+  text: string;
+  icon: LucideIcon;
+  kind?: ExperienceKind;
+}[] = [
+  {
+    href: '/events',
+    title: 'Events',
+    text: 'Concerts, festivals and gatherings.',
+    icon: Ticket,
+    kind: 'EVENT',
+  },
+  {
+    href: '/tours',
+    title: 'Tours',
+    text: 'City walks, zoo trips and adventures.',
+    icon: Map,
+    kind: 'TOUR',
+  },
   {
     href: '/hotels',
+    kind: 'HOTEL',
     title: 'Hotels',
     text: 'Rooms, nightly prices and availability.',
     icon: BedDouble,
   },
   {
     href: '/cleaning',
+    kind: 'CLEANING',
     title: 'Cleaning',
     text: 'Verified home and office cleaners.',
     icon: Sparkles,
@@ -35,7 +56,9 @@ const SECTIONS: { href: string; title: string; text: string; icon: LucideIcon }[
   { href: '/destinations', title: 'Destinations', text: 'Where to go on holiday.', icon: Palmtree },
 ];
 
-export default function ExperiencesPage() {
+export default async function ExperiencesPage() {
+  const offered = (await getPublicPolicies()).experiences;
+  const sections = SECTIONS.filter((s) => !s.kind || offered[s.kind]);
   return (
     <Container className="py-8 lg:py-12">
       <header className="mb-10 max-w-3xl">
@@ -45,7 +68,7 @@ export default function ExperiencesPage() {
         </p>
       </header>
       <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {SECTIONS.map(({ href, title, text, icon: Icon }) => (
+        {sections.map(({ href, title, text, icon: Icon }) => (
           <li key={href}>
             <Link
               href={href}

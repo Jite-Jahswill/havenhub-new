@@ -111,6 +111,8 @@ export interface AdminHomepageSection {
   title: string | null;
   subtitle: string | null;
   config: Record<string, unknown>;
+  /** HERO only: the chosen image, resolved for the editor's preview. */
+  heroImage?: CmsImage | null;
 }
 
 export type HomepageSectionView =
@@ -122,6 +124,9 @@ export type HomepageSectionView =
       showSearch: boolean;
       searchPlaceholder: string | null;
       links: HomepageLink[];
+      image: CmsImage | null;
+      imageLayout: 'BACKGROUND' | 'SIDE';
+      overlay: 'LIGHT' | 'MEDIUM' | 'STRONG';
     }
   | {
       key: 'EXPLORE';
@@ -130,7 +135,8 @@ export type HomepageSectionView =
       items: { title: string; description: string | null; href: string }[];
     }
   | {
-      key: 'FEATURED_PROPERTIES' | 'RENT_PROPERTIES' | 'SALE_PROPERTIES';
+      key:
+        'FEATURED_PROPERTIES' | 'RENT_PROPERTIES' | 'SALE_PROPERTIES' | 'SPECIAL_OFFERS' | 'AWARDS';
       title: string | null;
       subtitle: string | null;
       properties: PropertyCard[];

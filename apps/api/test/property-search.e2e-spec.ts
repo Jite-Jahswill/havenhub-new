@@ -105,6 +105,7 @@ describe('property search', () => {
     expect(Object.keys(res.body.data.items[0]).sort()).toEqual(
       [
         'agent',
+        'badges',
         'bathrooms',
         'bedrooms',
         'city',
@@ -120,6 +121,8 @@ describe('property search', () => {
         'priceKobo',
         'propertyType',
         'publishedAt',
+        'rating',
+        'saleMode',
         'sizeSqm',
         'slug',
         'state',

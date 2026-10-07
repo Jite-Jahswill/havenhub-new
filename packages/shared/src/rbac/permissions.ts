@@ -50,6 +50,9 @@ export const PERMISSIONS = {
   'content.site': 'Edit site settings, homepage sections and testimonials',
   'content.pages': 'Create, edit and publish pages (about, contact, terms, privacy…)',
   'content.media': 'Upload and manage CMS images',
+  'reviews.moderate': 'See all reviews and hide or restore them',
+  'badges.manage': 'Design badges, set their rules and give them to properties',
+  'popups.manage': 'Create, schedule and switch off pop-ups on the public site',
   'help.manage': 'Manage help centre categories, articles and FAQs',
   'careers.manage': 'Create, edit, publish and close job postings',
   'careers.applications': 'View job applicants, their CVs and update application status',
@@ -57,6 +60,8 @@ export const PERMISSIONS = {
   'marketing.campaigns': 'Create and edit email campaigns',
   'marketing.send': 'Schedule, send and cancel email campaigns',
   'support.respond': 'Answer support conversations from customers and agents',
+  'discounts.manage': 'Create, change, switch off and send discount codes',
+  'notifications.send': 'Send in-app announcements to customers, agents or one person',
 
   'seo.manage': 'Manage SEO settings',
   'settings.manage': 'Manage platform settings, including the moderation policy',

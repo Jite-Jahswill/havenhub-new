@@ -58,6 +58,26 @@ describe('cancellation policy', () => {
     });
   });
 
+  it('the refunds policy cut-off limits customers only, counted in days before check-in', () => {
+    const inThreeDays = { status: 'CONFIRMED' as const, startDate: '2027-03-13' };
+    expect(cancellationDecision(inThreeDays, 'CUSTOMER', today, 3)).toMatchObject({
+      allowed: true,
+      refund: 'FULL',
+    });
+    expect(cancellationDecision(inThreeDays, 'CUSTOMER', today, 4)).toMatchObject({
+      allowed: false,
+      refund: 'NONE',
+      reason: expect.stringContaining('up to 4 days before check-in') as string,
+    });
+    expect(cancellationDecision(inThreeDays, 'AGENT', today, 4).allowed).toBe(true);
+    expect(cancellationDecision(inThreeDays, 'ADMIN', today, 4).allowed).toBe(true);
+    // Unpaid bookings are never limited.
+    expect(
+      cancellationDecision({ ...inThreeDays, status: 'AWAITING_PAYMENT' }, 'CUSTOMER', today, 30)
+        .allowed,
+    ).toBe(true);
+  });
+
   it('final bookings cannot be cancelled by anyone', () => {
     for (const status of ['CANCELLED', 'EXPIRED', 'COMPLETED'] as const) {
       expect(

@@ -45,6 +45,22 @@ describe('system roles', () => {
       SYSTEM_ROLES.filter((r) => (resolveRolePermissions(r) as string[]).includes(p))
         .map((r) => r.key)
         .sort();
+    // In-app announcements reach every user: admins and marketing only.
+    expect(holders('notifications.send')).toEqual(
+      ['admin', 'marketing_manager', SUPER_ADMIN_ROLE].sort(),
+    );
+    expect(holders('reviews.moderate')).toEqual(
+      ['admin', 'property_manager', 'support_admin', SUPER_ADMIN_ROLE].sort(),
+    );
+    expect(holders('badges.manage')).toEqual(
+      ['admin', 'content_manager', 'property_manager', SUPER_ADMIN_ROLE].sort(),
+    );
+    expect(holders('popups.manage')).toEqual(
+      ['admin', 'content_manager', 'marketing_manager', SUPER_ADMIN_ROLE].sort(),
+    );
+    expect(holders('discounts.manage')).toEqual(
+      ['admin', 'finance_admin', 'marketing_manager', SUPER_ADMIN_ROLE].sort(),
+    );
     // SMTP credentials and maintenance mode: Super Admin only (not the general Admin).
     expect(holders('settings.smtp')).toEqual([SUPER_ADMIN_ROLE]);
     expect(holders('settings.maintenance')).toEqual([SUPER_ADMIN_ROLE]);

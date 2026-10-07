@@ -219,8 +219,8 @@ One session system serves both client types; only the token transport differs.
   than overlap.
 - **Sweep:** `SUBSCRIPTION_SWEEP_INTERVAL_SECONDS` (default 300) ends finished terms, starts queued
   ones and sends reminders, under the same Redis leases as the booking sweep.
-- **Notifications** (email): activated/scheduled, payment failed, expiring, ended/cancelled/suspended,
-  plan limit reached (at most once a day per allowance).
+- **Notifications** (in-app and email): activated/scheduled, payment failed, expiring,
+  ended/cancelled/suspended, plan limit reached (at most once a day per allowance).
 - **RBAC:** `subscriptions.view` (lists, detail, metrics), `subscriptions.manage` (cancel, suspend,
   reactivate — reason required, audited), `subscriptions.plans` (create/edit plans and limits).
   Finance Admin has all three; Admin has view + manage; Support Admin has view.
@@ -304,6 +304,86 @@ One session system serves both client types; only the token transport differs.
   publication needs admin review (default: yes, everywhere). With review off, a verified agent's
   submission — and later edits — publish immediately (`*.published_without_review` in the audit log).
   Changes apply to the next submission; existing listings keep their state.
+- **Platform policies** (`settings.manage`, Admin → Settings, `GET/PATCH admin/settings/policies`):
+  security (minimum password length, sign-out after inactivity), storage (largest image and chat
+  attachment), booking (on/off, hold time, how far ahead, unpaid bookings per customer), refunds
+  (customer cancellation cut-off), chat (new conversations, attachments, edit window), events &
+  experiences (each kind on/off — off hides it publicly and stops new listings, nothing is deleted)
+  and notifications (unread-chat emails and delay, subscription reminder). Stored as one validated
+  JSON document; every value defaults to the built-in behaviour, empty number fields fall back to
+  the environment default (`REFRESH_TOKEN_TTL_DAYS`, `BOOKING_HOLD_MINUTES`,
+  `CHAT_EMAIL_DELAY_SECONDS`). Cached in Redis and rewritten on change, audited as
+  `platform.policies.updated` (changed areas only). A turned-off feature answers `403`
+  `FEATURE_DISABLED`. Withdrawals and reviews get settings when those features exist.
+- **Property sales (stage A)**: sale listings have a `sale_mode` — `CONTACT` (default) or `IN_APP`
+  (buying on HavenHub; refused until the in-app sale checkout ships). Contact for sale shows the
+  agent's phone and email only after a signed-in buyer ticks acceptance of the notice in Admin →
+  Settings → Property sales (no notice set = no direct details; HavenHub chat always works).
+  Each acceptance keeps the exact wording, its SHA-256, time, IP and browser in the append-only
+  `sale_contact_acceptances` table (`POST properties/:slug/sale-contact`); a changed notice must be
+  accepted again. Admins can switch contact for sale off.
+- **Reviews** (`POST bookings/:id/review`, `GET properties/:slug/reviews`; moderation
+  `admin/reviews` with `reviews.moderate`: Admin, Property Manager, Support Admin): one per completed
+  booking, by its customer, within the reviews policy's window after check-out (default 60 days; can
+  be switched off). 1–5 stars and an optional comment, published at once and shown as "First L.".
+  Hiding (with a reason, audited) removes it from the page and from the stars. Properties keep
+  `rating_sum`/`review_count` and `completed_bookings` counters, updated in the same transaction.
+- **Badges** (`/admin/badges`, `badges.manage`: Admin, Property Manager, Content Manager): your own
+  designs (media-library image, name, description). MANUAL badges are given to properties by hand;
+  AUTOMATIC ones are earned by rules — minimum stars (compared exactly, never rounded up), reviews and
+  completed stays — e.g. "Award winning" = 5.0 stars and 10+ stays. Awards live in `badge_awards`
+  and are recalculated when reviews, completed stays or rules change, so every property card and page
+  shows them (and the star rating). The "Award-winning properties" homepage section lists holders of
+  one badge (or any), best rated first.
+- **Special offers** (homepage section, switched on in Admin → Homepage): public properties whose
+  agent set a listing discount, biggest discount first; hidden when there are none. "See all" opens
+  `/properties?onOffer=true&sort=discount` — property search gained the `onOffer` filter ("On offer"
+  in the filters) and the `discount` sort ("Biggest discount"). Agents' private promo codes are never
+  listed publicly.
+- **Homepage hero image** (Admin → Homepage → Hero, `content.site`): an image from the media
+  library, shown full-width behind the text (with a light, medium or strong darkening overlay) or
+  beside it; text-only when none is set. Stored as `imageId` in the hero's config, validated against
+  the library, and protected: the media library refuses to delete an image used by the hero (or by
+  a pop-up).
+- **Pop-ups** (`popups.manage`: Admin, Content Manager, Marketing Manager, Super Admin;
+  `/admin/popups`, `admin/popups`): announcements, what's new, offers (with a copyable code) and
+  featured properties (shown only while the property is public), with an optional media-library
+  image and button. Targeted by audience (everyone, signed-out visitors, customers, agents), pages
+  (all public pages, homepage, or chosen sections such as `/properties` or `/agent`), schedule and
+  priority; never on admin, sign-in or payment pages. The browser shows at most one per visit and
+  remembers "once / daily / every visit" locally. Public list `GET /popups` (CMS-cached, refreshed
+  on change); anonymous view/click/close counters `POST /popups/:id/events` (rate-limited).
+- **Discount codes** (`discounts.manage`: Admin, Finance Admin, Marketing Manager, Super Admin;
+  `/admin/discounts`, `admin/discount-codes`): percent (1–90%) or fixed ₦ off agent plans, optionally
+  limited to plans, agents (by email), a date window, total uses and uses per agent; switch off at
+  any time; "Send to agents" puts the code in their notifications with a link that applies it.
+  Checkout re-validates and prices it on the server, locks the code row and reserves a use in the
+  same transaction as the payment (no overselling the last use); a paid payment redeems it, a
+  failed one releases it, and an abandoned checkout stops holding it after 2 hours. A code can
+  never bring a charge below ₦100. `subscription_payments` records `discount_kobo` and the code.
+- **Agent promo codes** (`/agent/promotions`, `agents/me/promo-codes`): an agent's codes for their
+  own rentals (all, or chosen properties), percent or fixed ₦, with a window and use limits.
+  Customers enter the code in the booking widget (`code` on `bookings/quote` and `POST bookings`).
+  It comes off the rent after the listing discount as a `PROMO_DISCOUNT` line; like the listing
+  discount it is agent-funded (service fee, VAT and commission follow the reduced stay, so the
+  ledger is unchanged). Codes are unique per agent; another agent's code is "not valid". The use is
+  held while the booking is unpaid, redeemed on payment and released on expiry or cancellation
+  (the booking row is locked with the code, so the last use is never taken twice). Per-customer
+  limits are checked when booking (quotes are anonymous). Bookings record `promo_code` and
+  `promo_discount_kobo`.
+- **Experience discounts:** events, tours, hotels and cleaning services can show "X% off"
+  (`discountPercent`, 1–90) on cards and pages. There is no experience checkout yet, so this is a
+  displayed offer; customers arrange payment with the provider.
+- **In-app notifications** (`GET /notifications`, `GET /notifications/unread`,
+  `POST /notifications/:id/read`, `POST /notifications/read-all`): each user's inbox at
+  `/account/notifications` and `/agent/notifications`, with a live unread badge. Written in the same
+  transaction as the event (booking confirmed/received/cancelled/expired, refund
+  approved/rejected/sent, listing moderated, agent verification, subscription and plan-limit
+  events); the realtime hint `notifications.changed` is sent only once that transaction committed.
+  Wording lives in `notification-messages.ts`. Announcements (`notifications.send`: Admin,
+  Marketing Manager, Super Admin) go to all active customers, agents, both, or one person by email
+  (`/admin/announcements`, audited as `notification.broadcast.sent`); links must be paths on this
+  site. Retention is the notifications policy (default 180 days).
 - **Maintenance mode** (`settings.maintenance`): non-admin API requests get `503` + `Retry-After`
   (code `MAINTENANCE_MODE`), and the web proxy serves a branded 503 page (CMS logo and contact
   details). Always available: administrators, `/auth/*`, health checks, payment webhooks,
@@ -419,6 +499,7 @@ See `.env.example` for the full annotated list.
 | `SUBSCRIPTION_SWEEP_INTERVAL_SECONDS` | API         | no       | Subscription term/reminder sweep (default 300; 0 disables)                       |
 | `CHAT_SWEEP_INTERVAL_SECONDS`         | API         | no       | Chat email digests and unsent-upload cleanup (default 60; 0 disables)            |
 | `CHAT_EMAIL_DELAY_SECONDS`            | API         | no       | Unread time before a digest email (default 600)                                  |
+| `NOTIFICATION_SWEEP_INTERVAL_SECONDS` | API         | no       | In-app notification retention sweep (default 3600; 0 disables)                   |
 | `PAYMENT_RECONCILE_INTERVAL_SECONDS`  | API         | no       | Re-verifies pending payments 15 min–72 h old (default 300; 0 disables)           |
 | `REVALIDATE_SECRET`                   | API, Web    | no       | Same value on both; instant CMS refresh after admin edits (else within ~60 s)    |
 | `NEXT_PUBLIC_REALTIME_URL`            | Web         | prod     | Public API origin for the Socket.IO connection (default `http://localhost:4000`) |
@@ -448,11 +529,11 @@ Web variables live in `apps/web/.env.example`. **Never commit `.env` files.**
 1. ~~Foundation: auth, roles and permissions, audit logs, agent onboarding, dashboard shells~~
 2. ~~Property marketplace: listings, moderation, media, amenities, search, map, details, favourites~~
 3. ~~Booking and payments foundation: availability, pricing engine, Paystack abstraction, ledger, refunds~~
-   — still to schedule: discount codes and gifting, agent withdrawals, reviews tied to completed bookings
+   — still to schedule: gifting, agent withdrawals
 4. ~~Agent subscriptions: plans, entitlements, limits, paid terms, admin management~~
-   — later: in-app notifications, automatic renewal (needs stored-card charging), subscription refunds
+   — later: automatic renewal (needs stored-card charging), subscription refunds
 5. ~~Communication: conversations, messages, attachments, reactions, real-time (Socket.IO), digests~~
-   — later: in-app notification centre, support tickets, mobile push, user blocking
+   — later: support tickets, mobile push, user blocking
 6. Events, hotels, tours, vacation zones, cleaning ← _next_
 7. CMS: homepage, blog, SEO, careers, help center, email marketing
 8. Advanced admin: RBAC management, analytics, moderation

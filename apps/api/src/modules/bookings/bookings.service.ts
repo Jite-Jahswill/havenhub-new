@@ -6,7 +6,6 @@ import {
   ErrorCode,
   LedgerEntryType,
   ListingType,
-  MAX_ADVANCE_BOOKING_DAYS,
   PaymentStatus,
   RENTAL_PERIODS,
   STAY_LIMITS,
@@ -19,6 +18,7 @@ import {
   type PropertyAvailability,
   type RentalPeriod,
   type createBookingSchema,
+  type AppliedDiscount,
 } from '@havenhub/shared';
 import type { z } from 'zod';
 
@@ -37,13 +37,19 @@ import { cancelDecisionFor, type StoredPropertySnapshot } from './booking.mapper
 import { BookingStateService } from './booking-state.service';
 import type { CancellationActor } from './booking-lifecycle';
 import { AvailabilityService } from './availability.service';
-import { PricingError, priceStay, type PricingResult } from './pricing/pricing-engine';
+import {
+  PricingError,
+  discountedUnit,
+  priceStay,
+  type PricingResult,
+} from './pricing/pricing-engine';
+import { PlatformPoliciesService } from '../platform/platform-policies.service';
+import { DiscountsService } from '../discounts/discounts.service';
 
 type Tx = Prisma.TransactionClient;
 type Db = PrismaService | Tx;
 
 /** Unpaid bookings one customer may hold at once (stops date-squatting). */
-export const MAX_OPEN_HOLDS_PER_CUSTOMER = 3;
 
 const BOOKABLE_SELECT = {
   id: true,
@@ -94,6 +100,8 @@ export class BookingsService {
     private readonly refunds: RefundsService,
     private readonly audit: AuditService,
     @Inject(ENV) private readonly env: Env,
+    private readonly policies: PlatformPoliciesService,
+    private readonly discounts: DiscountsService,
   ) {}
 
   // ── Quote & availability ─────────────────────────────────────────────────
@@ -101,7 +109,16 @@ export class BookingsService {
   async quote(input: BookingRequest): Promise<BookingQuote> {
     const config = await this.pricingConfig.require();
     const property = await this.loadBookable(this.prisma, input.propertyId);
-    const plan = this.plan(property, input, config, todayInNigeria());
+    const { booking: policy } = await this.policies.get();
+    const promo = await this.promoFor(this.prisma, property, input, null);
+    const plan = this.plan(
+      property,
+      input,
+      config,
+      todayInNigeria(),
+      policy.maxAdvanceDays,
+      promo?.applied,
+    );
     const available = await this.availability.isAvailable(
       property.id,
       plan.startDate,
@@ -126,6 +143,7 @@ export class BookingsService {
       })),
       totalKobo: koboToNumber(plan.pricing.totalKobo),
       refundableDepositKobo: koboToNumber(plan.pricing.cautionKobo),
+      promo: promo?.applied ?? null,
       currency: 'NGN',
     };
   }
@@ -137,7 +155,8 @@ export class BookingsService {
     const property = await this.loadBookable(this.prisma, propertyId);
     const period = rentalPeriodOf(property);
     const earliest = earliestStart(property, todayInNigeria());
-    const latest = addDays(todayInNigeria(), MAX_ADVANCE_BOOKING_DAYS);
+    const { maxAdvanceDays } = (await this.policies.get()).booking;
+    const latest = addDays(todayInNigeria(), maxAdvanceDays);
     const horizonEnd = stayEndDate(latest, period, STAY_LIMITS[period].max);
 
     let result: PropertyAvailability['check'] = null;
@@ -168,7 +187,8 @@ export class BookingsService {
   // ── Create ───────────────────────────────────────────────────────────────
 
   /**
-   * Creates an unpaid booking that holds its dates for BOOKING_HOLD_MINUTES.
+   * Creates an unpaid booking that holds its dates for the booking policy's
+   * hold time (default BOOKING_HOLD_MINUTES).
    * Runs under a lock on the property row, so concurrent attempts for one
    * property are serialised; the exclusion constraint backs this up.
    */
@@ -177,12 +197,26 @@ export class BookingsService {
     input: z.output<typeof createBookingSchema>,
     meta: RequestMeta,
   ): Promise<string> {
+    const { booking: policy } = await this.policies.get();
+    if (!policy.enabled) {
+      throw Errors.featureDisabled('HavenHub is not taking new bookings right now.');
+    }
     const config = await this.pricingConfig.require();
+    const holdMinutes = policy.holdMinutes ?? this.env.BOOKING_HOLD_MINUTES;
     try {
       return await this.prisma.$transaction(async (tx) => {
         await tx.$queryRaw`SELECT id FROM properties WHERE id = ${input.propertyId}::uuid FOR UPDATE`;
         const property = await this.loadBookable(tx, input.propertyId);
-        const plan = this.plan(property, input, config, todayInNigeria());
+        // Locks the code: concurrent bookings cannot both take its last use.
+        const promo = await this.promoFor(tx, property, input, customerId, true);
+        const plan = this.plan(
+          property,
+          input,
+          config,
+          todayInNigeria(),
+          policy.maxAdvanceDays,
+          promo?.applied,
+        );
 
         if (
           input.expectedTotalKobo !== undefined &&
@@ -204,7 +238,7 @@ export class BookingsService {
             holdExpiresAt: { gt: new Date() },
           },
         });
-        if (openHolds >= MAX_OPEN_HOLDS_PER_CUSTOMER) {
+        if (openHolds >= policy.maxOpenHoldsPerCustomer) {
           throw Errors.conflict(
             'You have several unpaid bookings. Pay for or cancel one before booking again.',
           );
@@ -236,7 +270,9 @@ export class BookingsService {
             agentPayoutKobo: plan.pricing.agentPayoutKobo,
             pricingConfigId: config.id,
             propertySnapshot: snapshot(property) as unknown as Prisma.InputJsonObject,
-            holdExpiresAt: new Date(Date.now() + this.env.BOOKING_HOLD_MINUTES * 60_000),
+            promoCode: promo?.applied.code ?? null,
+            promoDiscountKobo: plan.pricing.promoKobo,
+            holdExpiresAt: new Date(Date.now() + holdMinutes * 60_000),
             lines: {
               create: plan.pricing.lines.map((line, index) => ({
                 kind: line.kind,
@@ -262,11 +298,22 @@ export class BookingsService {
               endDate: plan.endDate,
               totalKobo: booking.totalKobo.toString(),
               pricingConfigVersion: config.version,
+              promoCode: booking.promoCode,
+              promoDiscountKobo: booking.promoDiscountKobo.toString(),
             },
             meta,
           },
           tx,
         );
+        if (promo) {
+          // Held while unpaid; the payment redeems it, expiry or cancellation releases it.
+          await this.discounts.reserve(tx, {
+            discountCodeId: promo.discountCodeId,
+            userId: customerId,
+            bookingId: booking.id,
+            amountOffKobo: promo.applied.amountOffKobo,
+          });
+        }
         return booking.id;
       });
     } catch (error) {
@@ -287,6 +334,7 @@ export class BookingsService {
     reason: string | undefined,
     meta: RequestMeta,
   ) {
+    const cutoff = (await this.policies.get()).refunds.customerCancelCutoffDays;
     await this.prisma.$transaction(async (tx) => {
       const booking = await this.state.lock(tx, bookingId);
       if (
@@ -295,7 +343,7 @@ export class BookingsService {
       ) {
         throw Errors.notFound('Booking');
       }
-      const decision = cancelDecisionFor(booking, actor.kind);
+      const decision = cancelDecisionFor(booking, actor.kind, cutoff);
       if (!decision.allowed) {
         throw new AppException(
           HttpStatus.CONFLICT,
@@ -353,15 +401,45 @@ export class BookingsService {
     return property;
   }
 
+  /**
+   * The agent's promo code for this stay, validated against the rent after
+   * the listing discount (what it may reduce). Null without a code.
+   */
+  private async promoFor(
+    db: PrismaService | Prisma.TransactionClient,
+    property: BookableProperty,
+    input: BookingRequest,
+    customerId: string | null,
+    lock = false,
+  ) {
+    if (!input.code) return null;
+    const baseStay =
+      discountedUnit(property.priceKobo!, property.discountPercent) * BigInt(input.quantity);
+    if (!isSafeKobo(baseStay)) return null;
+    return this.discounts.apply(db, {
+      code: input.code,
+      userId: customerId,
+      target: {
+        kind: 'PROPERTY',
+        propertyId: property.id,
+        ownerAgentProfileId: property.agentProfileId,
+      },
+      priceKobo: koboToNumber(baseStay),
+      lock,
+    });
+  }
+
   private plan(
     property: BookableProperty,
     input: BookingRequest,
     config: PricingConfig,
     today: string,
+    maxAdvanceDays: number,
+    promo?: AppliedDiscount,
   ): StayPlan {
     const period = rentalPeriodOf(property);
     const earliest = earliestStart(property, today);
-    const latest = addDays(today, MAX_ADVANCE_BOOKING_DAYS);
+    const latest = addDays(today, maxAdvanceDays);
     const problem = ruleViolation(period, input.startDate, input.quantity, earliest, latest);
     if (problem) throw invalid(problem.path, problem.message);
     if (input.guests && property.maxGuests && input.guests > property.maxGuests) {
@@ -379,6 +457,9 @@ export class BookingsService {
         cleaningFeeKobo: property.cleaningFeeKobo,
         addCleaning: input.addCleaning,
         cautionFeeKobo: property.cautionFeeKobo,
+        promo: promo
+          ? { code: promo.code, label: promo.label, amountOffKobo: BigInt(promo.amountOffKobo) }
+          : null,
         rates: config,
       });
     } catch (error) {

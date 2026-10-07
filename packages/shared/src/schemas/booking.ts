@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { BookingStatus, PaymentStatus, RefundStatus } from '../enums/booking.js';
 import { MAX_PRICE_KOBO } from './property.js';
 import { paginationQuerySchema } from './admin.js';
+import { discountCodeField } from './discount.js';
 
 /**
  * What a customer asks for. Prices, fees, VAT and ownership are never
@@ -16,6 +17,8 @@ export const bookingRequestSchema = z.object({
   quantity: z.number().int().min(1).max(366),
   guests: z.number().int().min(1).max(200).optional(),
   addCleaning: z.boolean().default(false),
+  /** The agent's promo code; validated and priced by the server. */
+  code: discountCodeField.optional(),
 });
 export type BookingRequestInput = z.input<typeof bookingRequestSchema>;
 export type BookingRequest = z.output<typeof bookingRequestSchema>;

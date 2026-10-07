@@ -7,6 +7,8 @@ import { discountedKobo, formatPrice } from '@/lib/format';
 import { LISTING_TYPE_LABELS, PROPERTY_TYPE_LABELS } from '@/lib/labels';
 
 import { FavoriteButton, type Viewer } from './favorite-button';
+import { PropertyBadges } from './property-badges';
+import { Rating } from './rating';
 import { Photo } from './photo';
 
 export function PropertyCard({
@@ -56,12 +58,16 @@ export function PropertyCard({
             <FavoriteButton propertyId={property.id} initial={favorite} viewer={viewer} />
           </div>
         </div>
+        <PropertyBadges badges={property.badges} compact className="absolute bottom-3 left-3" />
       </div>
 
       <div className="mt-3.5 flex flex-col gap-1 px-0.5">
-        <p className="flex items-center gap-1.5 text-xs font-medium text-text-secondary">
-          {PROPERTY_TYPE_LABELS[property.propertyType]} · {property.city}, {property.state}
-        </p>
+        <div className="flex items-center justify-between gap-2">
+          <p className="flex items-center gap-1.5 text-xs font-medium text-text-secondary">
+            {PROPERTY_TYPE_LABELS[property.propertyType]} · {property.city}, {property.state}
+          </p>
+          <Rating rating={property.rating} className="shrink-0 text-xs" />
+        </div>
         <h3 className="line-clamp-1 font-semibold text-text">
           <Link
             href={`/properties/${property.slug}`}

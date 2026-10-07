@@ -41,6 +41,8 @@ const uniqueBy = <T>(items: T[], key: (item: T) => string) =>
 /** Fields every kind shares. Drafts may leave everything but the title empty. */
 const commonFields = {
   description: text(30, 5000).nullable().optional(),
+  /** "X% off" shown on the listing; null removes it. */
+  discountPercent: z.number().int().min(1).max(90).nullable().optional(),
   addressLine: text(3, 240).nullable().optional(),
   city: text(2, 100).nullable().optional(),
   state: text(2, 60).nullable().optional(),

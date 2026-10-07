@@ -2,7 +2,6 @@ import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import {
   ChatEvent,
   ErrorCode,
-  MESSAGE_EDIT_WINDOW_MINUTES,
   type MessagePage,
   type MessageType,
   type MessageView,
@@ -20,6 +19,7 @@ import { ChatAccessService } from './chat-access.service';
 import { ChatEventsService } from './chat-events.service';
 import { ChatNotificationsService } from './chat-notifications.service';
 import { ConversationsService } from './conversations.service';
+import { PlatformPoliciesService } from '../platform/platform-policies.service';
 
 type Tx = Prisma.TransactionClient;
 type SendInput = z.output<typeof sendMessageSchema>;
@@ -33,7 +33,7 @@ type PageQuery = z.output<typeof listMessagesQuerySchema>;
  *   of pagination and read cursors.
  * - Idempotency: (sender, clientKey) is unique in the database. A retried or
  *   duplicated send returns the original message instead of a new one.
- * - Editing: own text messages only, for MESSAGE_EDIT_WINDOW_MINUTES; the
+ * - Editing: own text messages only, within the chat policy's edit window; the
  *   previous text is kept in MessageRevision (visible to moderators only).
  * - Deleting: own messages, any time; a soft delete. Content, attachments,
  *   reply quote and reactions disappear from every API response, but the row
@@ -50,6 +50,7 @@ export class MessagesService {
     private readonly events: ChatEventsService,
     private readonly notifications: ChatNotificationsService,
     private readonly storage: StorageService,
+    private readonly policies: PlatformPoliciesService,
   ) {}
 
   async list(userId: string, conversationId: string, query: PageQuery): Promise<MessagePage> {
@@ -75,8 +76,9 @@ export class MessagesService {
     const page = rows.slice(0, query.limit);
     if (!newer) page.reverse();
     const now = new Date();
+    const window = await this.editWindow();
     return {
-      items: page.map((m) => toMessageView(m, userId, this.storage, now)),
+      items: page.map((m) => toMessageView(m, userId, this.storage, window, now)),
       hasMore: rows.length > query.limit,
       lastSeq: conversation.lastSeq,
     };
@@ -220,17 +222,19 @@ export class MessagesService {
   }
 
   async edit(userId: string, messageId: string, body: string): Promise<MessageView> {
+    const window = await this.editWindow();
     await this.prisma.$transaction(async (tx) => {
       const message = await this.lockOwn(tx, userId, messageId);
-      const tooLate =
-        Date.now() - message.createdAt.getTime() >= MESSAGE_EDIT_WINDOW_MINUTES * 60_000;
+      const tooLate = Date.now() - message.createdAt.getTime() >= window * 60_000;
       if (message.deletedAt || message.type === 'SYSTEM' || message.body === null || tooLate) {
         throw new AppException(
           HttpStatus.CONFLICT,
           ErrorCode.MESSAGE_NOT_EDITABLE,
-          tooLate
-            ? `Messages can only be edited for ${MESSAGE_EDIT_WINDOW_MINUTES} minutes after sending.`
-            : 'This message cannot be edited.',
+          tooLate && window > 0
+            ? `Messages can only be edited for ${window} minutes after sending.`
+            : tooLate
+              ? 'Editing messages is turned off.'
+              : 'This message cannot be edited.',
         );
       }
       const conversation = await tx.conversation.findUniqueOrThrow({
@@ -294,12 +298,16 @@ export class MessagesService {
     return this.view(messageId, userId);
   }
 
+  private async editWindow(): Promise<number> {
+    return (await this.policies.get()).chat.editWindowMinutes;
+  }
+
   async view(messageId: string, viewerId: string): Promise<MessageView> {
     const row = await this.prisma.message.findUniqueOrThrow({
       where: { id: messageId },
       include: MESSAGE_INCLUDE,
     });
-    return toMessageView(row, viewerId, this.storage);
+    return toMessageView(row, viewerId, this.storage, await this.editWindow());
   }
 
   private async findByClientKey(userId: string, clientKey: string, conversationId: string) {
@@ -311,7 +319,7 @@ export class MessagesService {
     if (existing.conversationId !== conversationId) {
       throw Errors.conflict('This clientKey was already used for another message.');
     }
-    return toMessageView(existing, userId, this.storage);
+    return toMessageView(existing, userId, this.storage, await this.editWindow());
   }
 
   /** The message, if the caller participates in its conversation (else "not found"). */

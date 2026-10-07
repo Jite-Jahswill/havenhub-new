@@ -17,6 +17,8 @@ import { BookingsModule } from './modules/bookings/bookings.module';
 import { ChatModule } from './modules/chat/chat.module';
 import { FinanceModule } from './modules/finance/finance.module';
 import { HealthModule } from './modules/health/health.module';
+import { BadgesModule } from './modules/badges/badges.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { PlatformCoreModule } from './modules/platform/platform-core.module';
 import { PlatformModule } from './modules/platform/platform.module';
@@ -26,6 +28,7 @@ import { ExperiencesModule } from './modules/experiences/experiences.module';
 import { PropertiesModule } from './modules/properties/properties.module';
 import { RbacModule } from './modules/rbac/rbac.module';
 import { RealtimeModule } from './modules/realtime/realtime.module';
+import { ReviewsModule } from './modules/reviews/reviews.module';
 import { SubscriptionsModule } from './modules/subscriptions/subscriptions.module';
 import { UsersModule } from './modules/users/users.module';
 
@@ -61,6 +64,9 @@ import { UsersModule } from './modules/users/users.module';
     PaymentsModule,
     SubscriptionsModule,
     RealtimeModule,
+    NotificationsModule,
+    BadgesModule,
+    ReviewsModule,
     ChatModule,
     HealthModule,
   ],
