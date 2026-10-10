@@ -18,3 +18,4 @@ export * from './review.js';
 export * from './property.js';
 export * from './subscription.js';
 export * from './user.js';
+export * from './assistant.js';

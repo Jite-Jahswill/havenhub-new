@@ -92,7 +92,9 @@ export default async function AgentEarningsPage() {
                     {
                       label: 'Booking revenue',
                       kobo: res.data.grossKobo,
-                      hint: 'Stays and cleaning',
+                      hint: res.data.agencyFeeKobo
+                        ? 'Stays, cleaning and agency fees'
+                        : 'Stays and cleaning',
                     },
                     { label: 'HavenHub commission', kobo: res.data.commissionKobo, negative: true },
                     {

@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { Plus_Jakarta_Sans } from 'next/font/google';
 import type { ReactNode } from 'react';
 
+import { Assistant } from '@/components/assistant/assistant';
 import { Popups } from '@/components/popups/popups';
 import { SiteFooter } from '@/components/site-footer';
 import { SiteHeader } from '@/components/site-header';
@@ -71,6 +72,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           </main>
           <SiteFooter />
           <Popups />
+          <Assistant />
         </ThemeProvider>
       </body>
     </html>

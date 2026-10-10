@@ -11,6 +11,7 @@ import { FileText, Pencil, Reply, SmilePlus, Trash2 } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 
 import { formatBytes, formatTime } from './chat-utils';
+import { ContactWarning } from './contact-warning';
 
 export interface PendingMessage {
   clientKey: string;
@@ -152,6 +153,7 @@ export function MessageItem({
           </div>
         )}
       </div>
+      {!deleted && <ContactWarning text={message.body} className="max-w-[85%] sm:max-w-[75%]" />}
 
       {picker && (
         <div

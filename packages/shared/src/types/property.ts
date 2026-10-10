@@ -8,7 +8,6 @@ import type {
   PropertyStatus,
   PropertyType,
   VideoProvider,
-  SaleMode,
 } from '../enums/property.js';
 
 /** All money values are integer kobo. */
@@ -63,8 +62,6 @@ export interface PropertyCard {
   title: string;
   propertyType: PropertyType;
   listingType: ListingType;
-  /** Sale listings: how buyers purchase; null for rentals. */
-  saleMode: SaleMode | null;
   pricingPeriod: PricingPeriod;
   priceKobo: number;
   discountPercent: number | null;
@@ -99,10 +96,15 @@ export interface PropertySearchResult {
 
 export interface PropertyDetail extends PropertyCard {
   /**
-   * Contact for sale: the notice the buyer must accept to see the agent's
-   * direct contact details; null when that is not offered for this listing.
+   * Sale listings: sales happen directly with the agent, never through
+   * HavenHub. The notice is always shown with the agent's details; `contact`
+   * is null for signed-out visitors. Null for rentals, or when administrators
+   * have switched direct contact off.
    */
-  saleContact: { disclaimer: string; disclaimerHash: string } | null;
+  saleContact: {
+    disclaimer: string;
+    contact: { phone: string | null; email: string } | null;
+  } | null;
   description: string;
   addressLine: string;
   lga: string;
@@ -136,8 +138,6 @@ export interface AgentPropertyView {
   description: string | null;
   propertyType: PropertyType;
   listingType: ListingType;
-  /** Sale listings: how buyers purchase; null for rentals. */
-  saleMode: SaleMode | null;
   pricingPeriod: PricingPeriod | null;
   addressLine: string | null;
   city: string | null;
@@ -218,11 +218,4 @@ export interface AdminPropertyDetail extends AgentPropertyView {
   };
   amenities: AmenityView[];
   reviewedAt: string | null;
-}
-
-/** An agent's direct contact details, shown after the buyer accepts the notice. */
-export interface SaleContactView {
-  agentName: string;
-  phone: string | null;
-  email: string;
 }

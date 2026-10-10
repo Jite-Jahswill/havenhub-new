@@ -12,6 +12,8 @@ import {
   CalendarDays,
   Car,
   Check,
+  Mail,
+  Phone,
   Ruler,
   Sofa,
   Sparkles,
@@ -32,7 +34,6 @@ import { Gallery } from '@/components/properties/gallery';
 import { PropertyBadges } from '@/components/properties/property-badges';
 import { PropertyCard } from '@/components/properties/property-card';
 import { Rating, Stars } from '@/components/properties/rating';
-import { SaleContact } from '@/components/properties/sale-contact';
 import { ShareButton } from '@/components/properties/share-button';
 import { ViewBeacon } from '@/components/properties/view-beacon';
 import { serverApi, serverApiData } from '@/lib/api/server';
@@ -310,6 +311,42 @@ export default async function PropertyPage({
                 </p>
               </div>
             </Link>
+            {property.saleContact && (
+              <div className="mt-4 flex flex-col gap-3 rounded-card border border-border p-5 text-sm">
+                {property.saleContact.contact ? (
+                  <div className="flex flex-col gap-2">
+                    {property.saleContact.contact.phone && (
+                      <a
+                        href={`tel:${property.saleContact.contact.phone}`}
+                        className="flex items-center gap-2 text-text hover:underline"
+                      >
+                        <Phone aria-hidden className="size-4" />{' '}
+                        {property.saleContact.contact.phone}
+                      </a>
+                    )}
+                    <a
+                      href={`mailto:${property.saleContact.contact.email}`}
+                      className="flex items-center gap-2 text-text hover:underline"
+                    >
+                      <Mail aria-hidden className="size-4" /> {property.saleContact.contact.email}
+                    </a>
+                  </div>
+                ) : (
+                  <Link
+                    href={`/login?next=${encodeURIComponent(`/properties/${property.slug}`)}`}
+                    className="font-medium text-primary hover:underline"
+                  >
+                    Sign in to see the agent’s phone and email
+                  </Link>
+                )}
+                <p
+                  role="note"
+                  className="rounded-control bg-surface-secondary p-3 text-xs whitespace-pre-line text-text-secondary"
+                >
+                  {property.saleContact.disclaimer}
+                </p>
+              </div>
+            )}
           </Section>
         </div>
 
@@ -344,18 +381,11 @@ export default async function PropertyPage({
               </p>
             )}
             {property.listingType === 'SALE' ? (
-              property.saleContact && viewer !== 'other' ? (
-                <SaleContact
-                  slug={property.slug}
-                  notice={property.saleContact.disclaimer}
-                  noticeHash={property.saleContact.disclaimerHash}
-                  signedIn={viewer !== 'guest'}
-                />
-              ) : (
-                <p className="text-sm text-text-secondary">
-                  Interested in buying? Message the agent through HavenHub.
-                </p>
-              )
+              <p className="text-sm text-text-secondary">
+                {property.saleContact
+                  ? 'This property is sold directly by the agent, not through HavenHub. Their contact details are under “Listed by”.'
+                  : 'This property is sold directly by the agent, not through HavenHub. Message the agent to ask about it.'}
+              </p>
             ) : (
               <BookingWidget property={property} viewer={viewer} />
             )}

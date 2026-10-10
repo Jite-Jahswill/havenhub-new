@@ -9,6 +9,7 @@ import { RedisModule } from './infrastructure/redis/redis.module';
 import { StorageModule } from './infrastructure/storage/storage.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { AgentsModule } from './modules/agents/agents.module';
+import { AssistantModule } from './modules/assistant/assistant.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { AmenitiesModule } from './modules/amenities/amenities.module';
 import { AuditModule } from './modules/audit/audit.module';
@@ -68,6 +69,7 @@ import { UsersModule } from './modules/users/users.module';
     BadgesModule,
     ReviewsModule,
     ChatModule,
+    AssistantModule,
     HealthModule,
   ],
 })

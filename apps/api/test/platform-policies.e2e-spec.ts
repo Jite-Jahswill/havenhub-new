@@ -1,6 +1,8 @@
 import { randomBytes } from 'node:crypto';
 
 import {
+  DEFAULT_ASSISTANT_GREETING,
+  DEFAULT_CHAT_CONTACT_WARNING,
   POLICY_DEFAULTS,
   type ConversationSummary,
   type MessageView,
@@ -134,7 +136,12 @@ describe('admin platform policies', () => {
       passwordMinLength: 10,
       bookingsEnabled: true,
       experiences: { EVENT: true, TOUR: true, HOTEL: true, CLEANING: true },
-      chat: { newConversations: true, attachments: true },
+      chat: {
+        newConversations: true,
+        attachments: true,
+        contactWarning: DEFAULT_CHAT_CONTACT_WARNING,
+      },
+      assistant: { greeting: DEFAULT_ASSISTANT_GREETING, handoffEnabled: true },
     });
   });
 
@@ -430,6 +437,20 @@ describe('chat policy', () => {
       .set(c.auth)
       .expect(200);
     expect((page.body.data.items as MessageView[]).at(-1)!.canEdit).toBe(false);
+  });
+
+  it('publishes the contact details warning: custom wording, or off', async () => {
+    const warning = async () =>
+      (
+        (await ctx.http().get('/api/v1/platform/status').expect(200)).body
+          .data as PlatformStatusView
+      ).policies.chat.contactWarning;
+    await setPolicies({ chat: { contactWarningText: 'Pay only on HavenHub.' } });
+    expect(await warning()).toBe('Pay only on HavenHub.');
+    await setPolicies({ chat: { contactWarning: false } });
+    expect(await warning()).toBeNull();
+    await setPolicies({ chat: { contactWarning: true, contactWarningText: null } });
+    expect(await warning()).toBe(DEFAULT_CHAT_CONTACT_WARNING);
   });
 });
 

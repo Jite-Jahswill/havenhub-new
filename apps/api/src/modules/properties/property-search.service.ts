@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { Injectable, Logger } from '@nestjs/common';
 import {
   AccountType,
+  DEFAULT_SALES_DISCLAIMER,
   type PropertyCard,
   type PropertyDetail,
   type PropertySearchParams,
@@ -23,7 +24,6 @@ import {
   agentDisplayName,
 } from './property.selects';
 import { PlatformPoliciesService } from '../platform/platform-policies.service';
-import { disclaimerHash } from './sale-contact.service';
 
 const VIEW_DEDUPE_SECONDS = 30 * 60;
 
@@ -94,7 +94,17 @@ export class PropertySearchService {
           orderBy: [{ amenity: { category: 'asc' } }, { amenity: { sortOrder: 'asc' } }],
         },
         agentProfile: {
-          include: { user: { select: { fullName: true, avatarKey: true, createdAt: true } } },
+          include: {
+            user: {
+              select: {
+                fullName: true,
+                avatarKey: true,
+                createdAt: true,
+                phone: true,
+                email: true,
+              },
+            },
+          },
         },
         badgeAwards: BADGE_AWARDS_SELECT,
       },
@@ -114,13 +124,16 @@ export class PropertySearchService {
     );
 
     const { sales } = await this.policies.get();
-    // Contact for sale needs the admin's notice: no notice, no direct contact details.
+    // Sales are never processed on HavenHub: buyers deal with the agent directly,
+    // under the notice. Contact details go to signed-in visitors only (no scraping).
     const saleContact =
-      row.listingType === 'SALE' &&
-      row.saleMode === 'CONTACT' &&
-      sales.contactEnabled &&
-      sales.disclaimer
-        ? { disclaimer: sales.disclaimer, disclaimerHash: disclaimerHash(sales.disclaimer) }
+      row.listingType === 'SALE' && sales.contactEnabled
+        ? {
+            disclaimer: sales.disclaimer ?? DEFAULT_SALES_DISCLAIMER,
+            contact: viewer
+              ? { phone: row.agentProfile.user.phone, email: row.agentProfile.user.email }
+              : null,
+          }
         : null;
 
     return {

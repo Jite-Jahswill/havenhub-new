@@ -241,6 +241,11 @@ async function RatesTab({ canEdit }: { canEdit: boolean }) {
                     {formatRate(v.agentCommissionBps)} · VAT {formatRate(v.vatBps)}
                     {v.vatOnServiceFee ? ' on fee' : ''}
                     {v.vatOnStay ? ' + stay' : ''}
+                    {v.agencyFeeBps > 0 && v.agencyFeePeriods.length > 0
+                      ? ` · Agency fee ${formatRate(v.agencyFeeBps)} (${v.agencyFeePeriods
+                          .map((p) => p.toLowerCase())
+                          .join(', ')})`
+                      : ''}
                   </p>
                   {v.note && <p className="text-xs text-text-muted">{v.note}</p>}
                   {v.createdBy && (

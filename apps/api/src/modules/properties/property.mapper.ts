@@ -7,7 +7,6 @@ import {
   type PropertyImageView,
   type PropertyVideoView,
   ratingSummary,
-  type SaleMode,
 } from '@havenhub/shared';
 
 import type { Amenity, PropertyImage, PropertyVideo } from '../../generated/prisma/client';
@@ -63,7 +62,6 @@ export function toPropertyCard(row: PropertyCardRow, urls: Urls): PropertyCard {
     title: row.title,
     propertyType: row.propertyType,
     listingType: row.listingType,
-    saleMode: row.saleMode as SaleMode | null,
     pricingPeriod: row.pricingPeriod!,
     priceKobo: num(row.priceKobo)!,
     discountPercent: row.discountPercent,
@@ -115,7 +113,6 @@ export function toAgentPropertyView(
     description: row.description,
     propertyType: row.propertyType,
     listingType: row.listingType,
-    saleMode: row.saleMode as SaleMode | null,
     pricingPeriod: row.pricingPeriod,
     addressLine: row.addressLine,
     city: row.city,

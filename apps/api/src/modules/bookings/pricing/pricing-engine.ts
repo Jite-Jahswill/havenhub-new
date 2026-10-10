@@ -13,9 +13,10 @@ import { CleaningOption, PriceLineKind, stayUnitLabel, type RentalPeriod } from 
  *   + caution         refundable deposit (once per booking; never revenue)
  *   + service fee     serviceFeeBps of the stay           → HavenHub
  *   + VAT             vatBps of the VAT base               → held for remittance
+ *   + agency fee      agencyFeeBps of the stay, for the listed periods → the agent, in full
  *   = customer total
  *
- *   agent payout = stay − commission (agentCommissionBps of the stay) + cleaning
+ *   agent payout = stay − commission (agentCommissionBps of the stay) + cleaning + agency fee
  */
 
 export interface PricingRates {
@@ -24,6 +25,9 @@ export interface PricingRates {
   vatBps: number;
   vatOnServiceFee: boolean;
   vatOnStay: boolean;
+  /** Paid to the agent in full; 0 or a period not listed = no agency fee. */
+  agencyFeeBps: number;
+  agencyFeePeriods: readonly string[];
 }
 
 export interface PricingInput {
@@ -59,6 +63,7 @@ export interface PricingResult {
   cautionKobo: bigint;
   serviceFeeKobo: bigint;
   vatKobo: bigint;
+  agencyFeeKobo: bigint;
   totalKobo: bigint;
   agentCommissionKobo: bigint;
   agentPayoutKobo: bigint;
@@ -150,9 +155,24 @@ export function priceStay(input: PricingInput): PricingResult {
     lines.push(fixedLine(PriceLineKind.VAT, `VAT (${formatBps(rates.vatBps)})`, vatKobo));
   }
 
-  const totalKobo = stayKobo + cleaningKobo + cautionKobo + serviceFeeKobo + vatKobo;
+  // The agent's own fee: no HavenHub commission or VAT on it.
+  const agencyFeeKobo = rates.agencyFeePeriods.includes(input.period)
+    ? applyBps(stayKobo, rates.agencyFeeBps)
+    : 0n;
+  if (agencyFeeKobo > 0n) {
+    lines.push(
+      fixedLine(
+        PriceLineKind.AGENCY_FEE,
+        `Agency fee (${formatBps(rates.agencyFeeBps)})`,
+        agencyFeeKobo,
+      ),
+    );
+  }
+
+  const totalKobo =
+    stayKobo + cleaningKobo + cautionKobo + serviceFeeKobo + vatKobo + agencyFeeKobo;
   const agentCommissionKobo = applyBps(stayKobo, rates.agentCommissionBps);
-  const agentPayoutKobo = stayKobo - agentCommissionKobo + cleaningKobo;
+  const agentPayoutKobo = stayKobo - agentCommissionKobo + cleaningKobo + agencyFeeKobo;
 
   // Invariants the database also enforces (bookings_total_check / agent_payout_check).
   const lineSum = lines.reduce((sum, line) => sum + line.amountKobo, 0n);
@@ -169,6 +189,7 @@ export function priceStay(input: PricingInput): PricingResult {
     cautionKobo,
     serviceFeeKobo,
     vatKobo,
+    agencyFeeKobo,
     totalKobo,
     agentCommissionKobo,
     agentPayoutKobo,

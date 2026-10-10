@@ -93,6 +93,17 @@ export const pricingConfigSchema = z.object({
   vatOnServiceFee: z.boolean(),
   /** Charge VAT on the stay and cleaning (e.g. commercial lets). */
   vatOnStay: z.boolean(),
+  /**
+   * Agency fee the customer pays, all of it to the agent (no HavenHub
+   * commission, no VAT added by HavenHub), on the rent after discounts.
+   */
+  agencyFeeBps: bps.default(0),
+  /** Rental periods it applies to; empty = none. */
+  agencyFeePeriods: z
+    .array(z.enum(['DAILY', 'MONTHLY', 'YEARLY']))
+    .max(3)
+    .transform((v) => [...new Set(v)])
+    .default([]),
   note: z.string().trim().max(500).optional(),
 });
 export type PricingConfigInput = z.input<typeof pricingConfigSchema>;

@@ -10,25 +10,22 @@ import { PropertyMediaService } from './property-media.service';
 import { PropertyModerationService } from './property-moderation.service';
 import { PropertySearchService } from './property-search.service';
 import { PublicPropertiesController } from './public-properties.controller';
-import { SaleContactController } from './sale-contact.controller';
-import { SaleContactService } from './sale-contact.service';
 
 @Module({
   controllers: [
     PublicPropertiesController,
-    SaleContactController,
     AgentPropertiesController,
     FavoritesController,
     AdminPropertiesController,
   ],
   providers: [
     PropertyAccessService,
-    SaleContactService,
     AgentPropertiesService,
     PropertyMediaService,
     PropertySearchService,
     PropertyModerationService,
     FavoritesService,
   ],
+  exports: [PropertySearchService],
 })
 export class PropertiesModule {}

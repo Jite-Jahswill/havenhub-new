@@ -42,7 +42,6 @@ export const PROPERTY_CARD_SELECT = {
   title: true,
   propertyType: true,
   listingType: true,
-  saleMode: true,
   pricingPeriod: true,
   priceKobo: true,
   discountPercent: true,

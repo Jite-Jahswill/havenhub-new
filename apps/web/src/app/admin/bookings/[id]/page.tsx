@@ -212,7 +212,11 @@ export default async function AdminBookingPage({ params }: PageProps<'/admin/boo
             <CardBody>
               <MoneyRows
                 rows={[
-                  { label: 'Agent payout', kobo: f.agentPayoutKobo },
+                  {
+                    label: 'Agent payout',
+                    kobo: f.agentPayoutKobo,
+                    ...(f.agencyFeeKobo ? { hint: 'Includes the agency fee in full' } : {}),
+                  },
                   { label: 'HavenHub service fee', kobo: f.serviceFeeKobo },
                   {
                     label: 'HavenHub commission',

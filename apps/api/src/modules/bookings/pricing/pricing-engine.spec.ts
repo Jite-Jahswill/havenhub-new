@@ -180,6 +180,43 @@ describe('priceStay', () => {
     ).toThrow(PricingError);
   });
 
+  it('adds the agency fee on the stay, for listed periods only, all of it to the agent', () => {
+    const withFee = { ...rates, agencyFeeBps: 1000, agencyFeePeriods: ['MONTHLY', 'YEARLY'] };
+    const yearly = priceStay(
+      base({
+        period: 'YEARLY',
+        quantity: 1,
+        unitPriceKobo: 300_000_000n,
+        discountPercent: 10,
+        rates: withFee,
+      }),
+    );
+    // Stay after the 10% listing discount: 270,000,000; agency fee 10% of that.
+    expect(yearly.stayKobo).toBe(270_000_000n);
+    expect(yearly.agencyFeeKobo).toBe(27_000_000n);
+    expect(yearly.lines.find((l) => l.kind === 'AGENCY_FEE')).toMatchObject({
+      label: 'Agency fee (10%)',
+      amountKobo: 27_000_000n,
+    });
+    // No commission or VAT on it: the agent gets all of it.
+    expect(yearly.agentCommissionKobo).toBe(applyBps(270_000_000n, rates.agentCommissionBps));
+    expect(yearly.agentPayoutKobo).toBe(270_000_000n - yearly.agentCommissionKobo + 27_000_000n);
+    expect(yearly.vatKobo).toBe(applyBps(yearly.serviceFeeKobo, rates.vatBps));
+    expect(sum(yearly)).toBe(yearly.totalKobo);
+    expect(
+      yearly.agentPayoutKobo + yearly.serviceFeeKobo + yearly.agentCommissionKobo + yearly.vatKobo,
+    ).toBe(yearly.totalKobo);
+
+    // Not for nightly stays here (period not listed), and never when the rate is 0.
+    const nightly = priceStay(base({ rates: withFee }));
+    expect(nightly.agencyFeeKobo).toBe(0n);
+    expect(nightly.lines.some((l) => l.kind === 'AGENCY_FEE')).toBe(false);
+    const off = priceStay(
+      base({ period: 'YEARLY', quantity: 1, rates: { ...withFee, agencyFeeBps: 0 } }),
+    );
+    expect(off.agencyFeeKobo).toBe(0n);
+  });
+
   it('rejects unpriced properties and bad quantities', () => {
     expect(() => priceStay(base({ unitPriceKobo: 0n }))).toThrow(PricingError);
     expect(() => priceStay(base({ quantity: 0 }))).toThrow(PricingError);

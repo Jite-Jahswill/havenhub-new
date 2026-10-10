@@ -18,5 +18,8 @@ export const QA_PRICING_RATES = Object.freeze({
   vatBps: 750,
   vatOnServiceFee: true,
   vatOnStay: false,
+  // No agency fee by default, so existing figures stay easy to check; tests of the fee set it.
+  agencyFeeBps: 0,
+  agencyFeePeriods: [] as ('DAILY' | 'MONTHLY' | 'YEARLY')[],
   note: 'DEVELOPMENT/QA rates — not approved for production',
 });

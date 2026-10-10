@@ -122,7 +122,6 @@ describe('property search', () => {
         'propertyType',
         'publishedAt',
         'rating',
-        'saleMode',
         'sizeSqm',
         'slug',
         'state',

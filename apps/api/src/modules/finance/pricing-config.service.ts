@@ -66,6 +66,8 @@ export class PricingConfigService {
           vatBps: input.vatBps,
           vatOnServiceFee: input.vatOnServiceFee,
           vatOnStay: input.vatOnStay,
+          agencyFeeBps: input.agencyFeeBps,
+          agencyFeePeriods: input.agencyFeePeriods,
           note: input.note ?? null,
           createdById: actorId,
         },
@@ -95,6 +97,10 @@ const rates = (c: PricingConfig) => ({
   vatBps: c.vatBps,
   vatOnServiceFee: c.vatOnServiceFee,
   vatOnStay: c.vatOnStay,
+  agencyFeeBps: c.agencyFeeBps,
+  agencyFeePeriods: c.agencyFeePeriods.filter(
+    (p): p is 'DAILY' | 'MONTHLY' | 'YEARLY' => p !== 'SALE',
+  ),
 });
 
 function toView(

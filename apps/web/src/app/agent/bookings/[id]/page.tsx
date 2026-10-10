@@ -99,6 +99,9 @@ export default async function AgentBookingPage({ params }: PageProps<'/agent/boo
                 rows={[
                   { label: 'Stay (after listing discount)', kobo: f.stayKobo },
                   ...(f.cleaningKobo ? [{ label: 'Cleaning', kobo: f.cleaningKobo }] : []),
+                  ...(f.agencyFeeKobo
+                    ? [{ label: 'Agency fee (no commission)', kobo: f.agencyFeeKobo }]
+                    : []),
                   { label: 'HavenHub commission', kobo: f.commissionKobo, negative: true },
                   { label: 'Your payout', kobo: f.payoutKobo, strong: true },
                 ]}

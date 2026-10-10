@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { DEFAULT_CHAT_CONTACT_WARNING } from '../utils/contact-details.js';
 import { MAX_ADVANCE_BOOKING_DAYS } from '../utils/stay.js';
 
 /**
@@ -51,11 +52,23 @@ const FIELDS = {
     attachments: flag(),
     /** 0 = messages cannot be edited. */
     editWindowMinutes: int(0, 24 * 60),
+    /** Warn both people when a message contains a phone number, email or messaging link. */
+    contactWarning: flag(),
+    /** null = DEFAULT_CHAT_CONTACT_WARNING. */
+    contactWarningText: z.string().trim().max(1000).nullable(),
+  },
+  assistant: {
+    /** The "Ask HavenHub" assistant on the public site. */
+    enabled: flag(),
+    /** First message shown; null = the built-in greeting. */
+    greeting: z.string().trim().max(500).nullable(),
+    /** "Talk to a person" hands the conversation to the support queue. */
+    handoffEnabled: flag(),
   },
   sales: {
     /** Off: buyers can only message agents through HavenHub chat. */
     contactEnabled: flag(),
-    /** Shown to buyers before an agent's direct contact details; required to reveal them. */
+    /** Shown with an agent's contact details on sale listings; null = DEFAULT_SALES_DISCLAIMER. */
     disclaimer: z.string().trim().max(5000).nullable(),
   },
   reviews: {
@@ -80,6 +93,19 @@ const FIELDS = {
   },
 } as const;
 
+/**
+ * Shown on every sale listing unless administrators set their own wording.
+ * HavenHub only takes payment for rentals; sales are always off-platform.
+ */
+export const DEFAULT_SALES_DISCLAIMER =
+  'HavenHub does not process property sales. Only rentals are paid through HavenHub. ' +
+  'Any purchase, payment, inspection or agreement for this property is made directly between ' +
+  'you and the agent, outside HavenHub, and HavenHub is not a party to it or responsible for ' +
+  'it. Verify the property, its title documents and the agent before paying anything.';
+
+export const DEFAULT_ASSISTANT_GREETING =
+  'Hi, I’m the HavenHub assistant. Ask me about properties, tours, events and hotels, or about your bookings and refunds. For example: “2 bedroom flat in Lekki under 3m a year” or “Where is my refund?”';
+
 export const POLICY_DEFAULTS = {
   security: { passwordMinLength: 10, sessionDays: null },
   storage: { imageMaxMb: POLICY_LIMITS.imageMaxMb, chatAttachmentMaxMb: 50 },
@@ -90,7 +116,14 @@ export const POLICY_DEFAULTS = {
     maxOpenHoldsPerCustomer: 3,
   },
   refunds: { customerCancelCutoffDays: 0 },
-  chat: { newConversations: true, attachments: true, editWindowMinutes: 15 },
+  chat: {
+    newConversations: true,
+    attachments: true,
+    editWindowMinutes: 15,
+    contactWarning: true,
+    contactWarningText: null,
+  },
+  assistant: { enabled: true, greeting: null, handoffEnabled: true },
   sales: { contactEnabled: true, disclaimer: null },
   reviews: { enabled: true, windowDays: 60 },
   events: { EVENT: true, TOUR: true, HOTEL: true, CLEANING: true },
@@ -155,7 +188,14 @@ export interface PublicPlatformPolicies {
   passwordMinLength: number;
   bookingsEnabled: boolean;
   experiences: PlatformPolicies['events'];
-  chat: { newConversations: boolean; attachments: boolean };
+  chat: {
+    newConversations: boolean;
+    attachments: boolean;
+    /** The off-platform warning for messages with contact details; null = switched off. */
+    contactWarning: string | null;
+  };
+  /** null = the assistant is switched off. */
+  assistant: { greeting: string; handoffEnabled: boolean } | null;
 }
 
 export function publicPolicies(p: PlatformPolicies): PublicPlatformPolicies {
@@ -163,7 +203,19 @@ export function publicPolicies(p: PlatformPolicies): PublicPlatformPolicies {
     passwordMinLength: p.security.passwordMinLength,
     bookingsEnabled: p.booking.enabled,
     experiences: p.events,
-    chat: { newConversations: p.chat.newConversations, attachments: p.chat.attachments },
+    chat: {
+      newConversations: p.chat.newConversations,
+      attachments: p.chat.attachments,
+      contactWarning: p.chat.contactWarning
+        ? (p.chat.contactWarningText ?? DEFAULT_CHAT_CONTACT_WARNING)
+        : null,
+    },
+    assistant: p.assistant.enabled
+      ? {
+          greeting: p.assistant.greeting ?? DEFAULT_ASSISTANT_GREETING,
+          handoffEnabled: p.assistant.handoffEnabled,
+        }
+      : null,
   };
 }
 
@@ -305,7 +357,8 @@ export const POLICY_AREA_META: Record<PolicyArea, PolicyAreaMeta> = {
   },
   chat: {
     title: 'Chat',
-    description: 'Starting conversations, attachments and message editing.',
+    description:
+      'Starting conversations, attachments, message editing and the warning about sharing contact details.',
     fields: [
       bool(
         'newConversations',
@@ -320,22 +373,58 @@ export const POLICY_AREA_META: Record<PolicyArea, PolicyAreaMeta> = {
         'How long after sending a message its author can edit it. 0 = no editing.',
         'minutes',
       ),
+      bool(
+        'contactWarning',
+        'Warn about contact details',
+        'On: when a message contains a phone number, email or WhatsApp/Telegram link, both people see the notice below (the message is still sent). Also shown while typing one.',
+      ),
+      {
+        key: 'contactWarningText',
+        label: 'Contact details notice',
+        help: 'Leave empty to use HavenHub’s standard notice (bookings and payments made outside HavenHub are not HavenHub’s responsibility).',
+        type: 'text',
+        max: 1000,
+      },
+    ],
+  },
+  assistant: {
+    title: 'Assistant',
+    description:
+      'The “Ask HavenHub” assistant: answers questions about listings, tours, bookings and refunds from HavenHub’s own data, and passes visitors to support.',
+    fields: [
+      bool(
+        'enabled',
+        'Show the assistant',
+        'Off: the assistant button disappears from the site. Support chat keeps working.',
+      ),
+      {
+        key: 'greeting',
+        label: 'Greeting',
+        help: 'The assistant’s first message. Leave empty for the standard greeting.',
+        type: 'text',
+        max: 500,
+      },
+      bool(
+        'handoffEnabled',
+        'Allow “Talk to a person”',
+        'On: signed-in visitors can pass their question to the support team, who answer in HavenHub messages (Admin → Support).',
+      ),
     ],
   },
   sales: {
     title: 'Property sales',
     description:
-      'Contact for sale: whether buyers may contact agents directly, and the notice they accept first.',
+      'Sales never go through HavenHub: buyers deal with the agent directly. Whether agents’ contact details show on sale listings, and the notice shown with them.',
     fields: [
       bool(
         'contactEnabled',
-        'Allow contact for sale',
-        'On: buyers can see an agent’s phone and email after accepting the notice below. Off: they can only message agents through HavenHub chat.',
+        'Show agents’ contact details on sale listings',
+        'On: signed-in visitors see the agent’s phone and email on sale listings, with the notice below. Off: they can only message agents through HavenHub chat.',
       ),
       {
         key: 'disclaimer',
-        label: 'Notice buyers must accept',
-        help: 'Shown before an agent’s contact details; buyers tick that they accept it, and the exact wording is kept. Until it is set, contact details are not shown. Have it reviewed by your lawyer.',
+        label: 'Notice shown on sale listings',
+        help: 'Shown with the agent’s contact details. Leave empty to use HavenHub’s standard notice (sales are outside HavenHub; only rentals are paid through HavenHub). Have it reviewed by your lawyer.',
         type: 'text',
         max: 5000,
       },

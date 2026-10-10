@@ -6,6 +6,7 @@ import {
   BedDouble,
   Bell,
   BellRing,
+  Bot,
   BookOpen,
   Briefcase,
   CircleHelp,
@@ -218,6 +219,7 @@ export const ADMIN_NAV: NavItem[] = [
     group: 'Platform',
   },
   { href: '/admin/support', label: 'Support', icon: LifeBuoy, permission: 'support.respond' },
+  { href: '/admin/assistant', label: 'Assistant', icon: Bot, permission: 'support.respond' },
   {
     href: '/admin/messages',
     label: 'Messages',

@@ -36,6 +36,6 @@ import { UnreadService } from './unread.service';
     ChatAdminService,
     SupportService,
   ],
-  exports: [ConversationsService, ChatMaintenanceService],
+  exports: [ConversationsService, ChatMaintenanceService, MessagesService, ChatEventsService],
 })
 export class ChatModule {}

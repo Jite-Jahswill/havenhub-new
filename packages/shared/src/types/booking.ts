@@ -151,6 +151,8 @@ export interface AgentBookingFinancials {
   /** Rent after listing discount. */
   stayKobo: number;
   cleaningKobo: number;
+  /** The agent's agency fee, paid in full (no commission). */
+  agencyFeeKobo: number;
   commissionKobo: number;
   payoutKobo: number;
   /** Collected by HavenHub, not the agent's money. */
@@ -182,8 +184,10 @@ export interface AgentBookingDetail extends AgentBookingListItem {
 export interface AgentEarningsSummary {
   /** Bookings with captured payments (confirmed, completed, or cancelled after payment). */
   paidBookings: number;
-  /** Sum of stay + cleaning before commission. */
+  /** Sum of stay + cleaning + agency fee before commission. */
   grossKobo: number;
+  /** Agency fees collected for the agent (included in grossKobo). */
+  agencyFeeKobo: number;
   commissionKobo: number;
   /** Earned on confirmed bookings, not yet payable. */
   pendingKobo: number;
@@ -210,6 +214,7 @@ export interface PlatformBookingFinancials {
   agentCommissionKobo: number;
   vatKobo: number;
   cautionKobo: number;
+  agencyFeeKobo: number;
   agentPayoutKobo: number;
   pricingConfigVersion: number;
 }
@@ -254,6 +259,8 @@ export interface PricingConfigView {
   vatBps: number;
   vatOnServiceFee: boolean;
   vatOnStay: boolean;
+  agencyFeeBps: number;
+  agencyFeePeriods: ('DAILY' | 'MONTHLY' | 'YEARLY')[];
   note: string | null;
   createdAt: string;
   createdBy: { id: string; fullName: string } | null;

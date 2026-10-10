@@ -27,6 +27,7 @@ export const LEDGER_ENTRY_BUCKET: Record<LedgerEntryType, LedgerBucket> = {
   [LedgerEntryType.VAT_PAYABLE]: LedgerBucket.TAX_PAYABLE,
   [LedgerEntryType.AGENT_RENT_PAYABLE]: LedgerBucket.AGENT_PAYABLE,
   [LedgerEntryType.AGENT_CLEANING_PAYABLE]: LedgerBucket.AGENT_PAYABLE,
+  [LedgerEntryType.AGENT_AGENCY_FEE_PAYABLE]: LedgerBucket.AGENT_PAYABLE,
   [LedgerEntryType.CAUTION_HELD]: LedgerBucket.CAUTION_HELD,
   [LedgerEntryType.UNALLOCATED]: LedgerBucket.OWED_TO_CUSTOMER,
 };

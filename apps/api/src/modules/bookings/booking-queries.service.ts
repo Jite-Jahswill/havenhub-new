@@ -138,6 +138,7 @@ export class BookingQueriesService {
       financials: {
         stayKobo: koboToNumber(row.stayKobo),
         cleaningKobo: koboToNumber(row.cleaningKobo),
+        agencyFeeKobo: koboToNumber(row.agencyFeeKobo),
         commissionKobo: koboToNumber(row.agentCommissionKobo),
         payoutKobo: koboToNumber(row.agentPayoutKobo),
         vatKobo: koboToNumber(row.vatKobo),
@@ -169,6 +170,7 @@ export class BookingQueriesService {
             in: [
               LedgerEntryType.AGENT_RENT_PAYABLE,
               LedgerEntryType.AGENT_CLEANING_PAYABLE,
+              LedgerEntryType.AGENT_AGENCY_FEE_PAYABLE,
               LedgerEntryType.PLATFORM_COMMISSION,
               LedgerEntryType.VAT_PAYABLE,
             ],
@@ -188,8 +190,10 @@ export class BookingQueriesService {
       grossKobo: koboToNumber(
         captured(LedgerEntryType.AGENT_RENT_PAYABLE) +
           captured(LedgerEntryType.AGENT_CLEANING_PAYABLE) +
+          captured(LedgerEntryType.AGENT_AGENCY_FEE_PAYABLE) +
           commission,
       ),
+      agencyFeeKobo: koboToNumber(captured(LedgerEntryType.AGENT_AGENCY_FEE_PAYABLE)),
       commissionKobo: koboToNumber(commission),
       pendingKobo: earning(AgentEarningStatus.PENDING),
       availableKobo: earning(AgentEarningStatus.AVAILABLE),
@@ -258,6 +262,7 @@ export class BookingQueriesService {
         agentCommissionKobo: koboToNumber(row.agentCommissionKobo),
         vatKobo: koboToNumber(row.vatKobo),
         cautionKobo: koboToNumber(row.cautionKobo),
+        agencyFeeKobo: koboToNumber(row.agencyFeeKobo),
         agentPayoutKobo: koboToNumber(row.agentPayoutKobo),
         pricingConfigVersion: row.pricingConfig.version,
       },

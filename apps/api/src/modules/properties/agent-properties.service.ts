@@ -6,11 +6,10 @@ import {
   type AgentPropertyView,
   type createPropertySchema,
   type updatePropertySchema,
-  type SaleMode,
 } from '@havenhub/shared';
 import type { z } from 'zod';
 
-import { AppException, Errors } from '../../common/errors/app.exception';
+import { AppException } from '../../common/errors/app.exception';
 import type { RequestMeta } from '../../common/http/request-meta';
 import type { AgentProfile, Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
@@ -92,7 +91,6 @@ export class AgentPropertiesService {
           propertyType: input.propertyType,
           listingType: input.listingType,
           pricingPeriod: input.listingType === 'SALE' ? 'SALE' : (input.pricingPeriod ?? null),
-          saleMode: input.listingType === 'SALE' ? saleModeFor(input.saleMode) : null,
           slug: propertySlug(input.title),
           // Ownership always comes from the session, never from the request body.
           agentProfileId: agent.id,
@@ -389,7 +387,6 @@ function toColumns(fields: Omit<Partial<UpdateInput>, 'amenityIds'>): Columns {
   assign('propertyType', fields.propertyType);
   assign('listingType', fields.listingType);
   assign('pricingPeriod', fields.pricingPeriod);
-  assign('saleMode', fields.saleMode);
   assign('addressLine', fields.addressLine);
   assign('city', fields.city);
   assign('lga', fields.lga);
@@ -437,16 +434,6 @@ function reconcile(current: AgentPropertyRow, data: Columns): void {
   if (period !== current.pricingPeriod || data.pricingPeriod !== undefined) {
     data.pricingPeriod = period as Columns['pricingPeriod'];
   }
-  // Sale listings always have a sale mode (contact by default); rentals never do.
-  const saleMode =
-    listingType === 'SALE'
-      ? saleModeFor(
-          (data.saleMode as SaleMode | undefined) ??
-            (current.saleMode as SaleMode | null) ??
-            undefined,
-        )
-      : null;
-  if (saleMode !== current.saleMode || data.saleMode !== undefined) data.saleMode = saleMode;
 
   const cleaning = data.cleaningOption !== undefined ? data.cleaningOption : current.cleaningOption;
   const fee = data.cleaningFeeKobo !== undefined ? data.cleaningFeeKobo : current.cleaningFeeKobo;
@@ -476,16 +463,3 @@ async function assertActiveAmenities(tx: Tx, ids: string[] | undefined): Promise
 
 const invalidTransition = (message: string) =>
   new AppException(HttpStatus.CONFLICT, ErrorCode.INVALID_STATUS_TRANSITION, message);
-
-/**
- * Buying on HavenHub (IN_APP) is not open yet: sale listings are contact for
- * sale until the in-app sale checkout ships.
- */
-function saleModeFor(mode: SaleMode | undefined): SaleMode {
-  if (mode === 'IN_APP') {
-    throw Errors.featureDisabled(
-      'Buying on HavenHub is not available yet. Choose “Contact me” for now.',
-    );
-  }
-  return 'CONTACT';
-}

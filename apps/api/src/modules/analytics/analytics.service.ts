@@ -28,7 +28,7 @@ const value = (n: number | bigint | null | undefined): Metric => ({
 const unavailable = (reason: string): Metric => ({ available: false, reason });
 
 const NO_TICKETING = 'Ticket sales are not available yet';
-const NO_SALES = 'Property sales are not handled on HavenHub yet';
+const NO_SALES = 'Property sales happen directly with agents, outside HavenHub';
 const NO_REVIEWS = 'Reviews are not available yet';
 const NO_WITHDRAWALS = 'Withdrawals are not available yet';
 

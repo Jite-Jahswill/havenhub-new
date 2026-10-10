@@ -4,6 +4,7 @@ import { Suspense } from 'react';
 import { ChatWorkspace } from '@/components/chat/chat-workspace';
 import { NoAccess } from '@/components/admin/no-access';
 import { PageHeader } from '@/components/dashboard/dashboard-shell';
+import { getPublicPolicies } from '@/lib/cms';
 import { hasPermission, requireUser } from '@/lib/session';
 
 export const metadata: Metadata = { title: 'Messages' };
@@ -16,7 +17,11 @@ export default async function AdminMessagesPage() {
     <>
       <PageHeader title="Messages" description="Support conversations you have joined." />
       <Suspense>
-        <ChatWorkspace viewerId={user.id} area="admin" />
+        <ChatWorkspace
+          viewerId={user.id}
+          area="admin"
+          contactWarning={(await getPublicPolicies()).chat.contactWarning}
+        />
       </Suspense>
     </>
   );

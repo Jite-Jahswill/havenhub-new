@@ -71,6 +71,8 @@ export const PriceLineKind = {
   LISTING_DISCOUNT: 'LISTING_DISCOUNT',
   /** The agent's promo code (agent-funded, like the listing discount). */
   PROMO_DISCOUNT: 'PROMO_DISCOUNT',
+  /** Paid to the agent in full. */
+  AGENCY_FEE: 'AGENCY_FEE',
   CLEANING_FEE: 'CLEANING_FEE',
   CAUTION_FEE: 'CAUTION_FEE',
   SERVICE_FEE: 'SERVICE_FEE',
@@ -93,6 +95,8 @@ export const LedgerEntryType = {
   AGENT_RENT_PAYABLE: 'AGENT_RENT_PAYABLE',
   /** Cleaning fee owed to the agent who provides cleaning. */
   AGENT_CLEANING_PAYABLE: 'AGENT_CLEANING_PAYABLE',
+  /** Agency fee owed to the agent in full (no commission). */
+  AGENT_AGENCY_FEE_PAYABLE: 'AGENT_AGENCY_FEE_PAYABLE',
   /** Refundable caution deposit, held — never HavenHub revenue. */
   CAUTION_HELD: 'CAUTION_HELD',
   /** Money that could not be applied to a booking and is owed back. */

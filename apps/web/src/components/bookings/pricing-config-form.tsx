@@ -20,6 +20,12 @@ function percentToBps(value: string): number | null {
   return Number(match[1]) * 100 + Number((match[2] ?? '').padEnd(2, '0'));
 }
 
+const AGENCY_FEE_PERIODS = [
+  ['DAILY', 'Nightly stays'],
+  ['MONTHLY', 'Monthly rentals'],
+  ['YEARLY', 'Yearly rentals'],
+] as const;
+
 export function PricingConfigForm({ current }: { current: PricingConfigView | null }) {
   const router = useRouter();
   const { pending, error, fieldErrors, validate, run, setError } = useApiAction();
@@ -34,6 +40,7 @@ export function PricingConfigForm({ current }: { current: PricingConfigView | nu
       serviceFeeBps: percentToBps(text(form, 'serviceFee')),
       agentCommissionBps: percentToBps(text(form, 'agentCommission')),
       vatBps: percentToBps(text(form, 'vat')),
+      agencyFeeBps: percentToBps(text(form, 'agencyFee') || '0'),
     };
     const bad = Object.entries(rates).find(([, v]) => v === null);
     if (bad) {
@@ -49,6 +56,7 @@ export function PricingConfigForm({ current }: { current: PricingConfigView | nu
       ...rates,
       vatOnServiceFee: form.get('vatOnServiceFee') === 'on',
       vatOnStay: form.get('vatOnStay') === 'on',
+      agencyFeePeriods: form.getAll('agencyFeePeriods'),
       note: text(form, 'note').trim() || undefined,
     });
     if (!input) return;
@@ -128,6 +136,42 @@ export function PricingConfigForm({ current }: { current: PricingConfigView | nu
           />
           The stay and cleaning (e.g. commercial lets)
         </label>
+      </fieldset>
+      <fieldset className="flex flex-col gap-3 text-sm text-text">
+        <legend className="mb-1 font-medium">Agency fee</legend>
+        <p className="text-text-muted">
+          Paid by the customer on the rent after discounts and passed to the agent in full: no
+          HavenHub commission or VAT on it. Set 0 or tick no rental type to switch it off.
+        </p>
+        <div className="max-w-48">
+          <Field label="Agency fee (%)" error={fieldErrors.agencyFeeBps}>
+            {(a) => (
+              <Input
+                {...a}
+                name="agencyFee"
+                inputMode="decimal"
+                defaultValue={pct(current?.agencyFeeBps ?? 0)}
+              />
+            )}
+          </Field>
+        </div>
+        <div className="flex flex-wrap gap-4">
+          {AGENCY_FEE_PERIODS.map(([value, label]) => (
+            <label key={value} className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                name="agencyFeePeriods"
+                value={value}
+                defaultChecked={current?.agencyFeePeriods.includes(value) ?? false}
+                className="size-4 accent-primary"
+              />
+              {label}
+            </label>
+          ))}
+        </div>
+        {fieldErrors.agencyFeePeriods && (
+          <p className="text-error">{fieldErrors.agencyFeePeriods}</p>
+        )}
       </fieldset>
       <Field label="Note" optional hint="Why the rates changed — kept in the history.">
         {(a) => <Input {...a} name="note" maxLength={500} />}

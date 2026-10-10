@@ -10,6 +10,7 @@ import { api } from '@/lib/api/client';
 import { useRealtimeConnection, useRealtimeEvent, useReconnect } from '@/lib/realtime';
 import { ConversationList } from './conversation-list';
 import { ConversationThread } from './conversation-thread';
+import { ContactWarningProvider } from './contact-warning';
 
 /**
  * Customer and agent messaging: conversation list and the open thread side
@@ -19,9 +20,12 @@ import { ConversationThread } from './conversation-thread';
 export function ChatWorkspace({
   viewerId,
   area,
+  contactWarning,
 }: {
   viewerId: string;
   area: 'account' | 'agent' | 'admin';
+  /** Settings → Chat notice for messages with contact details; null = off. */
+  contactWarning: string | null;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -152,59 +156,61 @@ export function ChatWorkspace({
   };
 
   return (
-    <div className="grid h-[calc(100dvh-13rem)] min-h-[30rem] grid-cols-[minmax(0,1fr)] overflow-hidden rounded-card border border-border bg-surface shadow-card lg:h-[calc(100dvh-12rem)] lg:grid-cols-[340px_minmax(0,1fr)]">
-      <div className={cn('min-h-0 border-border lg:border-r', selectedId && 'hidden lg:block')}>
-        <ConversationList
-          items={items}
-          viewerId={viewerId}
-          selectedId={selectedId}
-          onSelect={open}
-          loading={loading}
-          error={error}
-          nextCursor={nextCursor}
-          onLoadMore={() => void loadMore()}
-          search={search}
-          onSearch={setSearch}
-          archived={archived}
-          onArchived={(v) => {
-            setArchived(v);
-            setItems([]);
-            setLoading(true);
-          }}
-        />
-      </div>
-      <div className={cn('min-h-0', !selectedId && 'hidden lg:block')}>
-        {selected ? (
-          <ConversationThread
-            key={selected.id}
-            conversation={selected}
+    <ContactWarningProvider warning={contactWarning}>
+      <div className="grid h-[calc(100dvh-13rem)] min-h-[30rem] grid-cols-[minmax(0,1fr)] overflow-hidden rounded-card border border-border bg-surface shadow-card lg:h-[calc(100dvh-12rem)] lg:grid-cols-[340px_minmax(0,1fr)]">
+        <div className={cn('min-h-0 border-border lg:border-r', selectedId && 'hidden lg:block')}>
+          <ConversationList
+            items={items}
             viewerId={viewerId}
-            area={area}
-            status={status}
-            onBack={() => open(null)}
-            onChanged={(c) => {
-              patch(c);
-              if ('archived' in c && c.archived !== archived) {
-                setItems((prev) => prev.filter((x) => x.id !== c.id));
-              }
+            selectedId={selectedId}
+            onSelect={open}
+            loading={loading}
+            error={error}
+            nextCursor={nextCursor}
+            onLoadMore={() => void loadMore()}
+            search={search}
+            onSearch={setSearch}
+            archived={archived}
+            onArchived={(v) => {
+              setArchived(v);
+              setItems([]);
+              setLoading(true);
             }}
           />
-        ) : (
-          <div className="hidden h-full flex-col items-center justify-center gap-3 p-8 text-center lg:flex">
-            <span className="grid size-14 place-items-center rounded-full bg-surface-secondary text-text-secondary">
-              <MessageSquare aria-hidden className="size-6" />
-            </span>
-            <p className="font-medium text-text">Select a conversation</p>
-            <p className="max-w-xs text-sm text-text-secondary">
-              {area === 'agent'
-                ? 'Messages from customers about your listings and bookings appear here.'
-                : area === 'admin'
-                  ? 'Support conversations you have joined appear here.'
-                  : 'Message an agent from any listing or booking to start a conversation.'}
-            </p>
-          </div>
-        )}
+        </div>
+        <div className={cn('min-h-0', !selectedId && 'hidden lg:block')}>
+          {selected ? (
+            <ConversationThread
+              key={selected.id}
+              conversation={selected}
+              viewerId={viewerId}
+              area={area}
+              status={status}
+              onBack={() => open(null)}
+              onChanged={(c) => {
+                patch(c);
+                if ('archived' in c && c.archived !== archived) {
+                  setItems((prev) => prev.filter((x) => x.id !== c.id));
+                }
+              }}
+            />
+          ) : (
+            <div className="hidden h-full flex-col items-center justify-center gap-3 p-8 text-center lg:flex">
+              <span className="grid size-14 place-items-center rounded-full bg-surface-secondary text-text-secondary">
+                <MessageSquare aria-hidden className="size-6" />
+              </span>
+              <p className="font-medium text-text">Select a conversation</p>
+              <p className="max-w-xs text-sm text-text-secondary">
+                {area === 'agent'
+                  ? 'Messages from customers about your listings and bookings appear here.'
+                  : area === 'admin'
+                    ? 'Support conversations you have joined appear here.'
+                    : 'Message an agent from any listing or booking to start a conversation.'}
+              </p>
+            </div>
+          )}
+        </div>
       </div>
-    </div>
+    </ContactWarningProvider>
   );
 }

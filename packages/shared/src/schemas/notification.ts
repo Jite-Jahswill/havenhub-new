@@ -22,6 +22,8 @@ export const NotificationType = {
   PLAN_LIMIT_REACHED: 'PLAN_LIMIT_REACHED',
   REVIEW_RECEIVED: 'REVIEW_RECEIVED',
   ANNOUNCEMENT: 'ANNOUNCEMENT',
+  /** A visitor asked the assistant for a person (support staff). */
+  SUPPORT_REQUEST: 'SUPPORT_REQUEST',
 } as const;
 export type NotificationType = (typeof NotificationType)[keyof typeof NotificationType];
 

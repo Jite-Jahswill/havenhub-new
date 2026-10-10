@@ -123,6 +123,7 @@ describe('successful payment', () => {
     expect(earnings).toEqual({
       paidBookings: 1,
       grossKobo: 16_000_000,
+      agencyFeeKobo: 0,
       commissionKobo: 750_000,
       pendingKobo: 15_250_000,
       availableKobo: 0,

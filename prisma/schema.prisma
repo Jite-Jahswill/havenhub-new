@@ -90,6 +90,7 @@ model User {
   reviewsHidden           Review[]                  @relation("ReviewModerator")
   badgesAwarded           BadgeAward[]              @relation("BadgeAwardAssigner")
   saleContactAcceptances  SaleContactAcceptance[]
+  assistantQuestions      AssistantQuestion[]
   messageReactions        MessageReaction[]
 
   @@index([accountType, status])
@@ -448,8 +449,6 @@ model Property {
   reviewCount       Int       @default(0) @map("review_count")
   /// Bookings of this property that reached COMPLETED.
   completedBookings Int       @default(0) @map("completed_bookings")
-  /// SALE listings: IN_APP (bought on HavenHub) or CONTACT (buyer contacts the agent).
-  saleMode          String?   @map("sale_mode") @db.VarChar(20)
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
@@ -592,17 +591,22 @@ model PropertyViewDaily {
 /// Commission, VAT and fee rates (spec §29). Rows are immutable versions; the
 /// newest one applies to new bookings and each booking keeps the one it used.
 model PricingConfig {
-  id                 String   @id @default(uuid(7)) @db.Uuid
-  version            Int      @unique
+  id                 String          @id @default(uuid(7)) @db.Uuid
+  version            Int             @unique
   /// Rates in basis points (100 = 1%).
-  serviceFeeBps      Int      @map("service_fee_bps")
-  agentCommissionBps Int      @map("agent_commission_bps")
-  vatBps             Int      @map("vat_bps")
-  vatOnServiceFee    Boolean  @map("vat_on_service_fee")
-  vatOnStay          Boolean  @map("vat_on_stay")
-  note               String?  @db.VarChar(500)
-  createdById        String?  @map("created_by_id") @db.Uuid
-  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  serviceFeeBps      Int             @map("service_fee_bps")
+  agentCommissionBps Int             @map("agent_commission_bps")
+  vatBps             Int             @map("vat_bps")
+  vatOnServiceFee    Boolean         @map("vat_on_service_fee")
+  vatOnStay          Boolean         @map("vat_on_stay")
+  /// Agency fee charged to the customer and paid in full to the agent (no
+  /// HavenHub commission, no VAT added by HavenHub), on the rent after
+  /// discounts, for the rental periods listed. 0 = no agency fee.
+  agencyFeeBps       Int             @default(0) @map("agency_fee_bps")
+  agencyFeePeriods   PricingPeriod[] @default([]) @map("agency_fee_periods")
+  note               String?         @db.VarChar(500)
+  createdById        String?         @map("created_by_id") @db.Uuid
+  createdAt          DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
 
   createdBy User?     @relation(fields: [createdById], references: [id], onDelete: SetNull)
   bookings  Booking[]
@@ -654,6 +658,8 @@ model Booking {
   cautionKobo         BigInt   @map("caution_kobo")
   serviceFeeKobo      BigInt   @map("service_fee_kobo")
   vatKobo             BigInt   @map("vat_kobo")
+  /// Paid to the agent in full (included in totalKobo and agentPayoutKobo).
+  agencyFeeKobo       BigInt   @default(0) @map("agency_fee_kobo")
   totalKobo           BigInt   @map("total_kobo")
   agentCommissionKobo BigInt   @map("agent_commission_kobo")
   agentPayoutKobo     BigInt   @map("agent_payout_kobo")
@@ -702,6 +708,7 @@ enum PriceLineKind {
   RENT
   LISTING_DISCOUNT
   PROMO_DISCOUNT
+  AGENCY_FEE
   CLEANING_FEE
   CAUTION_FEE
   SERVICE_FEE
@@ -811,6 +818,7 @@ enum LedgerEntryType {
   VAT_PAYABLE
   AGENT_RENT_PAYABLE
   AGENT_CLEANING_PAYABLE
+  AGENT_AGENCY_FEE_PAYABLE
   CAUTION_HELD
   UNALLOCATED
 }
@@ -2360,6 +2368,8 @@ model BadgeAward {
 
 /// A buyer accepted the "dealing outside HavenHub" notice before seeing an
 /// agent's direct contact details. The exact wording is kept as evidence.
+/// No longer written (the notice is now shown alongside the details); kept
+/// append-only for the acceptances already recorded.
 model SaleContactAcceptance {
   id             String   @id @default(uuid(7)) @db.Uuid
   propertyId     String   @map("property_id") @db.Uuid
@@ -2377,4 +2387,23 @@ model SaleContactAcceptance {
   @@index([propertyId, createdAt(sort: Desc)])
   @@index([userId, createdAt(sort: Desc)])
   @@map("sale_contact_acceptances")
+}
+
+/// Questions asked of the "Ask HavenHub" assistant, so support staff can see
+/// what it could not answer (and add FAQs). Kept 180 days.
+model AssistantQuestion {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  /// Null for signed-out visitors.
+  userId    String?  @map("user_id") @db.Uuid
+  text      String   @db.VarChar(500)
+  intent    String   @db.VarChar(30)
+  answered  Boolean
+  handedOff Boolean  @default(false) @map("handed_off")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt(sort: Desc)])
+  @@index([answered, createdAt(sort: Desc)])
+  @@map("assistant_questions")
 }

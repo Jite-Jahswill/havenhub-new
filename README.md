@@ -147,8 +147,10 @@ One session system serves both client types; only the token transport differs.
   PostgreSQL exclusion constraint (`bookings_no_overlap`, `btree_gist`) makes overlapping holds
   impossible even for concurrent requests. Unpaid bookings hold dates for `BOOKING_HOLD_MINUTES`.
 - **Pricing** (`pricing-engine.ts`) is pure integer-kobo `bigint` arithmetic: rent − listing discount
-  = stay; + cleaning (if selected) + caution deposit + HavenHub service fee + VAT = total. The agent
-  receives stay − commission + cleaning. Service fee, commission and VAT rates are **admin-configured**
+  = stay; + cleaning (if selected) + caution deposit + HavenHub service fee + VAT + agency fee = total.
+  The agent receives stay − commission + cleaning + agency fee. The **agency fee** (a % of the stay, for
+  the rental periods admins choose; 0 = off) goes to the agent in full, with no commission and no VAT
+  added by HavenHub. Service fee, commission, VAT and agency fee rates are **admin-configured**
   (`/admin/payments` → Commission & VAT); each save is a new version, and bookings stay closed until
   one exists. Every booking freezes its lines, amounts, rates version and a property snapshot.
   **Production rates are not approved yet.** The 10% service fee, 5% commission and 7.5% VAT on the
@@ -160,7 +162,8 @@ One session system serves both client types; only the token transport differs.
   booking, write the ledger and create the agent's earning exactly once. Money that arrives for an
   expired, cancelled or already-paid booking is recorded and automatically queued for refund.
 - **Ledger** (`ledger_entries`, append-only by trigger): each payment is allocated to service fee,
-  commission, VAT, agent rent payable, agent cleaning payable and caution held; refunds write exact
+  commission, VAT, agent rent payable, agent cleaning payable, agent agency fee payable and caution
+  held; refunds write exact
   negations. Each entry type belongs to one bucket (`LEDGER_ENTRY_BUCKET` in `@havenhub/shared`):
   HavenHub revenue (service fee + commission), tax payable, agent payable, caution held (the
   customer's deposit — never revenue; no release policy yet) or owed to customer. The admin booking
@@ -307,7 +310,8 @@ One session system serves both client types; only the token transport differs.
 - **Platform policies** (`settings.manage`, Admin → Settings, `GET/PATCH admin/settings/policies`):
   security (minimum password length, sign-out after inactivity), storage (largest image and chat
   attachment), booking (on/off, hold time, how far ahead, unpaid bookings per customer), refunds
-  (customer cancellation cut-off), chat (new conversations, attachments, edit window), events &
+  (customer cancellation cut-off), chat (new conversations, attachments, edit window, contact details warning), assistant (on/off,
+  greeting, talk to a person), events &
   experiences (each kind on/off — off hides it publicly and stops new listings, nothing is deleted)
   and notifications (unread-chat emails and delay, subscription reminder). Stored as one validated
   JSON document; every value defaults to the built-in behaviour, empty number fields fall back to
@@ -315,13 +319,29 @@ One session system serves both client types; only the token transport differs.
   `CHAT_EMAIL_DELAY_SECONDS`). Cached in Redis and rewritten on change, audited as
   `platform.policies.updated` (changed areas only). A turned-off feature answers `403`
   `FEATURE_DISABLED`. Withdrawals and reviews get settings when those features exist.
-- **Property sales (stage A)**: sale listings have a `sale_mode` — `CONTACT` (default) or `IN_APP`
-  (buying on HavenHub; refused until the in-app sale checkout ships). Contact for sale shows the
-  agent's phone and email only after a signed-in buyer ticks acceptance of the notice in Admin →
-  Settings → Property sales (no notice set = no direct details; HavenHub chat always works).
-  Each acceptance keeps the exact wording, its SHA-256, time, IP and browser in the append-only
-  `sale_contact_acceptances` table (`POST properties/:slug/sale-contact`); a changed notice must be
-  accepted again. Admins can switch contact for sale off.
+- **Assistant** ("Ask HavenHub", `POST assistant/ask`): a floating chat on the public site that
+  answers from HavenHub's own data — no external AI. A rule-based parser
+  (`modules/assistant/assistant-nlp.ts`) reads the intent and filters ("2 bedroom flat in Lekki under
+  3m a year", "tours in Uyo", "where is my refund?") and the answer comes from property and
+  experience search (widening a city to its state when empty), the signed-in visitor's own bookings
+  and refunds (read-only), or the best-matching published FAQ / help article. "Talk to a person"
+  (`POST assistant/handoff`, signed-in customers and agents) posts the question and recent
+  transcript into the visitor's SUPPORT conversation and notifies everyone with `support.respond`;
+  staff answer from Admin → Support as usual. Questions are logged (`assistant_questions`, 180 days)
+  and Admin → Assistant lists the ones it could not answer. Admin → Settings → Assistant switches it
+  off, sets the greeting and turns "Talk to a person" on or off.
+- **Chat safety**: messages containing a phone number, email or WhatsApp/Telegram link
+  (`containsContactDetails` in `@havenhub/shared`) show a notice to both people, and the composer
+  shows it while one is being typed: deals made outside HavenHub are not HavenHub's responsibility.
+  It warns only (nothing is blocked or hidden). Admin → Settings → Chat switches it off or replaces
+  `DEFAULT_CHAT_CONTACT_WARNING` with custom wording.
+- **Property sales** never go through HavenHub: only rentals are paid on the platform, and sale
+  listings are refused by the booking flow. A sale listing shows the agent's phone and email in the
+  "Listed by" card to signed-in visitors (signed-out visitors are asked to sign in), always beside
+  the notice from Admin → Settings → Property sales, or `DEFAULT_SALES_DISCLAIMER` when none is set.
+  Admins can switch the contact details off (HavenHub chat always works). The append-only
+  `sale_contact_acceptances` table from the earlier accept-to-reveal flow keeps its records but is no
+  longer written.
 - **Reviews** (`POST bookings/:id/review`, `GET properties/:slug/reviews`; moderation
   `admin/reviews` with `reviews.moderate`: Admin, Property Manager, Support Admin): one per completed
   booking, by its customer, within the reviews policy's window after check-out (default 60 days; can

@@ -13,6 +13,7 @@ type BookingAmounts = Pick<
   | 'cautionKobo'
   | 'serviceFeeKobo'
   | 'vatKobo'
+  | 'agencyFeeKobo'
   | 'totalKobo'
   | 'agentCommissionKobo'
 >;
@@ -39,6 +40,7 @@ export class LedgerService {
       [L.VAT_PAYABLE, booking.vatKobo],
       [L.AGENT_RENT_PAYABLE, booking.stayKobo - booking.agentCommissionKobo],
       [L.AGENT_CLEANING_PAYABLE, booking.cleaningKobo],
+      [L.AGENT_AGENCY_FEE_PAYABLE, booking.agencyFeeKobo],
       [L.CAUTION_HELD, booking.cautionKobo],
     ];
     await this.write(

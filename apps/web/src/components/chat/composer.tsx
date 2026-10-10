@@ -15,6 +15,7 @@ import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent 
 import { apiUploadWithProgress } from '@/lib/api/client';
 import { realtime } from '@/lib/realtime';
 import { formatBytes } from './chat-utils';
+import { ContactWarning } from './contact-warning';
 
 interface Upload {
   key: string;
@@ -195,6 +196,8 @@ export function Composer({
           </button>
         </div>
       )}
+
+      <ContactWarning text={text} className="mb-2" />
 
       {uploads.length > 0 && (
         <ul className="mb-2 flex flex-wrap gap-2" aria-label="Attachments to send">

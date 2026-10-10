@@ -184,3 +184,4 @@ export * from './chat.js';
 export * from './experience.js';
 export * from './cms.js';
 export * from './platform.js';
+export * from './assistant.js';

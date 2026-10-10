@@ -265,6 +265,7 @@ export class BookingsService {
             cautionKobo: plan.pricing.cautionKobo,
             serviceFeeKobo: plan.pricing.serviceFeeKobo,
             vatKobo: plan.pricing.vatKobo,
+            agencyFeeKobo: plan.pricing.agencyFeeKobo,
             totalKobo: plan.pricing.totalKobo,
             agentCommissionKobo: plan.pricing.agentCommissionKobo,
             agentPayoutKobo: plan.pricing.agentPayoutKobo,
