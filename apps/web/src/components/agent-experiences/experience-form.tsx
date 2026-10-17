@@ -24,21 +24,16 @@ import {
   Select,
   Textarea,
 } from '@havenhub/ui';
-import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { useState, type FormEvent, type ReactNode } from 'react';
 
+import { CoordinatesField } from '@/components/map/coordinates-field';
 import { ApiErrorAlert } from '@/components/subscriptions/upgrade-prompt';
 import { api } from '@/lib/api/client';
 import { fromLagosInput, toLagosInput } from '@/lib/experiences';
 import { formText } from '@/lib/form';
 import { AMENITY_CATEGORY_LABELS, NIGERIAN_STATES } from '@/lib/labels';
 import { useApiAction } from '@/lib/use-api-action';
-
-const LocationMap = dynamic(
-  () => import('@/components/map/location-map').then((m) => m.LocationMap),
-  { ssr: false, loading: () => <div className="size-full animate-pulse bg-surface-secondary" /> },
-);
 
 const naira = (kobo: number | null | undefined) =>
   kobo === null || kobo === undefined ? '' : String(kobo / 100);
@@ -130,6 +125,7 @@ export function ExperienceForm({
                     .filter(Boolean),
                   availableDays: form.getAll('availableDays').map(String),
                   availabilityNote: text('availabilityNote'),
+                  dailyCapacity: int('dailyCapacity'),
                 },
               };
 
@@ -428,7 +424,7 @@ export function ExperienceForm({
           <Section
             id="cleaning"
             title="Service & availability"
-            description="Posting a cleaning service is free. Prices are shown to customers; nothing is charged on HavenHub yet."
+            description="Posting a cleaning service is free. Turn on online booking below to let customers book a day and pay on HavenHub."
           >
             <Field
               label="Service areas"
@@ -476,6 +472,23 @@ export function ExperienceForm({
                 />
               )}
             </Field>
+            <Field
+              label="Bookings a day"
+              optional
+              hint="The most online bookings you take on one day. Leave empty for no limit."
+              error={err('dailyCapacity')}
+            >
+              {(a) => (
+                <Input
+                  {...a}
+                  name="dailyCapacity"
+                  type="number"
+                  min={1}
+                  max={100}
+                  defaultValue={e?.cleaning?.dailyCapacity ?? ''}
+                />
+              )}
+            </Field>
             <div className="grid gap-5 sm:grid-cols-2">
               <Field label="Price (₦)" optional error={err('priceKobo')}>
                 {(a) => (
@@ -512,7 +525,7 @@ export function ExperienceForm({
           description={
             kind === 'CLEANING'
               ? 'Where your business is based.'
-              : 'Click the map to place the pin (optional).'
+              : 'Add the latitude and longitude from latlong.net (optional).'
           }
         >
           <Field
@@ -547,32 +560,12 @@ export function ExperienceForm({
             </Field>
           </div>
           {kind !== 'CLEANING' && (
-            <div>
-              <div className="h-64 overflow-hidden rounded-control border border-border">
-                <LocationMap
-                  latitude={point.lat}
-                  longitude={point.lng}
-                  onPick={locked ? undefined : (lat, lng) => setPoint({ lat, lng })}
-                />
-              </div>
-              <div className="mt-2 flex items-center justify-between gap-3 text-xs text-text-muted">
-                <span className={err('latitude') ? 'text-error' : undefined}>
-                  {err('latitude') ??
-                    (point.lat !== null
-                      ? `Pinned at ${point.lat.toFixed(5)}, ${point.lng!.toFixed(5)}`
-                      : 'No location pinned.')}
-                </span>
-                {point.lat !== null && !locked && (
-                  <button
-                    type="button"
-                    onClick={() => setPoint({ lat: null, lng: null })}
-                    className="font-medium text-text-secondary underline"
-                  >
-                    Remove pin
-                  </button>
-                )}
-              </div>
-            </div>
+            <CoordinatesField
+              value={point}
+              onChange={setPoint}
+              disabled={locked}
+              error={err('latitude') ?? err('longitude')}
+            />
           )}
         </Section>
 

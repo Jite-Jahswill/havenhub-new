@@ -309,7 +309,9 @@ export function ConversationThread({
           ? area === 'admin'
             ? '/admin/support'
             : '/help'
-          : `/${area}/bookings/${ctx.booking.id}`;
+          : ctx.type === 'AGENT'
+            ? `/agents/${ctx.agent.id}`
+            : `/${area}/bookings/${ctx.booking.id}`;
   const closed = conversation.status === 'CLOSED';
 
   return (

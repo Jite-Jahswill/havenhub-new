@@ -55,6 +55,7 @@ export const experienceCardSelect = (now: Date) =>
     },
     hotel: { select: { roomTypes: { select: { priceKobo: true } } } },
     cleaning: { select: { priceKobo: true, priceNote: true, serviceAreas: true } },
+    packageItems: { select: { priceKobo: true } },
   }) satisfies Prisma.ExperienceSelect;
 
 export type ExperienceCardRow = Prisma.ExperienceGetPayload<{
@@ -66,6 +67,7 @@ export const AGENT_EXPERIENCE_INCLUDE = {
   images: ordered,
   videos: ordered,
   amenities: { select: { amenityId: true } },
+  packageItems: { orderBy: { sortOrder: 'asc' } },
   event: { include: { ticketTypes: { orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }] } } },
   tour: { include: { dates: { orderBy: { startsAt: 'asc' } } } },
   hotel: {

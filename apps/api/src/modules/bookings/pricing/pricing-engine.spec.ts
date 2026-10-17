@@ -7,6 +7,7 @@ import {
   applyBps,
   discountedUnit,
   formatBps,
+  priceExperience,
   priceStay,
   type PricingInput,
   type PricingRates,
@@ -238,5 +239,47 @@ describe('kobo precision', () => {
     expect(formatBps(1000)).toBe('10%');
     expect(formatBps(1234)).toBe('12.34%');
     expect(formatBps(5)).toBe('0.05%');
+  });
+});
+
+describe('priceExperience', () => {
+  const tourFee = {
+    kind: 'PACKAGE_ITEM' as const,
+    label: 'Tour fee (2 days × 3 people)',
+    quantity: 6,
+    unitAmountKobo: 1_000_000n,
+    amountKobo: 6_000_000n,
+  };
+  const transport = {
+    kind: 'PACKAGE_ITEM' as const,
+    label: 'Transport (2 days)',
+    quantity: 2,
+    unitAmountKobo: 500_000n,
+    amountKobo: 1_000_000n,
+  };
+
+  it('sums the chosen items, then adds the fee and VAT like a stay', () => {
+    const r = priceExperience({ lines: [tourFee, transport], discountPercent: null, rates });
+    expect(r.stayKobo).toBe(7_000_000n);
+    expect(r.serviceFeeKobo).toBe(700_000n);
+    expect(r.vatKobo).toBe(52_500n);
+    expect(r.totalKobo).toBe(7_752_500n);
+    expect(r.agentCommissionKobo).toBe(350_000n);
+    expect(r.agentPayoutKobo).toBe(6_650_000n);
+    expect(r.cautionKobo + r.cleaningKobo + r.agencyFeeKobo).toBe(0n);
+    expect(r.lines.reduce((s, l) => s + l.amountKobo, 0n)).toBe(r.totalKobo);
+  });
+
+  it('applies the listing discount to the items', () => {
+    const r = priceExperience({ lines: [tourFee, transport], discountPercent: 10, rates });
+    expect(r.discountKobo).toBe(700_000n);
+    expect(r.stayKobo).toBe(6_300_000n);
+    expect(r.lines.find((l) => l.kind === 'LISTING_DISCOUNT')!.amountKobo).toBe(-700_000n);
+  });
+
+  it('needs at least one priced item', () => {
+    expect(() => priceExperience({ lines: [], discountPercent: null, rates })).toThrow(
+      PricingError,
+    );
   });
 });

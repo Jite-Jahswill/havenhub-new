@@ -13,6 +13,7 @@ import { notFound } from 'next/navigation';
 import { ExperienceForm } from '@/components/agent-experiences/experience-form';
 import { ExperienceStatusPanel } from '@/components/agent-experiences/experience-status-panel';
 import { HotelRoomsManager } from '@/components/agent-experiences/hotel-rooms-manager';
+import { PackageItemsEditor } from '@/components/agent-experiences/package-items-editor';
 import { TicketTypesEditor } from '@/components/agent-experiences/ticket-types-editor';
 import { TourDatesEditor } from '@/components/agent-experiences/tour-dates-editor';
 import { MediaManager } from '@/components/agent-properties/media-manager';
@@ -82,6 +83,7 @@ export default async function EditExperiencePage({
           {experience.kind === 'HOTEL' && (
             <HotelRoomsManager experience={experience} locked={locked} />
           )}
+          <PackageItemsEditor experience={experience} locked={locked} />
           <ExperienceForm
             kind={experience.kind}
             experience={experience}

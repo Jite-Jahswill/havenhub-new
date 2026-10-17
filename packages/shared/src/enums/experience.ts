@@ -109,8 +109,36 @@ export const EXPERIENCE_ENTITLEMENT = {
  * Technical anti-abuse bounds (not business rules): they keep any one
  * request, page and listing to a sane size.
  */
+/** What a package item covers; each is priced per day. */
+export const PackageItemCategory = {
+  TOUR_FEE: 'TOUR_FEE',
+  ACCOMMODATION: 'ACCOMMODATION',
+  FOOD: 'FOOD',
+  TRANSPORT: 'TRANSPORT',
+  OTHER: 'OTHER',
+} as const;
+export type PackageItemCategory = (typeof PackageItemCategory)[keyof typeof PackageItemCategory];
+
+export const PACKAGE_ITEM_CATEGORY_LABELS: Record<PackageItemCategory, string> = {
+  TOUR_FEE: 'Tour / entry fee',
+  ACCOMMODATION: 'Place to stay',
+  FOOD: 'Food',
+  TRANSPORT: 'Transport',
+  OTHER: 'Other',
+};
+
+/** Kinds that can be booked and paid for online (when the agent switches it on). */
+export const BOOKABLE_EXPERIENCE_KINDS = ['TOUR', 'EVENT', 'HOTEL', 'CLEANING'] as const;
+export type BookableExperienceKind = (typeof BOOKABLE_EXPERIENCE_KINDS)[number];
+
 export const EXPERIENCE_LIMITS = {
   images: 30,
+  packageItems: 20,
+  /** Longest experience booking, in days (nights for hotels). */
+  bookingDays: 30,
+  /** Most people (tours, events) or rooms (hotels) in one booking. */
+  bookingPeople: 50,
+  bookingRooms: 10,
   videos: 10,
   ticketTypes: 10,
   tourDates: 200,

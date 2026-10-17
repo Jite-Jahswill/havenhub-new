@@ -52,7 +52,22 @@ export class PublicReviewsController {
   }
 }
 
-/** The customer reviews their own completed stay. */
+/** Public: a tour's, event's, hotel's or cleaning service's published reviews. */
+@Public()
+@Controller('experiences')
+export class PublicExperienceReviewsController {
+  constructor(private readonly reviews: ReviewsService) {}
+
+  @Get(':slug/reviews')
+  async list(
+    @Param('slug') slug: string,
+    @Query(validate(propertyReviewsQuerySchema)) query: Out<typeof propertyReviewsQuerySchema>,
+  ) {
+    return ok(await this.reviews.forExperience(slug.slice(0, 160), query.page, query.pageSize));
+  }
+}
+
+/** The customer reviews their own completed booking. */
 @Controller('bookings')
 @AccountTypes(AccountType.CUSTOMER)
 @RequireVerifiedEmail()

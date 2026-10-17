@@ -22,6 +22,8 @@ describe('enum parity between @havenhub/shared and Prisma', () => {
     ['ParticipantRole', shared.ParticipantRole, db.ParticipantRole],
     ['MessageType', shared.MessageType, db.MessageType],
     ['AttachmentKind', shared.AttachmentKind, db.AttachmentKind],
+    ['PriceLineKind', shared.PriceLineKind, db.PriceLineKind],
+    ['PackageItemCategory', shared.PackageItemCategory, db.PackageItemCategory],
   ])('%s', (_, sharedEnum, dbEnum) => {
     expect(Object.values(sharedEnum).sort()).toEqual(Object.values(dbEnum).sort());
   });

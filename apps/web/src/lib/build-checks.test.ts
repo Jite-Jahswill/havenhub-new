@@ -22,12 +22,21 @@ describe('productionBuildProblems', () => {
     }
   });
 
-  it('requires a Mapbox token instead of falling back to OpenStreetMap tiles', () => {
+  it('requires a Google Maps key or a Mapbox token instead of OpenStreetMap tiles', () => {
     for (const value of [undefined, '', '   ']) {
       expect(productionBuildProblems({ ...valid, NEXT_PUBLIC_MAPBOX_TOKEN: value })).toEqual([
-        expect.stringMatching(/^NEXT_PUBLIC_MAPBOX_TOKEN is required for a production build/),
+        expect.stringMatching(
+          /^NEXT_PUBLIC_GOOGLE_MAPS_API_KEY \(or NEXT_PUBLIC_MAPBOX_TOKEN\) is required/,
+        ),
       ]);
     }
+    expect(
+      productionBuildProblems({
+        ...valid,
+        NEXT_PUBLIC_MAPBOX_TOKEN: undefined,
+        NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: 'AIza-public-key',
+      }),
+    ).toEqual([]);
   });
 
   it('keeps refusing development API and site URLs, and reports every problem', () => {

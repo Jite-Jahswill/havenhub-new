@@ -72,9 +72,8 @@ export default async function PromotionsPage({ searchParams }: PageProps<'/agent
                     </Td>
                     <Td>{c.label}</Td>
                     <Td className="text-sm text-text-secondary">
-                      {c.properties.length
-                        ? c.properties.map((p) => p.title).join(', ')
-                        : 'All rentals'}
+                      {[...c.properties, ...c.experiences].map((p) => p.title).join(', ') ||
+                        'All your listings'}
                     </Td>
                     <Td className="text-right tabular-nums">
                       {c.redeemed}

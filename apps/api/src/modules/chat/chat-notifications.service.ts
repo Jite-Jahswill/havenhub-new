@@ -7,6 +7,7 @@ import { MailService } from '../../infrastructure/mail/mail.service';
 import { MailTemplates } from '../../infrastructure/mail/mail.templates';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import { RedisService } from '../../infrastructure/redis/redis.service';
+import { agentDisplayName } from '../properties/property.selects';
 import { chatDisplayName } from './chat.mapper';
 import { PlatformPoliciesService } from '../platform/platform-policies.service';
 
@@ -114,6 +115,7 @@ export class ChatNotificationsService implements ChatNotificationChannel {
             property: { select: { title: true } },
             booking: { select: { reference: true } },
             experience: { select: { title: true } },
+            agentProfile: { select: { businessName: true, user: { select: { fullName: true } } } },
           },
         },
       },
@@ -146,7 +148,9 @@ export class ChatNotificationsService implements ChatNotificationChannel {
         ? `booking ${c.booking.reference}`
         : c.contextType === 'SUPPORT'
           ? 'your HavenHub support request'
-          : `“${c.property?.title ?? c.experience?.title ?? 'a listing'}”`;
+          : c.contextType === 'AGENT' && c.agentProfile
+            ? `your conversation with ${agentDisplayName(c.agentProfile)}`
+            : `“${c.property?.title ?? c.experience?.title ?? 'a listing'}”`;
     const area =
       participant.user.accountType === 'AGENT'
         ? 'agent'

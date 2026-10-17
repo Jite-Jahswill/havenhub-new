@@ -12,6 +12,7 @@ const code = (over: Partial<CodeFacts> = {}): CodeFacts => ({
   agentProfileIds: [],
   ownerAgentProfileId: null,
   propertyIds: [],
+  experienceIds: [],
   startsAt: null,
   endsAt: null,
   maxRedemptions: null,
@@ -111,5 +112,25 @@ describe('evaluateCode for property bookings', () => {
       'This code does not apply to this property.',
     );
     expect(reason(promo({ propertyIds: ['prop-2', 'prop-1'] }), use(property))).toBeNull();
+  });
+
+  it('covers the agent’s tours, events, hotels and cleaning too, or only those listed', () => {
+    const tour: UseTarget = {
+      kind: 'EXPERIENCE',
+      experienceId: 'exp-1',
+      ownerAgentProfileId: 'owner-1',
+    };
+    expect(reason(promo(), use(tour))).toBeNull();
+    expect(reason(promo({ experienceIds: ['exp-1'] }), use(tour))).toBeNull();
+    expect(reason(promo({ experienceIds: ['exp-2'] }), use(tour))).toBe(
+      'This code does not apply to this listing.',
+    );
+    // Limited to some properties only: not valid on experiences, and vice versa.
+    expect(reason(promo({ propertyIds: ['prop-1'] }), use(tour))).toBe(
+      'This code does not apply to this listing.',
+    );
+    expect(reason(promo({ experienceIds: ['exp-1'] }), use(property))).toBe(
+      'This code does not apply to this property.',
+    );
   });
 });

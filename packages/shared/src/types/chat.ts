@@ -41,6 +41,7 @@ export type ConversationContextView =
       };
     }
   | { type: 'SUPPORT' }
+  | { type: 'AGENT'; agent: { id: string; displayName: string } }
   | {
       type: 'BOOKING';
       booking: {

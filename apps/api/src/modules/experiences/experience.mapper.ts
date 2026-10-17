@@ -1,3 +1,8 @@
+import {
+  BOOKABLE_EXPERIENCE_KINDS,
+  type ExperienceKind,
+  type PackageItemView,
+} from '@havenhub/shared';
 import type {
   AgentExperienceListItem,
   AgentExperienceView,
@@ -11,6 +16,7 @@ import type {
 
 import type {
   CleaningService,
+  ExperiencePackageItem,
   Event,
   EventTicketType,
   HotelRoom,
@@ -37,6 +43,41 @@ export const toExperienceImageView = (image: ExperienceImage, urls: Urls) =>
   toImageView({ ...image, propertyId: image.experienceId }, urls);
 export const toExperienceVideoView = (video: ExperienceVideo) =>
   toVideoView({ ...video, propertyId: video.experienceId });
+
+export const toPackageItemView = (item: ExperiencePackageItem): PackageItemView => ({
+  id: item.id,
+  category: item.category,
+  name: item.name,
+  description: item.description,
+  priceKobo: Number(item.priceKobo),
+  perPerson: item.perPerson,
+});
+
+/**
+ * Whether a listing can be booked online: the agent switched it on and there
+ * is something to pay for — package items for a tour, a ticket type or items
+ * for an event, a room type with rooms for a hotel, a price or items for
+ * cleaning.
+ */
+export function canBookOnline(row: {
+  kind: ExperienceKind;
+  onlineBooking: boolean;
+  packageItems: unknown[];
+  event?: { ticketTypes: unknown[] } | null;
+  hotel?: { roomTypes: { _count: { rooms: number } }[] } | null;
+  cleaning?: { priceKobo: bigint | null } | null;
+}): boolean {
+  if (!row.onlineBooking || !(BOOKABLE_EXPERIENCE_KINDS as readonly string[]).includes(row.kind)) {
+    return false;
+  }
+  if (row.kind === 'HOTEL') return !!row.hotel?.roomTypes.some((t) => t._count.rooms > 0);
+  if (row.kind === 'CLEANING') {
+    return (row.cleaning?.priceKobo ?? 0n) > 0n || row.packageItems.length > 0;
+  }
+  if (row.kind === 'EVENT')
+    return (row.event?.ticketTypes.length ?? 0) > 0 || row.packageItems.length > 0;
+  return row.packageItems.length > 0;
+}
 
 export function toEventDetails(
   event: Event & { ticketTypes: EventTicketType[] },
@@ -104,6 +145,7 @@ export function toCleaningDetails(c: CleaningService): CleaningDetailsView {
     serviceAreas: c.serviceAreas,
     availableDays: c.availableDays,
     availabilityNote: c.availabilityNote,
+    dailyCapacity: c.dailyCapacity,
   };
 }
 
@@ -114,6 +156,10 @@ export function toExperienceCard(row: ExperienceCardRow, urls: Urls): Experience
   let priceNote: string | null = null;
   if (row.event) price = minOf(row.event.ticketTypes.map((t) => t.priceKobo));
   if (row.tour) [price, priceNote] = [num(row.tour.priceKobo), row.tour.priceNote];
+  // A tour priced only through package items: its cheapest item, per day.
+  if (row.tour && price === null && row.packageItems.length) {
+    [price, priceNote] = [minOf(row.packageItems.map((i) => i.priceKobo)), 'per day'];
+  }
   if (row.hotel) [price, priceNote] = [minOf(row.hotel.roomTypes.map((t) => t.priceKobo)), null];
   if (row.cleaning) [price, priceNote] = [num(row.cleaning.priceKobo), row.cleaning.priceNote];
   return {
@@ -158,6 +204,8 @@ export function toAgentExperienceView(row: AgentExperienceRow, urls: Urls): Agen
     title: row.title,
     description: row.description,
     discountPercent: row.discountPercent,
+    onlineBooking: row.onlineBooking,
+    packageItems: row.packageItems.map(toPackageItemView),
     addressLine: row.addressLine,
     city: row.city,
     state: row.state,

@@ -11,9 +11,13 @@ export async function generateMetadata({
   return experienceMetadata(await getExperience((await params).slug));
 }
 
-export default async function CleaningDetailPage({ params }: PageProps<'/cleaning/[slug]'>) {
+export default async function CleaningDetailPage({
+  params,
+  searchParams,
+}: PageProps<'/cleaning/[slug]'>) {
   const item = await getExperience((await params).slug);
   if (!item) notFound();
   if (item.kind !== 'CLEANING') permanentRedirect(experiencePath(item.kind, item.slug));
-  return <ExperienceDetailPage item={item} />;
+  const reviewPage = Number((await searchParams).reviews) || 1;
+  return <ExperienceDetailPage item={item} reviewPage={reviewPage} />;
 }

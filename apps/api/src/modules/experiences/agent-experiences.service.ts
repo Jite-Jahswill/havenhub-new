@@ -11,6 +11,7 @@ import {
   type ExperienceAllowance,
   type ExperienceKind,
   type createExperienceSchema,
+  type replacePackageItemsSchema,
   type replaceTicketTypesSchema,
   type replaceTourDatesSchema,
   type updateExperienceSchema,
@@ -360,6 +361,46 @@ export class AgentExperiencesService {
   }
 
   /**
+   * Replaces the package items of a listing (tour fee, food, place to stay,
+   * transport, cleaning extras…), each priced per day. Bookings keep their own
+   * snapshot, so replacing items never changes an existing booking. Prices
+   * are public content: a published listing goes back to review.
+   */
+  async replacePackageItems(
+    userId: string,
+    id: string,
+    input: z.output<typeof replacePackageItemsSchema>,
+    meta: RequestMeta,
+  ): Promise<AgentExperienceView> {
+    const agent = await this.agents.agentFor(userId);
+    this.agents.assertCanManage(agent);
+    return this.edit(
+      userId,
+      agent,
+      id,
+      meta,
+      'experience.package_items_replaced',
+      async (tx) => {
+        await tx.experiencePackageItem.deleteMany({ where: { experienceId: id } });
+        if (input.items.length) {
+          await tx.experiencePackageItem.createMany({
+            data: input.items.map((item, index) => ({
+              experienceId: id,
+              category: item.category,
+              name: item.name,
+              description: item.description ?? null,
+              priceKobo: BigInt(item.priceKobo),
+              perPerson: item.perPerson,
+              sortOrder: index,
+            })),
+          });
+        }
+        return true;
+      },
+    );
+  }
+
+  /**
    * Replaces a tour's upcoming dates (its availability). Past dates stay as
    * history. Availability is operational, so a published tour stays live.
    */
@@ -465,6 +506,7 @@ function commonColumns(input: Partial<UpdateInput>): Columns {
   assign('title', input.title);
   assign('description', input.description);
   assign('discountPercent', input.discountPercent);
+  assign('onlineBooking', input.onlineBooking);
   assign('addressLine', input.addressLine);
   assign('city', input.city);
   assign('state', input.state);

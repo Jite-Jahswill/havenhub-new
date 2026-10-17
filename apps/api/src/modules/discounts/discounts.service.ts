@@ -231,6 +231,20 @@ export class DiscountsService {
     meta: RequestMeta,
   ): Promise<AdminDiscountCodeDetail> {
     const propertyIds = [...new Set(input.propertyIds ?? [])];
+    const experienceIds = [...new Set(input.experienceIds ?? [])];
+    if (experienceIds.length > 0) {
+      const owned = await this.prisma.experience.count({
+        where: { id: { in: experienceIds }, agentProfileId },
+      });
+      if (owned !== experienceIds.length) {
+        throw new AppException(
+          HttpStatus.UNPROCESSABLE_ENTITY,
+          ErrorCode.VALIDATION_ERROR,
+          'Choose your own listings only.',
+          { issues: [{ path: 'experienceIds', message: 'Choose your own listings only' }] },
+        );
+      }
+    }
     if (propertyIds.length > 0) {
       const owned = await this.prisma.property.count({
         where: { id: { in: propertyIds }, agentProfileId },
@@ -249,6 +263,7 @@ export class DiscountsService {
       ownerKey: agentProfileId,
       ownerAgentProfileId: agentProfileId,
       propertyIds,
+      experienceIds,
       description: input.description ?? null,
       percentOff: input.percentOff ?? null,
       amountOffKobo: input.amountOffKobo == null ? null : BigInt(input.amountOffKobo),
@@ -458,38 +473,44 @@ export class DiscountsService {
     if (rows.length === 0) return [];
     const ids = rows.map((r) => r.id);
     const now = new Date();
-    const [plans, agents, properties, redeemed, pending, creators] = await Promise.all([
-      this.prisma.subscriptionPlan.findMany({
-        where: { id: { in: [...new Set(rows.flatMap((r) => r.planIds))] } },
-        select: { id: true, name: true },
-      }),
-      this.prisma.agentProfile.findMany({
-        where: { id: { in: [...new Set(rows.flatMap((r) => r.agentProfileIds))] } },
-        select: AGENT_SELECT,
-      }),
-      this.prisma.property.findMany({
-        where: { id: { in: [...new Set(rows.flatMap((r) => r.propertyIds))] } },
-        select: { id: true, title: true },
-      }),
-      this.prisma.discountRedemption.groupBy({
-        by: ['discountCodeId'],
-        where: { discountCodeId: { in: ids }, status: 'REDEEMED' },
-        _count: { _all: true },
-        _sum: { amountOffKobo: true },
-      }),
-      this.prisma.discountRedemption.groupBy({
-        by: ['discountCodeId'],
-        where: {
-          discountCodeId: { in: ids },
-          AND: [{ status: 'PENDING' }, countedUses(now)],
-        },
-        _count: { _all: true },
-      }),
-      this.prisma.user.findMany({
-        where: { id: { in: rows.flatMap((r) => (r.createdById ? [r.createdById] : [])) } },
-        select: { id: true, fullName: true },
-      }),
-    ]);
+    const [plans, agents, properties, experiences, redeemed, pending, creators] = await Promise.all(
+      [
+        this.prisma.subscriptionPlan.findMany({
+          where: { id: { in: [...new Set(rows.flatMap((r) => r.planIds))] } },
+          select: { id: true, name: true },
+        }),
+        this.prisma.agentProfile.findMany({
+          where: { id: { in: [...new Set(rows.flatMap((r) => r.agentProfileIds))] } },
+          select: AGENT_SELECT,
+        }),
+        this.prisma.property.findMany({
+          where: { id: { in: [...new Set(rows.flatMap((r) => r.propertyIds))] } },
+          select: { id: true, title: true },
+        }),
+        this.prisma.experience.findMany({
+          where: { id: { in: [...new Set(rows.flatMap((r) => r.experienceIds))] } },
+          select: { id: true, title: true },
+        }),
+        this.prisma.discountRedemption.groupBy({
+          by: ['discountCodeId'],
+          where: { discountCodeId: { in: ids }, status: 'REDEEMED' },
+          _count: { _all: true },
+          _sum: { amountOffKobo: true },
+        }),
+        this.prisma.discountRedemption.groupBy({
+          by: ['discountCodeId'],
+          where: {
+            discountCodeId: { in: ids },
+            AND: [{ status: 'PENDING' }, countedUses(now)],
+          },
+          _count: { _all: true },
+        }),
+        this.prisma.user.findMany({
+          where: { id: { in: rows.flatMap((r) => (r.createdById ? [r.createdById] : [])) } },
+          select: { id: true, fullName: true },
+        }),
+      ],
+    );
     return rows.map((r) => {
       const paid = redeemed.find((g) => g.discountCodeId === r.id);
       const amountOffKobo = r.amountOffKobo === null ? null : koboToNumber(r.amountOffKobo);
@@ -504,6 +525,7 @@ export class DiscountsService {
         plans: plans.filter((p) => r.planIds.includes(p.id)),
         agents: agents.filter((a) => r.agentProfileIds.includes(a.id)).map(agentRef),
         properties: properties.filter((p) => r.propertyIds.includes(p.id)),
+        experiences: experiences.filter((e) => r.experienceIds.includes(e.id)),
         startsAt: r.startsAt?.toISOString() ?? null,
         endsAt: r.endsAt?.toISOString() ?? null,
         maxRedemptions: r.maxRedemptions,
@@ -542,6 +564,7 @@ const snapshot = (r: DiscountCode) => ({
   scope: r.scope,
   ownerAgentProfileId: r.ownerAgentProfileId,
   propertyIds: r.propertyIds,
+  experienceIds: r.experienceIds,
   percentOff: r.percentOff,
   amountOffKobo: r.amountOffKobo?.toString() ?? null,
   planIds: r.planIds,

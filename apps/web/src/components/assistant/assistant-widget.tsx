@@ -9,6 +9,8 @@ import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 
 import { api } from '@/lib/api/client';
 
+import { OPEN_ASSISTANT_EVENT } from './open-assistant';
+
 type NewEntry = { from: 'user'; text: string } | { from: 'assistant'; reply: AssistantReply };
 type Entry = NewEntry & { id: number };
 
@@ -68,6 +70,11 @@ export function AssistantWidget({
   useEffect(() => {
     if (open) input.current?.focus();
   }, [open]);
+  useEffect(() => {
+    const show = () => setOpen(true);
+    window.addEventListener(OPEN_ASSISTANT_EVENT, show);
+    return () => window.removeEventListener(OPEN_ASSISTANT_EVENT, show);
+  }, []);
 
   if (HIDDEN_ON.some((re) => re.test(pathname))) return null;
 

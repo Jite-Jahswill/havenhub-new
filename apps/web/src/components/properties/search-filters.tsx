@@ -107,11 +107,7 @@ export function SearchFilters({
           aria-label="Search properties"
           className="h-12 rounded-full pr-28 pl-11"
         />
-        <Button
-          type="submit"
-          size="sm"
-          className="absolute top-1/2 right-1.5 -translate-y-1/2 rounded-full"
-        >
+        <Button type="submit" size="sm" className="absolute top-1.5 right-1.5 rounded-full">
           Search
         </Button>
       </form>

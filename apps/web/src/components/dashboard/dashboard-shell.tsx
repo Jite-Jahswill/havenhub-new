@@ -4,7 +4,7 @@ import type { AuthUser } from '@havenhub/shared';
 import { Badge, cn } from '@havenhub/ui';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import type { ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 
 import { UnreadMessagesBadge } from '@/components/chat/unread-badge';
 import { UnreadNotificationsBadge } from '@/components/notifications/unread-notifications-badge';
@@ -36,10 +36,24 @@ export function DashboardShell({ user, children }: { user: AuthUser; children: R
     .sort((a, b) => b.length - a.length)[0];
   const isActive = (item: NavItem) => item.href === activeHref;
 
+  // The sidebar scrolls on its own (desktop) and the tab row sideways (mobile):
+  // keep the active item in view after each navigation.
+  const panelRef = useRef<HTMLDivElement>(null);
+  const tabsRef = useRef<HTMLUListElement>(null);
+  useEffect(() => {
+    const desktop = window.matchMedia('(min-width: 64rem)').matches;
+    const box = desktop ? panelRef.current : tabsRef.current;
+    const link = tabsRef.current?.querySelector<HTMLElement>('[aria-current="page"]');
+    if (box && link) revealWithin(box, link, desktop ? 'y' : 'x');
+  }, [activeHref]);
+
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-4 py-8 sm:px-6 lg:flex-row lg:gap-12 lg:px-8 lg:py-12">
       <aside className="lg:w-60 lg:shrink-0">
-        <div className="lg:sticky lg:top-26">
+        <div
+          ref={panelRef}
+          className="lg:sticky lg:top-26 lg:-mx-2 lg:max-h-[calc(100dvh-8rem)] lg:[scrollbar-width:thin] lg:overflow-y-auto lg:overscroll-contain lg:px-2 lg:pb-4"
+        >
           <div className="mb-4 flex items-center justify-between gap-4 lg:hidden">
             <p className="min-w-0 truncate text-sm text-text-secondary">
               <span className="font-semibold text-text">{user.fullName}</span> ·{' '}
@@ -57,7 +71,10 @@ export function DashboardShell({ user, children }: { user: AuthUser; children: R
           </div>
 
           <nav aria-label={TITLES[user.accountType]} className="lg:mt-8">
-            <ul className="-mx-4 flex gap-1 overflow-x-auto px-4 pb-1 lg:mx-0 lg:flex-col lg:overflow-visible lg:px-0">
+            <ul
+              ref={tabsRef}
+              className="-mx-4 flex gap-1 overflow-x-auto px-4 pb-1 lg:mx-0 lg:flex-col lg:overflow-visible lg:px-0"
+            >
               {items.map((item) => {
                 const active = isActive(item);
                 const Icon = item.icon;
@@ -107,6 +124,18 @@ export function DashboardShell({ user, children }: { user: AuthUser; children: R
       <div className="min-w-0 flex-1">{children}</div>
     </div>
   );
+}
+
+/** Scrolls `box` (not the page) just enough to show `el`, with a little breathing room. */
+function revealWithin(box: HTMLElement, el: HTMLElement, axis: 'x' | 'y') {
+  const b = box.getBoundingClientRect();
+  const e = el.getBoundingClientRect();
+  const pad = 48;
+  if (axis === 'y') {
+    if (e.top < b.top + pad) box.scrollTop -= b.top + pad - e.top;
+    else if (e.bottom > b.bottom - pad) box.scrollTop += e.bottom - (b.bottom - pad);
+  } else if (e.left < b.left + pad) box.scrollLeft -= b.left + pad - e.left;
+  else if (e.right > b.right - pad) box.scrollLeft += e.right - (b.right - pad);
 }
 
 export function PageHeader({

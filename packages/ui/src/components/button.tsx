@@ -14,8 +14,10 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const variantClasses: Record<ButtonVariant, string> = {
-  primary: 'bg-primary text-primary-foreground hover:bg-primary-hover shadow-card',
-  secondary: 'bg-surface text-text border border-border-strong hover:bg-surface-secondary',
+  primary:
+    'bg-primary text-primary-foreground hover:bg-primary-hover shadow-card hover:shadow-glow hover:-translate-y-px',
+  secondary:
+    'bg-surface text-text border border-border-strong hover:bg-surface-secondary hover:border-text-muted',
   ghost: 'bg-transparent text-text hover:bg-surface-secondary',
   danger: 'bg-surface text-error border border-error/40 hover:bg-error-subtle',
 };
@@ -32,8 +34,9 @@ export const buttonClasses = ({
   className,
 }: Pick<ButtonProps, 'variant' | 'size' | 'className'> = {}) =>
   cn(
-    'inline-flex items-center justify-center gap-2 rounded-control font-semibold',
-    'transition-colors duration-150 disabled:pointer-events-none disabled:opacity-50',
+    'inline-flex items-center justify-center gap-2 rounded-control font-semibold whitespace-nowrap',
+    'transition-[color,background-color,border-color,box-shadow,translate,scale] duration-150',
+    'active:translate-y-0 active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50',
     variantClasses[variant],
     sizeClasses[size],
     className,

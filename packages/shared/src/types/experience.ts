@@ -1,10 +1,12 @@
 import type {
   ExperienceKind,
   ExperienceStatus,
+  PackageItemCategory,
   TicketTypeKind,
   TourCategory,
   Weekday,
 } from '../enums/experience.js';
+import type { RatingSummary } from '../schemas/review.js';
 import type {
   AmenityView,
   ListingAgentView,
@@ -13,12 +15,22 @@ import type {
 } from './property.js';
 
 /**
- * Events & experiences API shapes (Phase 6). All money is integer kobo and
- * is a *listed* price for display: nothing can be bought or booked yet.
+ * Events & experiences API shapes. All money is integer kobo. Tours, events
+ * and hotels with online booking on can be booked and paid for.
  */
 
 export type ExperienceImageView = PropertyImageView;
 export type ExperienceVideoView = PropertyVideoView;
+
+/** Something a guest can add to a booking, priced per day (per person when `perPerson`). */
+export interface PackageItemView {
+  id: string;
+  category: PackageItemCategory;
+  name: string;
+  description: string | null;
+  priceKobo: number;
+  perPerson: boolean;
+}
 
 export interface TicketTypeView {
   id: string;
@@ -80,6 +92,8 @@ export interface CleaningDetailsView {
   serviceAreas: string[];
   availableDays: Weekday[];
   availabilityNote: string | null;
+  /** Online bookings accepted per day; null = no limit. */
+  dailyCapacity: number | null;
 }
 
 /** Compact public listing for cards. */
@@ -126,8 +140,12 @@ export interface ExperienceDetail extends ExperienceCard {
   tour: TourDetailsView | null;
   hotel: HotelDetailsView | null;
   cleaning: CleaningDetailsView | null;
-  /** Always false in this release: purchasing and booking come later. */
-  purchasable: false;
+  /** Package items guests can book (tours, events, hotels). */
+  packageItems: PackageItemView[];
+  /** True when this listing can be booked and paid for on HavenHub now. */
+  bookable: boolean;
+  /** Average of published reviews from completed bookings; null with none. */
+  rating: RatingSummary | null;
   updatedAt: string;
 }
 
@@ -153,6 +171,8 @@ export interface AgentExperienceView {
   title: string;
   description: string | null;
   discountPercent: number | null;
+  onlineBooking: boolean;
+  packageItems: PackageItemView[];
   addressLine: string | null;
   city: string | null;
   state: string | null;

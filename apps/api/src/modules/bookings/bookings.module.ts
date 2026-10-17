@@ -11,6 +11,7 @@ import { BookingQueriesService } from './booking-queries.service';
 import { BookingStateService } from './booking-state.service';
 import { BookingDiscoveryController, CustomerBookingsController } from './bookings.controller';
 import { BookingsService } from './bookings.service';
+import { ExperienceBookingsService } from './experience-bookings.service';
 
 @Module({
   imports: [FinanceModule, DiscountsModule, ReviewsModule],
@@ -24,6 +25,7 @@ import { BookingsService } from './bookings.service';
     AvailabilityService,
     BookingStateService,
     BookingsService,
+    ExperienceBookingsService,
     BookingQueriesService,
     BookingMaintenanceService,
   ],

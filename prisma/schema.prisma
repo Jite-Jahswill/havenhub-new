@@ -286,6 +286,7 @@ model AgentProfile {
   payoutAccount        PayoutAccount?
   properties           Property[]
   bookings             Booking[]
+  directConversations  Conversation[]
   earnings             AgentEarning[]
   subscriptions        AgentSubscription[]
   subscriptionPayments SubscriptionPayment[]
@@ -629,19 +630,28 @@ enum CancelledBy {
   SYSTEM
 }
 
-/// A reservation of a rental property for [startDate, endDate). Every amount
-/// is calculated by the API at creation and frozen here: later price or fee
-/// changes never alter an existing booking. Overlaps are prevented by the
-/// `bookings_no_overlap` exclusion constraint (see migration), not only by code.
+/// A reservation of a rental property, or of a tour/event/hotel stay, for
+/// [startDate, endDate). Exactly one of propertyId / experienceId is set
+/// (bookings_listing_check). Every amount is calculated by the API at
+/// creation and frozen here: later price or fee changes never alter an
+/// existing booking. Property overlaps are prevented by the
+/// `bookings_no_overlap` exclusion constraint (see migration), not only by
+/// code; experience capacity is checked under a lock on the listing.
 model Booking {
-  id             String        @id @default(uuid(7)) @db.Uuid
+  id              String        @id @default(uuid(7)) @db.Uuid
   /// Human-friendly reference shown to customers, e.g. "HH-7KQ2M9XD".
-  reference      String        @unique @db.VarChar(20)
-  customerId     String        @map("customer_id") @db.Uuid
-  propertyId     String        @map("property_id") @db.Uuid
+  reference       String        @unique @db.VarChar(20)
+  customerId      String        @map("customer_id") @db.Uuid
+  propertyId      String?       @map("property_id") @db.Uuid
+  experienceId    String?       @map("experience_id") @db.Uuid
+  /// Hotels: the room type booked and how many rooms (capacity checks).
+  hotelRoomTypeId String?       @map("hotel_room_type_id") @db.Uuid
+  rooms           Int?          @db.SmallInt
+  /// Experiences: what the customer chose (items, ticket, room type), frozen.
+  selection       Json?
   /// The property's owner when the booking was made.
-  agentProfileId String        @map("agent_profile_id") @db.Uuid
-  status         BookingStatus @default(AWAITING_PAYMENT)
+  agentProfileId  String        @map("agent_profile_id") @db.Uuid
+  status          BookingStatus @default(AWAITING_PAYMENT)
 
   pricingPeriod    PricingPeriod @map("pricing_period")
   startDate        DateTime      @map("start_date") @db.Date
@@ -664,7 +674,8 @@ model Booking {
   agentCommissionKobo BigInt   @map("agent_commission_kobo")
   agentPayoutKobo     BigInt   @map("agent_payout_kobo")
   pricingConfigId     String   @map("pricing_config_id") @db.Uuid
-  /// Title, address, unit price, discount and cleaning terms at booking time.
+  /// The listing at booking time: title, address, prices, terms. For
+  /// experience bookings it carries `kind` (TOUR/EVENT/HOTEL).
   propertySnapshot    Json     @map("property_snapshot")
   /// The agent's promo code used for this booking, and what it took off the stay.
   promoCode           String?  @map("promo_code") @db.VarChar(32)
@@ -683,7 +694,9 @@ model Booking {
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   customer           User                @relation("BookingCustomer", fields: [customerId], references: [id], onDelete: Restrict)
-  property           Property            @relation(fields: [propertyId], references: [id], onDelete: Restrict)
+  property           Property?           @relation(fields: [propertyId], references: [id], onDelete: Restrict)
+  experience         Experience?         @relation(fields: [experienceId], references: [id], onDelete: Restrict)
+  hotelRoomType      HotelRoomType?      @relation(fields: [hotelRoomTypeId], references: [id], onDelete: SetNull)
   agentProfile       AgentProfile        @relation(fields: [agentProfileId], references: [id], onDelete: Restrict)
   pricingConfig      PricingConfig       @relation(fields: [pricingConfigId], references: [id], onDelete: Restrict)
   lines              BookingLineItem[]
@@ -694,18 +707,40 @@ model Booking {
   conversations      Conversation[]
   discountRedemption DiscountRedemption?
   review             Review?
+  hotelRooms         BookingHotelRoom[]
 
   @@index([customerId, createdAt(sort: Desc)])
   @@index([agentProfileId, createdAt(sort: Desc)])
   @@index([propertyId, status, startDate])
+  @@index([experienceId, status, startDate])
+  @@index([hotelRoomTypeId, status, startDate])
   @@index([status, holdExpiresAt])
   @@index([status, endDate])
   @@index([createdAt])
   @@map("bookings")
 }
 
+/// The hotel rooms a booking holds. A room is held for the booking's dates
+/// while the booking holds dates (awaiting payment or paid); checked under a
+/// lock on the hotel when booking.
+model BookingHotelRoom {
+  bookingId String @map("booking_id") @db.Uuid
+  roomId    String @map("room_id") @db.Uuid
+
+  booking Booking   @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  room    HotelRoom @relation(fields: [roomId], references: [id], onDelete: Restrict)
+
+  @@id([bookingId, roomId])
+  @@index([roomId])
+  @@map("booking_hotel_rooms")
+}
+
 enum PriceLineKind {
   RENT
+  /// Experience bookings: a package item, event ticket or hotel room, per day.
+  PACKAGE_ITEM
+  TICKET
+  ROOM
   LISTING_DISCOUNT
   PROMO_DISCOUNT
   AGENCY_FEE
@@ -729,7 +764,7 @@ model BookingLineItem {
 
   booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
 
-  @@unique([bookingId, kind])
+  @@unique([bookingId, sortOrder])
   @@map("booking_line_items")
 }
 
@@ -1053,6 +1088,8 @@ enum ConversationContextType {
   EXPERIENCE
   /// Phase 7: a customer or agent asking HavenHub support for help.
   SUPPORT
+  /// A customer messaging an agent directly (no listing or booking).
+  AGENT
 }
 
 enum ConversationStatus {
@@ -1090,6 +1127,7 @@ model Conversation {
   propertyId     String?                 @map("property_id") @db.Uuid
   bookingId      String?                 @map("booking_id") @db.Uuid
   experienceId   String?                 @map("experience_id") @db.Uuid
+  agentProfileId String?                 @map("agent_profile_id") @db.Uuid
   /// Deterministic identity for get-or-create (e.g. "property:<id>:customer:<id>").
   contextKey     String                  @unique @map("context_key") @db.VarChar(160)
   status         ConversationStatus      @default(OPEN)
@@ -1106,6 +1144,7 @@ model Conversation {
   property     Property?                 @relation(fields: [propertyId], references: [id], onDelete: Restrict)
   booking      Booking?                  @relation(fields: [bookingId], references: [id], onDelete: Restrict)
   experience   Experience?               @relation(fields: [experienceId], references: [id], onDelete: Restrict)
+  agentProfile AgentProfile?             @relation(fields: [agentProfileId], references: [id], onDelete: Restrict)
   closedBy     User?                     @relation("ConversationCloser", fields: [closedById], references: [id], onDelete: SetNull)
   lastMessage  Message?                  @relation("ConversationLastMessage", fields: [lastMessageId], references: [id], onDelete: SetNull)
   participants ConversationParticipant[]
@@ -1116,6 +1155,7 @@ model Conversation {
   @@index([propertyId])
   @@index([bookingId])
   @@index([experienceId])
+  @@index([agentProfileId])
   @@map("conversations")
 }
 
@@ -1295,9 +1335,13 @@ model Experience {
   status          ExperienceStatus @default(DRAFT)
   title           String           @db.VarChar(120)
   description     String?          @db.VarChar(5000)
-  /// "X% off" shown on the listing (1–90). Customers arrange payment with the
-  /// provider; there is no experience checkout yet.
+  /// "X% off" shown on the listing (1–90); applied to online bookings.
   discountPercent Int?             @map("discount_percent") @db.SmallInt
+  /// Customers may book and pay on HavenHub.
+  onlineBooking   Boolean          @default(false) @map("online_booking")
+  /// Published reviews from completed bookings (hidden ones excluded).
+  ratingSum       Int              @default(0) @map("rating_sum")
+  reviewCount     Int              @default(0) @map("review_count")
 
   addressLine String?  @map("address_line") @db.VarChar(240)
   city        String?  @db.VarChar(100)
@@ -1325,11 +1369,41 @@ model Experience {
   amenities     ExperienceAmenity[]
   zones         VacationZoneExperience[]
   conversations Conversation[]
+  packageItems  ExperiencePackageItem[]
+  bookings      Booking[]
+  reviews       Review[]
 
   @@index([agentProfileId, kind, status])
   @@index([kind, status, publishedAt(sort: Desc)])
   @@index([kind, status, state, city])
   @@map("experiences")
+}
+
+enum PackageItemCategory {
+  TOUR_FEE
+  ACCOMMODATION
+  FOOD
+  TRANSPORT
+  OTHER
+}
+
+/// Something a tour, event or hotel guest can add to a booking, priced per
+/// day (per person when `perPerson`). Customers take the full package or
+/// pick items. Bookings snapshot what they chose, so items can be replaced.
+model ExperiencePackageItem {
+  id           String              @id @default(uuid(7)) @db.Uuid
+  experienceId String              @map("experience_id") @db.Uuid
+  category     PackageItemCategory
+  name         String              @db.VarChar(80)
+  description  String?             @db.VarChar(300)
+  priceKobo    BigInt              @map("price_kobo")
+  perPerson    Boolean             @default(true) @map("per_person")
+  sortOrder    Int                 @default(0) @map("sort_order")
+
+  experience Experience @relation(fields: [experienceId], references: [id], onDelete: Cascade)
+
+  @@unique([experienceId, name])
+  @@map("experience_package_items")
 }
 
 model ExperienceImage {
@@ -1463,8 +1537,9 @@ model HotelRoomType {
   priceKobo   BigInt  @map("price_kobo")
   sortOrder   Int     @default(0) @map("sort_order")
 
-  hotel Hotel       @relation(fields: [hotelId], references: [experienceId], onDelete: Cascade)
-  rooms HotelRoom[]
+  hotel    Hotel       @relation(fields: [hotelId], references: [experienceId], onDelete: Cascade)
+  rooms    HotelRoom[]
+  bookings Booking[]
 
   @@unique([hotelId, name])
   @@map("hotel_room_types")
@@ -1483,6 +1558,7 @@ model HotelRoom {
   hotel        Hotel                   @relation(fields: [hotelId], references: [experienceId], onDelete: Cascade)
   roomType     HotelRoomType           @relation(fields: [roomTypeId], references: [id], onDelete: Restrict)
   availability HotelRoomAvailability[]
+  bookings     BookingHotelRoom[]
 
   @@unique([hotelId, label])
   @@index([roomTypeId])
@@ -1512,6 +1588,8 @@ model CleaningService {
   serviceAreas     String[]  @default([]) @map("service_areas")
   availableDays    Weekday[] @default([]) @map("available_days")
   availabilityNote String?   @map("availability_note") @db.VarChar(300)
+  /// Online bookings accepted per day; null = no limit.
+  dailyCapacity    Int?      @map("daily_capacity") @db.SmallInt
 
   experience Experience @relation(fields: [experienceId], references: [id], onDelete: Cascade)
 
@@ -2188,8 +2266,11 @@ model DiscountCode {
   ownerKey            String    @default("PLATFORM") @map("owner_key") @db.VarChar(40)
   /// Set for BOOKING codes: the agent who offers (and pays for) the discount.
   ownerAgentProfileId String?   @map("owner_agent_profile_id") @db.Uuid
-  /// BOOKING codes: the owner's properties it applies to; empty = all of them.
+  /// BOOKING codes: the owner's properties and experiences (tours, events,
+  /// hotels, cleaning) it applies to. Both empty = all of the owner's listings;
+  /// otherwise only the listed ones.
   propertyIds         String[]  @default([]) @map("property_ids") @db.Uuid
+  experienceIds       String[]  @default([]) @map("experience_ids") @db.Uuid
   /// Internal note for administrators (never shown to agents).
   description         String?   @db.VarChar(300)
   percentOff          Int?      @map("percent_off")
@@ -2299,7 +2380,9 @@ model Popup {
 model Review {
   id           String    @id @default(uuid(7)) @db.Uuid
   bookingId    String    @unique @map("booking_id") @db.Uuid
-  propertyId   String    @map("property_id") @db.Uuid
+  /// Exactly one of propertyId / experienceId (reviews_listing_check).
+  propertyId   String?   @map("property_id") @db.Uuid
+  experienceId String?   @map("experience_id") @db.Uuid
   customerId   String    @map("customer_id") @db.Uuid
   rating       Int       @db.SmallInt
   comment      String?   @db.VarChar(2000)
@@ -2311,12 +2394,14 @@ model Review {
   createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  booking  Booking  @relation(fields: [bookingId], references: [id], onDelete: Restrict)
-  property Property @relation(fields: [propertyId], references: [id], onDelete: Restrict)
-  customer User     @relation("ReviewAuthor", fields: [customerId], references: [id], onDelete: Restrict)
-  hiddenBy User?    @relation("ReviewModerator", fields: [hiddenById], references: [id], onDelete: SetNull)
+  booking    Booking     @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  property   Property?   @relation(fields: [propertyId], references: [id], onDelete: Restrict)
+  experience Experience? @relation(fields: [experienceId], references: [id], onDelete: Restrict)
+  customer   User        @relation("ReviewAuthor", fields: [customerId], references: [id], onDelete: Restrict)
+  hiddenBy   User?       @relation("ReviewModerator", fields: [hiddenById], references: [id], onDelete: SetNull)
 
   @@index([propertyId, status, createdAt(sort: Desc)])
+  @@index([experienceId, status, createdAt(sort: Desc)])
   @@index([status, createdAt(sort: Desc)])
   @@map("reviews")
 }

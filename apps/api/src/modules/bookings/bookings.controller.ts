@@ -16,6 +16,8 @@ import {
   bookingRequestSchema,
   cancelBookingSchema,
   createBookingSchema,
+  createExperienceBookingSchema,
+  experienceBookingRequestSchema,
   listBookingsQuerySchema,
 } from '@havenhub/shared';
 import type { Request } from 'express';
@@ -35,6 +37,7 @@ import {
 } from '../auth/decorators/auth.decorators';
 import { BookingQueriesService } from './booking-queries.service';
 import { BookingsService } from './bookings.service';
+import { ExperienceBookingsService } from './experience-bookings.service';
 
 const uuid = new ParseUUIDPipe();
 
@@ -42,7 +45,10 @@ const uuid = new ParseUUIDPipe();
 @Public()
 @Controller()
 export class BookingDiscoveryController {
-  constructor(private readonly bookings: BookingsService) {}
+  constructor(
+    private readonly bookings: BookingsService,
+    private readonly experiences: ExperienceBookingsService,
+  ) {}
 
   @Get('properties/:id/availability')
   @RateLimit({ name: 'availability:ip', limit: 120, windowSeconds: 60, by: 'ip' })
@@ -61,6 +67,18 @@ export class BookingDiscoveryController {
   async quote(@Body(validate(bookingRequestSchema)) body: z.output<typeof bookingRequestSchema>) {
     return ok(await this.bookings.quote(body));
   }
+
+  /** Tours, events and hotels: prices the chosen days, people/rooms and items. */
+  @Post('bookings/experience/quote')
+  @SkipCsrf()
+  @HttpCode(HttpStatus.OK)
+  @RateLimit({ name: 'quote:ip', limit: 120, windowSeconds: 60, by: 'ip' })
+  async experienceQuote(
+    @Body(validate(experienceBookingRequestSchema))
+    body: z.output<typeof experienceBookingRequestSchema>,
+  ) {
+    return ok(await this.experiences.quote(body));
+  }
 }
 
 /** The signed-in customer's own bookings. Ownership always comes from the session. */
@@ -70,8 +88,21 @@ export class BookingDiscoveryController {
 export class CustomerBookingsController {
   constructor(
     private readonly bookings: BookingsService,
+    private readonly experiences: ExperienceBookingsService,
     private readonly queries: BookingQueriesService,
   ) {}
+
+  @Post('experience')
+  @RateLimit({ name: 'booking-create:user', limit: 20, windowSeconds: 3600, by: 'user' })
+  async createExperience(
+    @CurrentAuth() auth: AuthContext,
+    @Body(validate(createExperienceBookingSchema))
+    body: z.output<typeof createExperienceBookingSchema>,
+    @Req() req: Request,
+  ) {
+    const id = await this.experiences.create(auth.user.id, body, requestMeta(req));
+    return ok(await this.queries.customerDetail(auth.user.id, id));
+  }
 
   @Post()
   @RateLimit({ name: 'booking-create:user', limit: 20, windowSeconds: 3600, by: 'user' })

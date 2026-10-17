@@ -9,6 +9,8 @@ export const ConversationContextType = {
   EXPERIENCE: 'EXPERIENCE',
   /** Phase 7: a customer or agent asking HavenHub support for help. */
   SUPPORT: 'SUPPORT',
+  /** A customer messaging an agent directly, without a listing or booking. */
+  AGENT: 'AGENT',
 } as const;
 export type ConversationContextType =
   (typeof ConversationContextType)[keyof typeof ConversationContextType];

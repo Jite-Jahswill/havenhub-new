@@ -19,8 +19,8 @@ export function PriceBreakdown({
   return (
     <div className={cn('text-sm', className)}>
       <dl className="flex flex-col gap-2">
-        {lines.map((line) => (
-          <div key={line.kind} className="flex items-baseline justify-between gap-4">
+        {lines.map((line, index) => (
+          <div key={`${line.kind}-${index}`} className="flex items-baseline justify-between gap-4">
             <dt className="text-text-secondary">
               {line.label}
               {line.quantity !== null && line.unitAmountKobo !== null && (

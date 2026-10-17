@@ -4,13 +4,19 @@ import { CmsModule } from '../cms/cms.module';
 import {
   AdminReviewsController,
   CustomerReviewsController,
+  PublicExperienceReviewsController,
   PublicReviewsController,
 } from './reviews.controller';
 import { ReviewsService } from './reviews.service';
 
 @Module({
   imports: [CmsModule],
-  controllers: [PublicReviewsController, CustomerReviewsController, AdminReviewsController],
+  controllers: [
+    PublicReviewsController,
+    PublicExperienceReviewsController,
+    CustomerReviewsController,
+    AdminReviewsController,
+  ],
   providers: [ReviewsService],
   exports: [ReviewsService],
 })

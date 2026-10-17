@@ -104,7 +104,7 @@ export const DEFAULT_SALES_DISCLAIMER =
   'it. Verify the property, its title documents and the agent before paying anything.';
 
 export const DEFAULT_ASSISTANT_GREETING =
-  'Hi, I’m the HavenHub assistant. Ask me about properties, tours, events and hotels, or about your bookings and refunds. For example: “2 bedroom flat in Lekki under 3m a year” or “Where is my refund?”';
+  'Hi, I’m the HavenHub assistant. Just type what you’re looking for and relax — I’ll find homes and tours within your budget. For example: “2 bedroom flat in Lekki under 3m a year” or “tours in Lagos under 50k”. I can also help with your bookings and refunds.';
 
 export const POLICY_DEFAULTS = {
   security: { passwordMinLength: 10, sessionDays: null },

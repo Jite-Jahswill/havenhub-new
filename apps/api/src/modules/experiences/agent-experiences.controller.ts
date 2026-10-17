@@ -22,6 +22,7 @@ import {
   createRoomSchema,
   createRoomTypeSchema,
   reorderExperienceImagesSchema,
+  replacePackageItemsSchema,
   replaceTicketTypesSchema,
   replaceTourDatesSchema,
   roomAvailabilityQuerySchema,
@@ -55,7 +56,7 @@ type Out<T extends z.ZodType> = z.output<T>;
 /**
  * The signed-in agent's events, tours, hotels and cleaning services. No agent
  * id in any route: ownership comes from the session, and other agents' ids
- * answer 404. Catalogue only — there is no purchase or booking endpoint.
+ * answer 404. Bookings are made by customers through /bookings/experience.
  */
 @Controller('agents/me/experiences')
 @AccountTypes(AccountType.AGENT)
@@ -151,6 +152,17 @@ export class AgentExperiencesController {
     @Req() req: Request,
   ) {
     return ok(await this.experiences.replaceTicketTypes(auth.user.id, id, body, requestMeta(req)));
+  }
+
+  /** Tours, events and hotels: what guests can book, priced per day. */
+  @Put(':id/package-items')
+  async replacePackageItems(
+    @CurrentAuth() auth: AuthContext,
+    @Param('id', uuid) id: string,
+    @Body(validate(replacePackageItemsSchema)) body: Out<typeof replacePackageItemsSchema>,
+    @Req() req: Request,
+  ) {
+    return ok(await this.experiences.replacePackageItems(auth.user.id, id, body, requestMeta(req)));
   }
 
   @Put(':id/tour-dates')

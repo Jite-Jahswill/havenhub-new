@@ -32,7 +32,7 @@ export default async function PromoCodePage({ params }: PageProps<'/agent/promot
     ['Discount', c.label],
     [
       'Properties',
-      c.properties.length ? c.properties.map((p) => p.title).join(', ') : 'All rentals',
+      [...c.properties, ...c.experiences].map((p) => p.title).join(', ') || 'All your listings',
     ],
     ['Starts', c.startsAt ? formatDate(c.startsAt) : 'Immediately'],
     ['Ends', c.endsAt ? formatDate(c.endsAt) : 'No end date'],

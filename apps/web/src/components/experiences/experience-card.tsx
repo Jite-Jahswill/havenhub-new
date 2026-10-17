@@ -27,13 +27,13 @@ export function ExperienceCard({
       : EXPERIENCE_KIND_LABELS[item.kind].one;
   return (
     <article className="group relative flex flex-col">
-      <div className="relative aspect-[4/3] overflow-hidden rounded-card bg-surface-secondary">
+      <div className="relative aspect-[4/3] overflow-hidden rounded-card bg-surface-secondary shadow-card transition-[translate,box-shadow] duration-300 group-hover:-translate-y-1 group-hover:shadow-overlay">
         {item.coverImage ? (
           <Photo
             src={item.coverImage.url}
             alt={item.coverImage.altText ?? item.title}
             priority={priority}
-            className="transition-transform duration-500 group-hover:scale-[1.03]"
+            className="transition-transform duration-500 group-hover:scale-[1.05]"
           />
         ) : (
           <div className="grid size-full place-items-center text-text-muted">

@@ -72,7 +72,7 @@ intended; fix the variable, do not work around the check):
 - [ ] SMTP: either `SMTP_HOST` + `SMTP_*`, or admin-managed SMTP (Settings → Outgoing email). The
       API refuses to start in production with neither.
 - [ ] Web (Vercel): `API_INTERNAL_URL` (the API's `https://` URL), `NEXT_PUBLIC_SITE_URL`,
-      `NEXT_PUBLIC_REALTIME_URL`, `NEXT_PUBLIC_MAPBOX_TOKEN`, `INTERNAL_API_SECRET`, and
+      `NEXT_PUBLIC_REALTIME_URL`, `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`, `INTERNAL_API_SECRET`, and
       `REVALIDATE_SECRET` (same value as the API's).
 - [ ] Optional database limits: `DATABASE_POOL_MAX`, `DATABASE_STATEMENT_TIMEOUT_MS`,
       `DATABASE_CONNECT_TIMEOUT_MS` (unset = driver defaults).

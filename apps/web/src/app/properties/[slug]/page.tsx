@@ -27,15 +27,16 @@ import { cache, type ReactNode } from 'react';
 
 import { BookingWidget } from '@/components/bookings/booking-widget';
 import { StartConversationButton } from '@/components/chat/start-conversation-button';
-import { LocationMapLazy } from '@/components/map/location-map-lazy';
+import { LocationMap } from '@/components/map/location-map';
 import { AgentAvatar } from '@/components/properties/agent-avatar';
 import { FavoriteButton } from '@/components/properties/favorite-button';
 import { Gallery } from '@/components/properties/gallery';
 import { PropertyBadges } from '@/components/properties/property-badges';
 import { PropertyCard } from '@/components/properties/property-card';
-import { Rating, Stars } from '@/components/properties/rating';
+import { Rating } from '@/components/properties/rating';
 import { ShareButton } from '@/components/properties/share-button';
 import { ViewBeacon } from '@/components/properties/view-beacon';
+import { ReviewsList } from '@/components/reviews/reviews-list';
 import { serverApi, serverApiData } from '@/lib/api/server';
 import { env } from '@/lib/env';
 import { discountedKobo, formatPrice } from '@/lib/format';
@@ -81,12 +82,6 @@ export async function generateMetadata({
     twitter: { card: property.coverImage ? 'summary_large_image' : 'summary', title, description },
   };
 }
-
-const REVIEW_DATE = new Intl.DateTimeFormat('en-NG', {
-  month: 'long',
-  year: 'numeric',
-  timeZone: 'Africa/Lagos',
-});
 
 export default async function PropertyPage({
   params,
@@ -243,44 +238,10 @@ export default async function PropertyPage({
 
           {reviews && reviews.total > 0 && (
             <Section title="Reviews">
-              <div id="reviews" className="flex flex-col gap-6">
-                <Rating rating={reviews.rating} long className="text-base" />
-                <ul className="flex flex-col gap-6">
-                  {reviews.items.map((r) => (
-                    <li key={r.id} className="flex flex-col gap-1.5">
-                      <div className="flex flex-wrap items-center gap-3">
-                        <Stars value={r.rating} />
-                        <span className="text-sm font-semibold text-text">{r.authorName}</span>
-                        <span className="text-xs text-text-muted">
-                          {REVIEW_DATE.format(new Date(r.createdAt))}
-                        </span>
-                      </div>
-                      {r.comment && (
-                        <p className="text-sm leading-relaxed whitespace-pre-line text-text-secondary">
-                          {r.comment}
-                        </p>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-                {reviews.totalPages > 1 && (
-                  <nav aria-label="More reviews" className="flex gap-4 text-sm">
-                    {reviews.page > 1 && (
-                      <Link href={`?reviews=${reviews.page - 1}#reviews`} className="underline">
-                        Newer reviews
-                      </Link>
-                    )}
-                    {reviews.page < reviews.totalPages && (
-                      <Link href={`?reviews=${reviews.page + 1}#reviews`} className="underline">
-                        Older reviews
-                      </Link>
-                    )}
-                  </nav>
-                )}
-                <p className="text-xs text-text-muted">
-                  Only guests who completed a paid stay booked on HavenHub can review.
-                </p>
-              </div>
+              <ReviewsList
+                reviews={reviews}
+                note="Only guests who completed a paid stay booked on HavenHub can review."
+              />
             </Section>
           )}
 
@@ -289,65 +250,15 @@ export default async function PropertyPage({
               {property.addressLine}, {property.lga}, {property.city}, {property.state}
             </p>
             <div className="h-80 overflow-hidden rounded-card border border-border">
-              <LocationMapLazy latitude={property.latitude} longitude={property.longitude} />
+              <LocationMap latitude={property.latitude} longitude={property.longitude} />
             </div>
           </Section>
 
-          <Section title="Listed by">
-            <Link
-              href={`/agents/${property.agent.id}`}
-              className="flex items-center gap-4 rounded-card border border-border p-5 hover:bg-surface-secondary"
-            >
-              <AgentAvatar name={property.agent.displayName} url={property.agent.avatarUrl} />
-              <div>
-                <p className="flex items-center gap-1.5 font-semibold text-text">
-                  {property.agent.displayName}
-                  <BadgeCheck aria-label="Verified agent" className="size-4.5 text-success" />
-                </p>
-                <p className="text-sm text-text-secondary">
-                  Verified agent · {property.agent.publishedPropertyCount} listing
-                  {property.agent.publishedPropertyCount === 1 ? '' : 's'} · Member since{' '}
-                  {new Date(property.agent.memberSince).getFullYear()}
-                </p>
-              </div>
-            </Link>
-            {property.saleContact && (
-              <div className="mt-4 flex flex-col gap-3 rounded-card border border-border p-5 text-sm">
-                {property.saleContact.contact ? (
-                  <div className="flex flex-col gap-2">
-                    {property.saleContact.contact.phone && (
-                      <a
-                        href={`tel:${property.saleContact.contact.phone}`}
-                        className="flex items-center gap-2 text-text hover:underline"
-                      >
-                        <Phone aria-hidden className="size-4" />{' '}
-                        {property.saleContact.contact.phone}
-                      </a>
-                    )}
-                    <a
-                      href={`mailto:${property.saleContact.contact.email}`}
-                      className="flex items-center gap-2 text-text hover:underline"
-                    >
-                      <Mail aria-hidden className="size-4" /> {property.saleContact.contact.email}
-                    </a>
-                  </div>
-                ) : (
-                  <Link
-                    href={`/login?next=${encodeURIComponent(`/properties/${property.slug}`)}`}
-                    className="font-medium text-primary hover:underline"
-                  >
-                    Sign in to see the agent’s phone and email
-                  </Link>
-                )}
-                <p
-                  role="note"
-                  className="rounded-control bg-surface-secondary p-3 text-xs whitespace-pre-line text-text-secondary"
-                >
-                  {property.saleContact.disclaimer}
-                </p>
-              </div>
-            )}
-          </Section>
+          {property.listingType !== 'SALE' && (
+            <Section title="Listed by">
+              <AgentCard agent={property.agent} />
+            </Section>
+          )}
         </div>
 
         <aside>
@@ -381,25 +292,31 @@ export default async function PropertyPage({
               </p>
             )}
             {property.listingType === 'SALE' ? (
-              <p className="text-sm text-text-secondary">
-                {property.saleContact
-                  ? 'This property is sold directly by the agent, not through HavenHub. Their contact details are under “Listed by”.'
-                  : 'This property is sold directly by the agent, not through HavenHub. Message the agent to ask about it.'}
-              </p>
+              <div className="flex flex-col gap-4">
+                <p className="text-sm text-text-secondary">
+                  This property is sold directly by the agent, not through HavenHub. Contact them to
+                  arrange a viewing.
+                </p>
+                <AgentCard agent={property.agent} />
+                {viewer !== 'other' && (
+                  <MessageAgent property={property} viewer={viewer} variant="primary" />
+                )}
+                {property.saleContact && (
+                  <SaleContact sale={property.saleContact} slug={property.slug} />
+                )}
+              </div>
             ) : (
-              <BookingWidget property={property} viewer={viewer} />
-            )}
-            {viewer !== 'other' && (
-              <StartConversationButton
-                context={{ contextType: 'PROPERTY', propertyId: property.id }}
-                area="account"
-                label="Message the agent"
-                guestHref={
-                  viewer === 'guest'
-                    ? `/login?next=${encodeURIComponent(`/properties/${property.slug}`)}`
-                    : undefined
-                }
-              />
+              <>
+                <BookingWidget property={property} viewer={viewer} />
+                {viewer !== 'other' && (
+                  <div className="flex flex-col gap-2">
+                    <MessageAgent property={property} viewer={viewer} />
+                    <p className="text-center text-xs text-text-muted">
+                      Ask the agent anything — you don’t need to book first.
+                    </p>
+                  </div>
+                )}
+              </>
             )}
           </Card>
         </aside>
@@ -418,6 +335,98 @@ export default async function PropertyPage({
         </section>
       )}
     </Container>
+  );
+}
+
+/** Opens a conversation with the listing's agent; no booking is needed. */
+function MessageAgent({
+  property,
+  viewer,
+  variant = 'secondary',
+}: {
+  property: PropertyDetail;
+  viewer: 'guest' | 'customer';
+  variant?: 'primary' | 'secondary';
+}) {
+  return (
+    <StartConversationButton
+      context={{ contextType: 'PROPERTY', propertyId: property.id }}
+      area="account"
+      label="Message the agent"
+      variant={variant}
+      guestHref={
+        viewer === 'guest'
+          ? `/login?next=${encodeURIComponent(`/properties/${property.slug}`)}`
+          : undefined
+      }
+    />
+  );
+}
+
+function AgentCard({ agent }: { agent: PropertyDetail['agent'] }) {
+  return (
+    <Link
+      href={`/agents/${agent.id}`}
+      className="flex items-center gap-4 rounded-card border border-border p-5 hover:bg-surface-secondary"
+    >
+      <AgentAvatar name={agent.displayName} url={agent.avatarUrl} />
+      <div>
+        <p className="flex items-center gap-1.5 font-semibold text-text">
+          {agent.displayName}
+          <BadgeCheck aria-label="Verified agent" className="size-4.5 text-success" />
+        </p>
+        <p className="text-sm text-text-secondary">
+          Verified agent · {agent.publishedPropertyCount} listing
+          {agent.publishedPropertyCount === 1 ? '' : 's'} · Member since{' '}
+          {new Date(agent.memberSince).getFullYear()}
+        </p>
+      </div>
+    </Link>
+  );
+}
+
+/** The agent's phone and email for a sale (signed-in viewers only) and the off-platform disclaimer. */
+function SaleContact({
+  sale,
+  slug,
+}: {
+  sale: NonNullable<PropertyDetail['saleContact']>;
+  slug: string;
+}) {
+  return (
+    <div className="flex flex-col gap-3 rounded-card border border-border p-5 text-sm">
+      {sale.contact ? (
+        <div className="flex flex-col gap-2">
+          {sale.contact.phone && (
+            <a
+              href={`tel:${sale.contact.phone}`}
+              className="flex items-center gap-2 text-text hover:underline"
+            >
+              <Phone aria-hidden className="size-4" /> {sale.contact.phone}
+            </a>
+          )}
+          <a
+            href={`mailto:${sale.contact.email}`}
+            className="flex items-center gap-2 text-text hover:underline"
+          >
+            <Mail aria-hidden className="size-4" /> {sale.contact.email}
+          </a>
+        </div>
+      ) : (
+        <Link
+          href={`/login?next=${encodeURIComponent(`/properties/${slug}`)}`}
+          className="font-medium text-primary hover:underline"
+        >
+          Sign in to see the agent’s phone and email
+        </Link>
+      )}
+      <p
+        role="note"
+        className="rounded-control bg-surface-secondary p-3 text-xs whitespace-pre-line text-text-secondary"
+      >
+        {sale.disclaimer}
+      </p>
+    </div>
   );
 }
 

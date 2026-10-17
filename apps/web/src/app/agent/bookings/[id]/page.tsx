@@ -57,11 +57,12 @@ export default async function AgentBookingPage({ params }: PageProps<'/agent/boo
       <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
         <div className="flex min-w-0 flex-col gap-6">
           <Card>
-            <CardHeader title="Stay" />
+            <CardHeader title={b.snapshot.kind === 'PROPERTY' ? 'Stay' : 'Booking'} />
             <CardBody>
               <StayDetails
                 booking={b}
                 snapshot={b.snapshot}
+                selection={b.selection}
                 guests={b.guests}
                 cleaningSelected={b.cleaningSelected}
               >

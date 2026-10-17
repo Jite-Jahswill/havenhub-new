@@ -10,7 +10,7 @@ import { DiscountsService } from '../discounts/discounts.service';
 import { bookingMessages } from '../notifications/notification-messages';
 import { NotificationsService } from '../notifications/notifications.service';
 import { assertTransition } from './booking-lifecycle';
-import type { StoredPropertySnapshot } from './booking.mapper';
+import { snapshotOf } from './booking.mapper';
 
 type Tx = Prisma.TransactionClient;
 
@@ -69,8 +69,8 @@ export class BookingStateService {
       await this.discounts.settle(tx, { bookingId: booking.id }, 'REDEEMED');
     } else if (to === BookingStatus.CANCELLED || to === BookingStatus.EXPIRED) {
       await this.discounts.settle(tx, { bookingId: booking.id }, 'RELEASED');
-    } else if (to === BookingStatus.COMPLETED) {
-      // A completed stay counts towards booking-based badges.
+    } else if (to === BookingStatus.COMPLETED && booking.propertyId) {
+      // A completed stay counts towards booking-based badges (properties only).
       await tx.property.update({
         where: { id: booking.propertyId },
         data: { completedBookings: { increment: 1 } },
@@ -93,7 +93,7 @@ export class BookingStateService {
       where: { id: booking.agentProfileId },
       select: { userId: true },
     });
-    const snapshot = booking.propertySnapshot as unknown as StoredPropertySnapshot;
+    const snapshot = snapshotOf(booking);
     await this.notifications.notify(
       tx,
       build({

@@ -5,6 +5,7 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { cache } from 'react';
 
+import { StartConversationButton } from '@/components/chat/start-conversation-button';
 import { AgentAvatar } from '@/components/properties/agent-avatar';
 import { PropertyCard } from '@/components/properties/property-card';
 import { ShareButton } from '@/components/properties/share-button';
@@ -69,9 +70,23 @@ export default async function AgentProfilePage({ params }: PageProps<'/agents/[i
             </div>
           </div>
         </div>
-        <div className="flex flex-col items-start gap-2 sm:items-end">
+        <div className="flex w-full flex-col items-stretch gap-2 sm:w-auto sm:items-end">
+          {viewer !== 'other' && (
+            <div className="sm:w-56">
+              <StartConversationButton
+                context={{ contextType: 'AGENT', agentId: agent.id }}
+                area="account"
+                label="Message agent"
+                variant="primary"
+                guestHref={
+                  viewer === 'guest'
+                    ? `/login?next=${encodeURIComponent(`/agents/${agent.id}`)}`
+                    : undefined
+                }
+              />
+            </div>
+          )}
           <ShareButton title={agent.displayName} />
-          <p className="text-xs text-text-muted">Direct messaging with agents is coming soon.</p>
         </div>
       </header>
 

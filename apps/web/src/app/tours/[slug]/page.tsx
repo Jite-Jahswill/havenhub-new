@@ -9,9 +9,13 @@ export async function generateMetadata({ params }: PageProps<'/tours/[slug]'>): 
   return experienceMetadata(await getExperience((await params).slug));
 }
 
-export default async function ToursDetailPage({ params }: PageProps<'/tours/[slug]'>) {
+export default async function ToursDetailPage({
+  params,
+  searchParams,
+}: PageProps<'/tours/[slug]'>) {
   const item = await getExperience((await params).slug);
   if (!item) notFound();
   if (item.kind !== 'TOUR') permanentRedirect(experiencePath(item.kind, item.slug));
-  return <ExperienceDetailPage item={item} />;
+  const reviewPage = Number((await searchParams).reviews) || 1;
+  return <ExperienceDetailPage item={item} reviewPage={reviewPage} />;
 }

@@ -212,3 +212,108 @@ export function formatBps(bps: number): string {
     .replace(/0+$/, '');
   return fraction ? `${whole}.${fraction}%` : `${whole}%`;
 }
+
+export interface ExperienceLineInput {
+  kind: 'PACKAGE_ITEM' | 'TICKET' | 'ROOM' | 'CLEANING_FEE';
+  label: string;
+  /** Days × people (or rooms); for hotel rooms, the nights × rooms. */
+  quantity: number;
+  /** Per unit (per day / night). Null when units are priced differently (hotel nights). */
+  unitAmountKobo: bigint | null;
+  amountKobo: bigint;
+}
+
+/**
+ * Tour, event, hotel and cleaning bookings. What the customer chose
+ * (package items, a ticket, rooms, cleaning visits) is the "stay"; the same
+ * rates then apply as for rentals:
+ *
+ *   items            Σ chosen lines (each priced per day)
+ *   listing discount  −the provider's "X% off" on the items
+ *   promo code        −the agent's promo discount on the items after the listing discount
+ *   = stay
+ *   + service fee     serviceFeeBps of the stay → HavenHub
+ *   + VAT             vatBps of the VAT base     → held for remittance
+ *   = customer total
+ *
+ *   agent payout = stay − commission. No cleaning, caution or agency fee.
+ */
+export function priceExperience(input: {
+  lines: ExperienceLineInput[];
+  discountPercent: number | null;
+  promo?: { code: string; label: string; amountOffKobo: bigint } | null;
+  rates: PricingRates;
+}): PricingResult {
+  const { rates } = input;
+  if (input.lines.length === 0) throw new PricingError('Choose at least one item');
+  const lines: PricedLine[] = [];
+  let rentKobo = 0n;
+  for (const line of input.lines) {
+    if (line.amountKobo <= 0n) throw new PricingError(`${line.label} has no price`);
+    rentKobo += line.amountKobo;
+    lines.push({
+      kind: line.kind,
+      label: line.label,
+      quantity: line.quantity,
+      unitAmountKobo: line.unitAmountKobo,
+      amountKobo: line.amountKobo,
+    });
+  }
+  const discountKobo = rentKobo - discountedUnit(rentKobo, input.discountPercent);
+  if (discountKobo > 0n) {
+    lines.push(
+      fixedLine(
+        PriceLineKind.LISTING_DISCOUNT,
+        `Listing discount (${input.discountPercent}%)`,
+        -discountKobo,
+      ),
+    );
+  }
+  const promoKobo = input.promo?.amountOffKobo ?? 0n;
+  if (promoKobo < 0n || (promoKobo > 0n && promoKobo >= rentKobo - discountKobo)) {
+    throw new PricingError('A promo code cannot exceed the price');
+  }
+  if (input.promo && promoKobo > 0n) {
+    lines.push(
+      fixedLine(
+        PriceLineKind.PROMO_DISCOUNT,
+        `Promo code ${input.promo.code} (${input.promo.label})`,
+        -promoKobo,
+      ),
+    );
+  }
+  const stayKobo = rentKobo - discountKobo - promoKobo;
+
+  const serviceFeeKobo = applyBps(stayKobo, rates.serviceFeeBps);
+  if (serviceFeeKobo > 0n) {
+    lines.push(fixedLine(PriceLineKind.SERVICE_FEE, 'HavenHub service fee', serviceFeeKobo));
+  }
+  const vatBase = (rates.vatOnServiceFee ? serviceFeeKobo : 0n) + (rates.vatOnStay ? stayKobo : 0n);
+  const vatKobo = applyBps(vatBase, rates.vatBps);
+  if (vatKobo > 0n) {
+    lines.push(fixedLine(PriceLineKind.VAT, `VAT (${formatBps(rates.vatBps)})`, vatKobo));
+  }
+
+  const totalKobo = stayKobo + serviceFeeKobo + vatKobo;
+  const agentCommissionKobo = applyBps(stayKobo, rates.agentCommissionBps);
+  const agentPayoutKobo = stayKobo - agentCommissionKobo;
+  const lineSum = lines.reduce((sum, line) => sum + line.amountKobo, 0n);
+  if (lineSum !== totalKobo) throw new PricingError('Price lines do not add up to the total');
+  if (agentPayoutKobo < 0n) throw new PricingError('Agent payout cannot be negative');
+
+  return {
+    lines,
+    rentKobo,
+    discountKobo,
+    promoKobo,
+    stayKobo,
+    cleaningKobo: 0n,
+    cautionKobo: 0n,
+    serviceFeeKobo,
+    vatKobo,
+    agencyFeeKobo: 0n,
+    totalKobo,
+    agentCommissionKobo,
+    agentPayoutKobo,
+  };
+}

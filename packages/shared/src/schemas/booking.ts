@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { BookingStatus, PaymentStatus, RefundStatus } from '../enums/booking.js';
+import { EXPERIENCE_LIMITS } from '../enums/experience.js';
 import { MAX_PRICE_KOBO } from './property.js';
 import { paginationQuerySchema } from './admin.js';
 import { discountCodeField } from './discount.js';
@@ -32,6 +33,47 @@ export const createBookingSchema = bookingRequestSchema.extend({
   expectedTotalKobo: z.number().int().min(0).max(MAX_PRICE_KOBO).optional(),
 });
 export type CreateBookingInput = z.input<typeof createBookingSchema>;
+
+/**
+ * A tour, event, hotel or cleaning booking. Everything is per day (per
+ * night for hotels): the customer picks a start date, how many days, how
+ * many people (tours/events) or rooms (hotels), and either the full package
+ * or the items they want. Cleaning also needs an address. The server prices
+ * it; amounts are never accepted.
+ */
+export const experienceBookingRequestSchema = z.object({
+  experienceId: z.uuid(),
+  startDate: z.iso.date('Choose a start date'),
+  days: z.number().int().min(1).max(EXPERIENCE_LIMITS.bookingDays),
+  /** Tours and events: people. Hotels: guests (checked against the room type). */
+  people: z.number().int().min(1).max(EXPERIENCE_LIMITS.bookingPeople).default(1),
+  /** Hotels only. */
+  roomTypeId: z.uuid().optional(),
+  rooms: z.number().int().min(1).max(EXPERIENCE_LIMITS.bookingRooms).optional(),
+  /** Events only: the ticket type, priced per person per day. */
+  ticketTypeId: z.uuid().optional(),
+  /** Take every package item (ignores `itemIds`). */
+  fullPackage: z.boolean().default(false),
+  itemIds: z
+    .array(z.uuid())
+    .max(EXPERIENCE_LIMITS.packageItems)
+    .transform((ids) => [...new Set(ids)])
+    .default([]),
+  /** Cleaning: one of the cleaner's service areas (when they list any). */
+  serviceArea: z.string().trim().max(100).optional(),
+  /** Cleaning: where to clean. Shared with the cleaner once booked. */
+  address: z.string().trim().min(5, 'Enter the address to clean').max(240).optional(),
+  /** The agent's promo code; validated and priced by the server. */
+  code: discountCodeField.optional(),
+});
+export type ExperienceBookingRequestInput = z.input<typeof experienceBookingRequestSchema>;
+export type ExperienceBookingRequest = z.output<typeof experienceBookingRequestSchema>;
+
+export const createExperienceBookingSchema = experienceBookingRequestSchema.extend({
+  /** As for rentals: refused if the server's total differs from what was shown. */
+  expectedTotalKobo: z.number().int().min(0).max(MAX_PRICE_KOBO).optional(),
+});
+export type CreateExperienceBookingInput = z.input<typeof createExperienceBookingSchema>;
 
 export const availabilityQuerySchema = z.object({
   startDate: z.iso.date().optional(),

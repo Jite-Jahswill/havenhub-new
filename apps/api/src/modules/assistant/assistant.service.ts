@@ -32,6 +32,7 @@ import { ChatEventsService } from '../chat/chat-events.service';
 import { ConversationsService } from '../chat/conversations.service';
 import { MessagesService } from '../chat/messages.service';
 import { ExperienceSearchService } from '../experiences/experience-search.service';
+import { snapshotOf } from '../bookings/booking.mapper';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PlatformPoliciesService } from '../platform/platform-policies.service';
 import { PropertySearchService } from '../properties/property-search.service';
@@ -343,7 +344,7 @@ export class AssistantService {
         amountKobo: true,
         createdAt: true,
         completedAt: true,
-        booking: { select: { id: true, reference: true, property: { select: { title: true } } } },
+        booking: { select: { id: true, reference: true, propertySnapshot: true } },
       },
     });
     if (rows.length === 0) {
@@ -356,7 +357,7 @@ export class AssistantService {
     return {
       text: `Your latest refund (${latest.booking.reference}) of ${formatKobo(Number(latest.amountKobo))}: ${REFUND_STATUS_LABEL[latest.status]!.toLowerCase()}.`,
       cards: rows.map((r) => ({
-        title: r.booking.property.title,
+        title: snapshotOf(r.booking).title,
         subtitle: `${r.booking.reference} · ${formatKobo(Number(r.amountKobo))} · requested ${r.createdAt.toISOString().slice(0, 10)}`,
         href: `/account/bookings/${r.booking.id}`,
         imageUrl: null,
@@ -391,7 +392,7 @@ export class AssistantService {
         startDate: true,
         endDate: true,
         totalKobo: true,
-        property: { select: { title: true } },
+        propertySnapshot: true,
       },
     });
     if (rows.length === 0) {
@@ -408,7 +409,7 @@ export class AssistantService {
         ? `Booking ${latest.reference}: ${BOOKING_STATUS_LABEL[latest.status]!.toLowerCase()}.`
         : `Your most recent booking (${latest.reference}) is ${BOOKING_STATUS_LABEL[latest.status]!.toLowerCase()}.`,
       cards: rows.map((b) => ({
-        title: b.property.title,
+        title: snapshotOf(b).title,
         subtitle: `${b.reference} · ${b.startDate.toISOString().slice(0, 10)} to ${b.endDate.toISOString().slice(0, 10)} · ${formatKobo(Number(b.totalKobo))}`,
         href: `/account/bookings/${b.id}`,
         imageUrl: null,

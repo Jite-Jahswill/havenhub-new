@@ -83,8 +83,8 @@ export default async function AdminReviewsPage({ searchParams }: PageProps<'/adm
                       )}
                     </Td>
                     <Td>
-                      <Link href={`/properties/${r.property.slug}`} className="hover:underline">
-                        {r.property.title}
+                      <Link href={r.listing.href} className="hover:underline">
+                        {r.listing.title}
                       </Link>
                       <span className="block font-mono text-xs text-text-muted">
                         {r.bookingReference}

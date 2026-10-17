@@ -14,6 +14,8 @@ import {
 
 import type { Prisma } from '../../generated/prisma/client';
 import type { StorageService } from '../../infrastructure/storage/storage.service';
+import { snapshotOf } from '../bookings/booking.mapper';
+import { agentDisplayName } from '../properties/property.selects';
 
 type Urls = Pick<StorageService, 'url'>;
 
@@ -71,8 +73,11 @@ export const CONVERSATION_INCLUDE = {
       status: true,
       startDate: true,
       endDate: true,
-      property: { select: { title: true } },
+      propertySnapshot: true,
     },
+  },
+  agentProfile: {
+    select: { id: true, businessName: true, user: { select: { fullName: true } } },
   },
   lastMessage: {
     select: {
@@ -126,13 +131,19 @@ export function toContext(row: ConversationRow, urls: Urls): ConversationContext
         id: row.booking.id,
         reference: row.booking.reference,
         status: row.booking.status,
-        propertyTitle: row.booking.property.title,
+        propertyTitle: snapshotOf(row.booking).title,
         startDate: row.booking.startDate.toISOString().slice(0, 10),
         endDate: row.booking.endDate.toISOString().slice(0, 10),
       },
     };
   }
   if (row.contextType === 'SUPPORT') return { type: 'SUPPORT' };
+  if (row.contextType === 'AGENT' && row.agentProfile) {
+    return {
+      type: 'AGENT',
+      agent: { id: row.agentProfile.id, displayName: agentDisplayName(row.agentProfile) },
+    };
+  }
   if (row.contextType === 'EXPERIENCE' && row.experience) {
     const e = row.experience;
     return {

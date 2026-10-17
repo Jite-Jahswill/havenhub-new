@@ -393,6 +393,7 @@ describe('availability', () => {
       createdAt: _c,
       updatedAt: _u,
       propertySnapshot,
+      selection: _selection,
       ...rest
     } = row;
     await expect(

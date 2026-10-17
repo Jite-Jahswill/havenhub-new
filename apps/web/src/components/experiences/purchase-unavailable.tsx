@@ -8,8 +8,9 @@ const WHAT = {
 } as const;
 
 /**
- * Purchasing for events, tours, hotels and cleaning is not part of this
- * release. This is shown instead of a buy/book button — never a fake checkout.
+ * Shown instead of a booking form when a listing does not take online
+ * bookings (the provider has not switched it on, or it is a cleaning
+ * service) — never a fake checkout.
  */
 export function PurchaseUnavailable({ kind }: { kind: keyof typeof WHAT }) {
   return (
@@ -19,10 +20,11 @@ export function PurchaseUnavailable({ kind }: { kind: keyof typeof WHAT }) {
     >
       <Info aria-hidden className="mt-0.5 size-4.5 shrink-0 text-text-secondary" />
       <div>
-        <p className="font-semibold text-text">{WHAT[kind]} on HavenHub is coming later</p>
+        <p className="font-semibold text-text">
+          {WHAT[kind]} isn’t available online for this listing
+        </p>
         <p className="mt-1 text-text-secondary">
-          Prices shown are listed by the organiser for information. Nothing can be paid for here yet
-          — message them with any questions.
+          Prices shown are listed by the provider for information. Message them to arrange it.
         </p>
       </div>
     </div>

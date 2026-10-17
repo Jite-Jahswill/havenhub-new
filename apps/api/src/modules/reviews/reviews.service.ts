@@ -23,9 +23,18 @@ import { BadgesService } from '../badges/badges.service';
 import { CmsCacheService } from '../cms/cms-cache.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PlatformPoliciesService } from '../platform/platform-policies.service';
+import { PUBLIC_EXPERIENCE_WHERE } from '../experiences/experience.selects';
 import { PUBLIC_PROPERTY_WHERE } from '../properties/property.selects';
 
 type Tx = Prisma.TransactionClient;
+type ReviewTarget = { propertyId: string } | { experienceId: string };
+
+const EXPERIENCE_SEGMENT: Record<string, string> = {
+  EVENT: 'events',
+  TOUR: 'tours',
+  HOTEL: 'hotels',
+  CLEANING: 'cleaning',
+};
 type Out<T extends z.ZodType> = z.output<T>;
 const DAY_MS = 24 * 3600 * 1000;
 
@@ -33,10 +42,11 @@ const cannotReview = (message: string) =>
   new AppException(HttpStatus.CONFLICT, ErrorCode.INVALID_STATUS_TRANSITION, message);
 
 /**
- * Reviews: one per completed booking, by its customer, within the reviews
- * policy's window after check-out. Published at once; administrators may
- * hide one. The property's rating counters and its earned badges change in
- * the same transaction as the review.
+ * Reviews: one per completed booking (a rental, or a tour, event, hotel or
+ * cleaning booking), by its customer, within the reviews policy's window
+ * after it ends. Published at once; administrators may hide one. The
+ * listing's rating counters (and a property's earned badges) change in the
+ * same transaction as the review.
  */
 @Injectable()
 export class ReviewsService {
@@ -97,46 +107,54 @@ export class ReviewsService {
           property: {
             select: { id: true, title: true, agentProfile: { select: { userId: true } } },
           },
+          experience: {
+            select: { id: true, title: true, agentProfile: { select: { userId: true } } },
+          },
         },
       });
       // Someone else's booking looks like no booking at all.
       if (!booking || booking.customerId !== customerId) throw Errors.notFound('Booking');
-      if (booking.review) throw cannotReview('You have already reviewed this stay.');
+      const listing = booking.property ?? booking.experience;
+      if (!listing) throw Errors.notFound('Booking');
+      if (booking.review) throw cannotReview('You have already reviewed this booking.');
       if (booking.status !== BookingStatus.COMPLETED || !booking.completedAt) {
-        throw cannotReview('You can review a stay once it is completed.');
+        throw cannotReview('You can write a review once the booking is completed.');
       }
       if (Date.now() > booking.completedAt.getTime() + reviews.windowDays * DAY_MS) {
         throw cannotReview(
-          `Reviews can be written up to ${reviews.windowDays} days after check-out.`,
+          `Reviews can be written up to ${reviews.windowDays} days after it ends.`,
         );
       }
+      const target: ReviewTarget = booking.property
+        ? { propertyId: booking.property.id }
+        : { experienceId: booking.experience!.id };
       const review = await tx.review.create({
         data: {
           bookingId,
-          propertyId: booking.propertyId,
+          ...target,
           customerId,
           rating: input.rating,
           comment: input.comment ?? null,
         },
       });
-      await this.count(tx, booking.propertyId, input.rating, 1);
+      await this.count(tx, target, input.rating, 1);
       await this.audit.record(
         {
           actorId: customerId,
           action: 'review.created',
           resourceType: 'review',
           resourceId: review.id,
-          after: { bookingId, propertyId: booking.propertyId, rating: input.rating },
+          after: { bookingId, ...target, rating: input.rating },
           meta,
         },
         tx,
       );
       await this.notifications.notify(tx, [
         {
-          userId: booking.property.agentProfile.userId,
+          userId: listing.agentProfile.userId,
           type: NotificationType.REVIEW_RECEIVED,
           title: `New ${input.rating}-star review`,
-          body: `A guest reviewed “${booking.property.title}”${input.comment ? `: “${clip(input.comment, 200)}”` : '.'}`,
+          body: `A guest reviewed “${listing.title}”${input.comment ? `: “${clip(input.comment, 200)}”` : '.'}`,
           link: `/agent/bookings/${bookingId}`,
         },
       ]);
@@ -153,7 +171,35 @@ export class ReviewsService {
       select: { id: true, ratingSum: true, reviewCount: true },
     });
     if (!property) throw Errors.notFound('Property');
-    const where = { propertyId: property.id, status: 'PUBLISHED' };
+    return this.page(
+      { propertyId: property.id, status: 'PUBLISHED' },
+      ratingSummary(property.ratingSum, property.reviewCount),
+      page,
+      pageSize,
+    );
+  }
+
+  /** Public: published reviews of a public tour, event, hotel or cleaning service. */
+  async forExperience(slug: string, page: number, pageSize: number): Promise<PropertyReviewsPage> {
+    const experience = await this.prisma.experience.findFirst({
+      where: { ...PUBLIC_EXPERIENCE_WHERE, slug },
+      select: { id: true, ratingSum: true, reviewCount: true },
+    });
+    if (!experience) throw Errors.notFound('Listing');
+    return this.page(
+      { experienceId: experience.id, status: 'PUBLISHED' },
+      ratingSummary(experience.ratingSum, experience.reviewCount),
+      page,
+      pageSize,
+    );
+  }
+
+  private async page(
+    where: Prisma.ReviewWhereInput,
+    rating: PropertyReviewsPage['rating'],
+    page: number,
+    pageSize: number,
+  ): Promise<PropertyReviewsPage> {
     const [total, rows] = await this.prisma.$transaction([
       this.prisma.review.count({ where }),
       this.prisma.review.findMany({
@@ -165,7 +211,7 @@ export class ReviewsService {
       }),
     ]);
     return {
-      rating: ratingSummary(property.ratingSum, property.reviewCount),
+      rating,
       items: rows.map((r) => ({
         id: r.id,
         rating: r.rating,
@@ -198,6 +244,7 @@ export class ReviewsService {
         take: query.pageSize,
         include: {
           property: { select: { id: true, slug: true, title: true } },
+          experience: { select: { id: true, slug: true, kind: true, title: true } },
           customer: { select: { id: true, fullName: true, email: true } },
           booking: { select: { reference: true } },
         },
@@ -210,7 +257,13 @@ export class ReviewsService {
         comment: r.comment,
         status: r.status as 'PUBLISHED' | 'HIDDEN',
         hiddenReason: r.hiddenReason,
-        property: r.property,
+        listing: r.property
+          ? { id: r.property.id, title: r.property.title, href: `/properties/${r.property.slug}` }
+          : {
+              id: r.experience!.id,
+              title: r.experience!.title,
+              href: `/${EXPERIENCE_SEGMENT[r.experience!.kind]}/${r.experience!.slug}`,
+            },
         customer: r.customer,
         bookingReference: r.booking.reference,
         createdAt: r.createdAt.toISOString(),
@@ -246,7 +299,14 @@ export class ReviewsService {
             }
           : { status: 'PUBLISHED', hiddenReason: null, hiddenById: null, hiddenAt: null },
       });
-      await this.count(tx, review.propertyId, review.rating, hide ? -1 : 1);
+      await this.count(
+        tx,
+        review.propertyId
+          ? { propertyId: review.propertyId }
+          : { experienceId: review.experienceId! },
+        review.rating,
+        hide ? -1 : 1,
+      );
       await this.audit.record(
         {
           actorId,
@@ -265,16 +325,15 @@ export class ReviewsService {
     return { status };
   }
 
-  /** Adjusts the property's counters by one review, then its earned badges. */
-  private async count(tx: Tx, propertyId: string, rating: number, sign: 1 | -1) {
-    await tx.property.update({
-      where: { id: propertyId },
-      data: {
-        ratingSum: { increment: sign * rating },
-        reviewCount: { increment: sign },
-      },
-    });
-    await this.badges.recompute(tx, { propertyIds: [propertyId] });
+  /** Adjusts the listing's counters by one review (and a property's earned badges). */
+  private async count(tx: Tx, target: ReviewTarget, rating: number, sign: 1 | -1) {
+    const data = { ratingSum: { increment: sign * rating }, reviewCount: { increment: sign } };
+    if ('propertyId' in target) {
+      await tx.property.update({ where: { id: target.propertyId }, data });
+      await this.badges.recompute(tx, { propertyIds: [target.propertyId] });
+    } else {
+      await tx.experience.update({ where: { id: target.experienceId }, data });
+    }
   }
 }
 

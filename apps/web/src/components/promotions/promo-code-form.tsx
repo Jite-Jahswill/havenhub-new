@@ -17,7 +17,14 @@ const number = (value: string) => (value === '' ? null : Number(value));
 const instant = (value: string) => (value === '' ? null : new Date(value).toISOString());
 
 /** An agent's promo code for their own rentals. The agent funds the discount. */
-export function PromoCodeForm({ properties }: { properties: { id: string; title: string }[] }) {
+export function PromoCodeForm({
+  properties,
+  experiences,
+}: {
+  properties: { id: string; title: string }[];
+  /** The agent's tours, events, hotels and cleaning services. */
+  experiences: { id: string; title: string }[];
+}) {
   const router = useRouter();
   const { pending, error, fieldErrors, validate, run } = useApiAction();
   const [kind, setKind] = useState<'percent' | 'amount'>('percent');
@@ -32,6 +39,7 @@ export function PromoCodeForm({ properties }: { properties: { id: string; title:
       percentOff: kind === 'percent' ? value : null,
       amountOffKobo: kind === 'amount' && value !== null ? Math.round(value * 100) : null,
       propertyIds: f.getAll('propertyIds').map(String),
+      experienceIds: f.getAll('experienceIds').map(String),
       startsAt: instant(formText(f, 'startsAt')),
       endsAt: instant(formText(f, 'endsAt')),
       maxRedemptions: number(formText(f, 'maxRedemptions')),
@@ -93,8 +101,10 @@ export function PromoCodeForm({ properties }: { properties: { id: string; title:
             </Field>
           </div>
           <fieldset className="flex flex-col gap-2">
-            <legend className="mb-1 text-sm font-medium text-text">Properties</legend>
-            <p className="text-xs text-text-muted">Leave all unticked for all your rentals.</p>
+            <legend className="mb-1 text-sm font-medium text-text">Where it applies</legend>
+            <p className="text-xs text-text-muted">
+              Leave everything unticked for all your listings. Tick some to limit it to them.
+            </p>
             {properties.map((p) => (
               <label key={p.id} className="flex items-center gap-2 text-sm text-text">
                 <input
@@ -106,8 +116,21 @@ export function PromoCodeForm({ properties }: { properties: { id: string; title:
                 {p.title}
               </label>
             ))}
-            {fieldErrors.propertyIds && (
-              <p className="text-sm text-error">{fieldErrors.propertyIds}</p>
+            {experiences.map((e) => (
+              <label key={e.id} className="flex items-center gap-2 text-sm text-text">
+                <input
+                  type="checkbox"
+                  name="experienceIds"
+                  value={e.id}
+                  className="size-4 accent-primary"
+                />
+                {e.title}
+              </label>
+            ))}
+            {(fieldErrors.propertyIds || fieldErrors.experienceIds) && (
+              <p className="text-sm text-error">
+                {fieldErrors.propertyIds ?? fieldErrors.experienceIds}
+              </p>
             )}
           </fieldset>
           <div className="grid gap-4 sm:grid-cols-2">

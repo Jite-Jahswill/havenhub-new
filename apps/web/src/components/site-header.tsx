@@ -36,7 +36,10 @@ export async function SiteHeader() {
           )}
         </Link>
         <div className="flex items-center gap-2 sm:gap-3">
-          <Link href="/properties" className={buttonClasses({ variant: 'ghost', size: 'sm' })}>
+          <Link
+            href="/properties"
+            className={buttonClasses({ variant: 'ghost', size: 'sm', className: 'rounded-full' })}
+          >
             Explore
           </Link>
           <Link
@@ -44,7 +47,7 @@ export async function SiteHeader() {
             className={buttonClasses({
               variant: 'ghost',
               size: 'sm',
-              className: 'hidden sm:inline-flex',
+              className: 'hidden rounded-full sm:inline-flex',
             })}
           >
             Experiences
@@ -63,7 +66,7 @@ export async function SiteHeader() {
             >
               <span
                 aria-hidden
-                className="grid size-8 place-items-center rounded-full bg-surface-inverse text-xs font-semibold text-text-inverse"
+                className="grid size-8 place-items-center rounded-full bg-primary text-xs font-bold text-primary-foreground"
               >
                 {initials}
               </span>
@@ -71,12 +74,22 @@ export async function SiteHeader() {
             </Link>
           ) : (
             <>
-              <Link href="/login" className={buttonClasses({ variant: 'ghost', size: 'sm' })}>
+              <Link
+                href="/login"
+                className={buttonClasses({
+                  variant: 'ghost',
+                  size: 'sm',
+                  className: 'rounded-full',
+                })}
+              >
                 Sign in
               </Link>
               <Link
                 href="/register"
-                className={buttonClasses({ size: 'sm', className: 'hidden sm:inline-flex' })}
+                className={buttonClasses({
+                  size: 'sm',
+                  className: 'hidden rounded-full px-4 sm:inline-flex',
+                })}
               >
                 Get started
               </Link>

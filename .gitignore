@@ -30,6 +30,8 @@ pnpm-debug.log*
 
 # Local data
 .devdata/
+# Local test logins (passwords); never commit
+docs/LOCAL_TEST_ACCOUNTS.md
 
 # OS / editor
 .DS_Store

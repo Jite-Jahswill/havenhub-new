@@ -183,6 +183,10 @@ export class HotelRoomsService {
   ): Promise<AgentExperienceView> {
     return this.hotelEdit(userId, id, meta, 'experience.room_deleted', async (tx, hotel) => {
       if (!hotel.hotel!.rooms.some((r) => r.id === roomId)) throw Errors.notFound('Room');
+      // A room that has been booked stays as history; it can be switched off instead.
+      if (await tx.bookingHotelRoom.count({ where: { roomId } })) {
+        throw Errors.conflict('This room has bookings. Mark it inactive instead of deleting it.');
+      }
       await tx.hotelRoom.delete({ where: { id: roomId } });
       return false;
     });

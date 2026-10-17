@@ -579,7 +579,7 @@ export function isOverlapViolation(error: unknown): boolean {
 const REFERENCE_ALPHABET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
 
 /** "HH-" + 8 unambiguous characters (32^8 ≈ 10^12 combinations). */
-function bookingReference(): string {
+export function bookingReference(): string {
   let ref = 'HH-';
   for (let i = 0; i < 8; i++) ref += REFERENCE_ALPHABET[randomInt(REFERENCE_ALPHABET.length)];
   return ref;

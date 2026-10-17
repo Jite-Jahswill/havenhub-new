@@ -68,6 +68,10 @@ export type CancelledBy = (typeof CancelledBy)[keyof typeof CancelledBy];
  */
 export const PriceLineKind = {
   RENT: 'RENT',
+  /** Experience bookings: a package item, event ticket or hotel room (per day). */
+  PACKAGE_ITEM: 'PACKAGE_ITEM',
+  TICKET: 'TICKET',
+  ROOM: 'ROOM',
   LISTING_DISCOUNT: 'LISTING_DISCOUNT',
   /** The agent's promo code (agent-funded, like the listing discount). */
   PROMO_DISCOUNT: 'PROMO_DISCOUNT',

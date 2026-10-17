@@ -1,9 +1,11 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import {
   AccountType,
+  AgentVerificationStatus,
   ChatEvent,
   ErrorCode,
   PropertyStatus,
+  UserStatus,
   type ConversationPage,
   type ConversationSummary,
   type StartConversationInput,
@@ -38,6 +40,8 @@ type ListQuery = z.output<typeof listConversationsQuerySchema>;
  *               listing, with its agent (no purchase is involved)
  *   SUPPORT  — a customer or agent asking HavenHub for help; support staff
  *              join it from the admin support queue
+ *   AGENT    — a customer, directly with a verified agent (no listing or
+ *              booking needed)
  * Agents cannot open conversations with arbitrary customers.
  */
 @Injectable()
@@ -105,6 +109,25 @@ export class ConversationsService {
       data = { contextType: 'SUPPORT', contextKey };
       participants = [
         { userId: me.id, role: me.accountType === AccountType.AGENT ? 'AGENT' : 'CUSTOMER' },
+      ];
+    } else if (input.contextType === 'AGENT') {
+      if (me.accountType !== AccountType.CUSTOMER) {
+        throw Errors.forbidden('Only customers can message an agent directly.');
+      }
+      const agent = await this.prisma.agentProfile.findFirst({
+        where: {
+          id: input.agentId,
+          verificationStatus: AgentVerificationStatus.VERIFIED,
+          user: { status: UserStatus.ACTIVE },
+        },
+        select: { id: true, userId: true },
+      });
+      if (!agent) throw Errors.notFound('Agent');
+      contextKey = `agent:${agent.id}:customer:${me.id}`;
+      data = { contextType: 'AGENT', contextKey, agentProfile: { connect: { id: agent.id } } };
+      participants = [
+        { userId: me.id, role: 'CUSTOMER' },
+        { userId: agent.userId, role: 'AGENT' },
       ];
     } else {
       const booking = await this.prisma.booking.findUnique({
@@ -175,6 +198,7 @@ export class ConversationsService {
                   { experience: { title: search } },
                   { booking: { reference: search } },
                   { booking: { property: { title: search } } },
+                  { booking: { experience: { title: search } } },
                   {
                     participants: {
                       some: {

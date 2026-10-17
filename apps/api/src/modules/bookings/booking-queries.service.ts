@@ -32,6 +32,7 @@ import {
   snapshotOf,
   toCancellation,
   toPriceLine,
+  toSelectionView,
   toSnapshotView,
   toSummary,
   type BookingDetailRow,
@@ -81,6 +82,7 @@ export class BookingQueriesService {
       ...toSummary(row, this.storage),
       ...(await this.reviews.stateFor(row)),
       snapshot: toSnapshotView(row, this.storage),
+      selection: toSelectionView(row.selection),
       guests: row.guests,
       cleaningSelected: row.cleaningSelected,
       lines: row.lines.map(toPriceLine),
@@ -127,6 +129,7 @@ export class BookingQueriesService {
     return {
       ...this.agentItem(row),
       snapshot: toSnapshotView(row, this.storage),
+      selection: toSelectionView(row.selection),
       guests: row.guests,
       cleaningSelected: row.cleaningSelected,
       customer: {
@@ -226,6 +229,7 @@ export class BookingQueriesService {
               { customer: { email: { contains: query.search, mode: 'insensitive' } } },
               { customer: { fullName: { contains: query.search, mode: 'insensitive' } } },
               { property: { title: { contains: query.search, mode: 'insensitive' } } },
+              { experience: { title: { contains: query.search, mode: 'insensitive' } } },
             ],
           }
         : {}),
@@ -254,6 +258,7 @@ export class BookingQueriesService {
     return {
       ...this.adminItem(row),
       snapshot: toSnapshotView(row, this.storage),
+      selection: toSelectionView(row.selection),
       guests: row.guests,
       cleaningSelected: row.cleaningSelected,
       lines: row.lines.map(toPriceLine),

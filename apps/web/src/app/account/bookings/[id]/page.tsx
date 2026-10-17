@@ -64,11 +64,12 @@ export default async function CustomerBookingPage({
       <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_380px]">
         <div className="flex min-w-0 flex-col gap-6">
           <Card>
-            <CardHeader title="Your stay" />
+            <CardHeader title={b.snapshot.kind === 'PROPERTY' ? 'Your stay' : 'Your booking'} />
             <CardBody>
               <StayDetails
                 booking={b}
                 snapshot={b.snapshot}
+                selection={b.selection}
                 guests={b.guests}
                 cleaningSelected={b.cleaningSelected}
               />
@@ -168,7 +169,9 @@ export default async function CustomerBookingPage({
 
           {b.canReview && (
             <Card>
-              <CardHeader title="How was your stay?" />
+              <CardHeader
+                title={b.snapshot.kind === 'PROPERTY' ? 'How was your stay?' : 'How was it?'}
+              />
               <CardBody>
                 <ReviewForm bookingId={b.id} reviewBy={b.reviewBy} />
               </CardBody>
@@ -205,7 +208,7 @@ export default async function CustomerBookingPage({
           )}
           {b.status === 'CONFIRMED' && !b.canCancel && (
             <p className="text-sm text-text-secondary">
-              Your stay has started. To change or cancel it, please contact HavenHub support.
+              Your booking has started. To change or cancel it, please contact HavenHub support.
             </p>
           )}
         </aside>

@@ -1,6 +1,20 @@
 import type { HomepageSectionView } from '@havenhub/shared';
 import { Container, buttonClasses } from '@havenhub/ui';
-import { MapPin, Quote } from 'lucide-react';
+import {
+  ArrowRight,
+  ArrowUpRight,
+  BedDouble,
+  Building2,
+  CalendarHeart,
+  Compass,
+  Home,
+  Hotel,
+  KeyRound,
+  MapPin,
+  Quote,
+  Sparkles,
+  type LucideIcon,
+} from 'lucide-react';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 
@@ -42,24 +56,39 @@ export function HomeSection({
       return (
         <Band title={section.title} subtitle={section.subtitle} tinted>
           <ul className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {section.items.map((item) => (
-              <li
-                key={`${item.title}-${item.href}`}
-                className="relative rounded-card border border-border bg-surface p-7 shadow-card transition-colors hover:bg-surface-secondary"
-              >
-                <h3 className="text-lg font-semibold text-text">
-                  <Link
-                    href={item.href}
-                    className="after:absolute after:inset-0 after:rounded-card focus-visible:outline-none"
-                  >
-                    {item.title}
-                  </Link>
-                </h3>
-                {item.description && (
-                  <p className="mt-2 leading-relaxed text-text-secondary">{item.description}</p>
-                )}
-              </li>
-            ))}
+            {section.items.map((item, i) => {
+              const { icon: Icon, tone } = exploreStyle(item.href, i);
+              return (
+                <li
+                  key={`${item.title}-${item.href}`}
+                  className="group relative rounded-card border border-border bg-surface p-7 shadow-card transition-[translate,box-shadow,border-color] duration-200 hover:-translate-y-1 hover:border-border-strong hover:shadow-overlay"
+                >
+                  <div className="flex items-start justify-between">
+                    <span
+                      aria-hidden
+                      className={`grid size-12 place-items-center rounded-2xl transition-transform duration-300 group-hover:scale-110 group-hover:-rotate-6 ${tone}`}
+                    >
+                      <Icon className="size-6" strokeWidth={1.8} />
+                    </span>
+                    <ArrowUpRight
+                      aria-hidden
+                      className="size-5 text-text-muted transition-[translate,color] duration-200 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-primary-text"
+                    />
+                  </div>
+                  <h3 className="mt-5 text-lg font-bold text-text">
+                    <Link
+                      href={item.href}
+                      className="after:absolute after:inset-0 after:rounded-card focus-visible:outline-none"
+                    >
+                      {item.title}
+                    </Link>
+                  </h3>
+                  {item.description && (
+                    <p className="mt-1.5 leading-relaxed text-text-secondary">{item.description}</p>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         </Band>
       );
@@ -85,9 +114,14 @@ export function HomeSection({
               <li key={`${l.city}-${l.state}`}>
                 <Link
                   href={`/properties?city=${encodeURIComponent(l.city)}`}
-                  className="flex items-center gap-3 rounded-card border border-border bg-surface p-4 hover:bg-surface-secondary"
+                  className="group flex items-center gap-3 rounded-card border border-border bg-surface p-4 transition-[translate,box-shadow] duration-200 hover:-translate-y-0.5 hover:shadow-raised"
                 >
-                  <MapPin aria-hidden className="size-5 shrink-0 text-primary-text" />
+                  <span
+                    aria-hidden
+                    className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary-subtle text-primary-text transition-transform group-hover:scale-110"
+                  >
+                    <MapPin className="size-5" />
+                  </span>
                   <span className="min-w-0">
                     <span className="block truncate font-semibold text-text">{l.city}</span>
                     <span className="block text-sm text-text-secondary">
@@ -184,17 +218,28 @@ export function HomeSection({
       return (
         <section className="py-16">
           <Container>
-            <div className="flex flex-col items-start gap-5 rounded-card bg-surface-inverse p-8 text-text-inverse sm:p-12 md:flex-row md:items-center md:justify-between">
+            <div className="relative isolate flex flex-col items-start gap-5 overflow-hidden rounded-card bg-surface-inverse p-8 text-text-inverse sm:p-12 md:flex-row md:items-center md:justify-between">
+              <div
+                aria-hidden
+                className="absolute -top-24 -right-16 -z-10 size-72 rounded-full bg-primary/30 blur-3xl"
+              />
+              <div
+                aria-hidden
+                className="absolute -bottom-28 left-1/3 -z-10 size-64 rounded-full bg-accent-sun/20 blur-3xl"
+              />
               <div className="max-w-2xl">
-                <h2 className="text-2xl font-bold tracking-tight">{section.title}</h2>
+                <h2 className="text-2xl font-extrabold tracking-tight sm:text-3xl">
+                  {section.title}
+                </h2>
                 {section.subtitle && <p className="mt-2 opacity-80">{section.subtitle}</p>}
               </div>
               {section.button && (
                 <Link
                   href={section.button.href}
-                  className={buttonClasses({ size: 'lg', className: 'shrink-0' })}
+                  className={buttonClasses({ size: 'lg', className: 'shrink-0 rounded-full' })}
                 >
                   {section.button.label}
+                  <ArrowRight aria-hidden className="size-4" />
                 </Link>
               )}
             </div>
@@ -223,12 +268,24 @@ function Band({
         {(title || more) && (
           <div className="mb-8 flex flex-wrap items-end justify-between gap-3">
             <div>
-              {title && <h2 className="text-2xl font-bold tracking-tight text-text">{title}</h2>}
+              {title && (
+                <h2 className="flex items-center gap-2.5 text-2xl font-extrabold tracking-tight text-text sm:text-3xl">
+                  <Sparkles aria-hidden className="size-5 shrink-0 text-primary" />
+                  {title}
+                </h2>
+              )}
               {subtitle && <p className="mt-2 text-text-secondary">{subtitle}</p>}
             </div>
             {more && (
-              <Link href={more} className="text-sm font-semibold text-primary-text hover:underline">
-                View all →
+              <Link
+                href={more}
+                className="group inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-4 py-2 text-sm font-semibold text-text transition-colors hover:border-primary/40 hover:text-primary-text"
+              >
+                View all
+                <ArrowRight
+                  aria-hidden
+                  className="size-4 transition-transform group-hover:translate-x-0.5"
+                />
               </Link>
             )}
           </div>
@@ -237,6 +294,34 @@ function Band({
       </Container>
     </section>
   );
+}
+
+const TONES = [
+  'bg-accent-coral-subtle text-accent-coral',
+  'bg-accent-sky-subtle text-accent-sky',
+  'bg-accent-sun-subtle text-accent-sun',
+  'bg-accent-grape-subtle text-accent-grape',
+  'bg-primary-subtle text-primary-text',
+  'bg-accent-leaf-subtle text-accent-leaf',
+];
+
+/** Picks an icon from where an Explore tile links (CMS-editable), and a colour by position. */
+function exploreStyle(href: string, index: number): { icon: LucideIcon; tone: string } {
+  const tone = TONES[index % TONES.length]!;
+  const icon: LucideIcon = href.includes('pricingPeriod=DAILY')
+    ? BedDouble
+    : href.includes('listingType=SALE')
+      ? KeyRound
+      : href.includes('listingType=RENT')
+        ? Building2
+        : href.startsWith('/hotels')
+          ? Hotel
+          : href.startsWith('/events')
+            ? CalendarHeart
+            : href.startsWith('/experiences') || href.startsWith('/tours')
+              ? Compass
+              : Home;
+  return { icon, tone };
 }
 
 const Grid = ({ children }: { children: ReactNode }) => (

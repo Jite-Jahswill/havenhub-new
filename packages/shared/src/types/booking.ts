@@ -11,6 +11,7 @@ import type {
   RefundStatus,
 } from '../enums/booking.js';
 import type { CleaningOption, PropertyType } from '../enums/property.js';
+import type { BookableExperienceKind, PackageItemCategory } from '../enums/experience.js';
 import type { LedgerSummary } from '../utils/ledger.js';
 import type { RentalPeriod } from '../utils/stay.js';
 
@@ -47,6 +48,25 @@ export interface BookingQuote {
   currency: 'NGN';
 }
 
+/** A tour, event or hotel booking priced by the server (see experienceBookingRequestSchema). */
+export interface ExperienceBookingQuote {
+  experienceId: string;
+  kind: BookableExperienceKind;
+  startDate: string;
+  /** The day after the last day (exclusive), like rentals' check-out. */
+  endDate: string;
+  days: number;
+  people: number;
+  rooms: number | null;
+  available: boolean;
+  unavailableReason: string | null;
+  lines: PriceLine[];
+  totalKobo: number;
+  /** The promo code applied, if one was given and is valid. */
+  promo: AppliedDiscount | null;
+  currency: 'NGN';
+}
+
 export interface PropertyAvailability {
   propertyId: string;
   pricingPeriod: RentalPeriod;
@@ -65,14 +85,36 @@ export interface PropertyAvailability {
   } | null;
 }
 
-/** What the booking captured about the property when it was made. */
+/** What was booked: a rental property, or a tour, event or hotel. */
+export type BookingListingKind = 'PROPERTY' | BookableExperienceKind;
+
+/** What an experience booking included, frozen at booking time. */
+export interface ExperienceSelectionView {
+  people: number;
+  rooms: number | null;
+  roomTypeName: string | null;
+  ticketName: string | null;
+  fullPackage: boolean;
+  items: { name: string; category: PackageItemCategory; perPerson: boolean }[];
+  /** Cleaning: the area and the address to clean. */
+  serviceArea: string | null;
+  address: string | null;
+}
+
+/**
+ * What the booking captured about the listing when it was made. The
+ * property-only fields are null for experience bookings.
+ */
 export interface BookingPropertySnapshot {
+  kind: BookingListingKind;
+  /** The public page of the listing. */
+  href: string;
   id: string;
   slug: string;
   title: string;
-  propertyType: PropertyType;
+  propertyType: PropertyType | null;
   pricingPeriod: RentalPeriod;
-  unitPriceKobo: number;
+  unitPriceKobo: number | null;
   discountPercent: number | null;
   cleaningOption: CleaningOption | null;
   addressLine: string | null;
@@ -116,9 +158,10 @@ export interface BookingSummary {
   status: BookingStatus;
   /** Status of the payment that settled (or is settling) this booking. */
   paymentStatus: PaymentStatus | null;
+  /** The listing booked (a property, or a tour/event/hotel — see `kind`). */
   property: Pick<
     BookingPropertySnapshot,
-    'id' | 'slug' | 'title' | 'city' | 'state' | 'coverThumbnailUrl'
+    'kind' | 'href' | 'id' | 'slug' | 'title' | 'city' | 'state' | 'coverThumbnailUrl'
   >;
   pricingPeriod: RentalPeriod;
   startDate: string;
@@ -131,6 +174,8 @@ export interface BookingSummary {
 
 export interface CustomerBookingDetail extends BookingSummary, BookingReviewState {
   snapshot: BookingPropertySnapshot;
+  /** Experience bookings only. */
+  selection: ExperienceSelectionView | null;
   guests: number | null;
   cleaningSelected: boolean;
   lines: PriceLine[];
@@ -169,6 +214,7 @@ export interface AgentBookingListItem extends BookingSummary {
 
 export interface AgentBookingDetail extends AgentBookingListItem {
   snapshot: BookingPropertySnapshot;
+  selection: ExperienceSelectionView | null;
   guests: number | null;
   cleaningSelected: boolean;
   /** Contact details are shared only once a booking is confirmed. */
@@ -226,6 +272,7 @@ export interface AdminBookingListItem extends BookingSummary {
 
 export interface AdminBookingDetail extends AdminBookingListItem {
   snapshot: BookingPropertySnapshot;
+  selection: ExperienceSelectionView | null;
   guests: number | null;
   cleaningSelected: boolean;
   lines: PriceLine[];

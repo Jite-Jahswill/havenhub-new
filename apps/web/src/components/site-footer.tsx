@@ -20,7 +20,15 @@ export async function SiteFooter() {
     <footer className="mt-auto border-t border-border bg-footer text-footer-foreground">
       <Container className="grid gap-10 py-12 text-sm md:grid-cols-[1.2fr_1fr_1fr]">
         <div className="flex min-w-0 flex-col gap-3">
-          <p className="text-base font-semibold">{site.siteName}</p>
+          <p className="flex items-center gap-2 text-lg font-extrabold tracking-tight">
+            <svg aria-hidden viewBox="0 0 32 32" className="size-6">
+              <path
+                d="M4 15.5 16 5l12 10.5V27a1 1 0 0 1-1 1h-6.5v-7.5h-9V28H5a1 1 0 0 1-1-1V15.5Z"
+                fill="var(--hh-primary)"
+              />
+            </svg>
+            {site.siteName}
+          </p>
           {(site.footerText ?? site.tagline) && (
             <p className="max-w-sm break-words whitespace-pre-line opacity-75">
               {site.footerText ?? site.tagline}
@@ -50,7 +58,7 @@ export async function SiteFooter() {
             <Link
               key={l.href}
               href={l.href}
-              className="w-fit opacity-80 hover:underline hover:opacity-100"
+              className="w-fit opacity-80 transition-[opacity,translate] hover:translate-x-0.5 hover:opacity-100"
             >
               {l.label}
             </Link>
@@ -77,7 +85,7 @@ export async function SiteFooter() {
         </div>
       </Container>
       <Container className="border-t border-white/10 py-5 text-xs opacity-70">
-        © {new Date().getFullYear()} {site.siteName}. Made for Nigeria.
+        © {new Date().getFullYear()} {site.siteName}. Made with ❤️ for Nigeria.
       </Container>
     </footer>
   );

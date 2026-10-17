@@ -8,6 +8,50 @@
   --font-sans: var(--font-jakarta), ui-sans-serif, system-ui, sans-serif;
 }
 
+/* Hero backdrop: two soft brand glows over a faint dot grid. Decorative only. */
+.hh-hero-backdrop {
+  background:
+    radial-gradient(60% 70% at 85% 10%, var(--hh-glow-1), transparent 70%),
+    radial-gradient(45% 55% at 10% 90%, var(--hh-glow-2), transparent 70%),
+    radial-gradient(var(--hh-dots) 1.2px, transparent 1.2px) 0 0 / 22px 22px;
+}
+
+/* Gentle bobbing for decorative hero tiles; off for reduced motion (see base styles). */
+@keyframes hh-float {
+  0%,
+  100% {
+    translate: 0 0;
+  }
+  50% {
+    translate: 0 -8px;
+  }
+}
+.hh-float {
+  animation: hh-float 6s ease-in-out infinite;
+}
+.hh-float-delay {
+  animation: hh-float 7s ease-in-out 1.2s infinite;
+}
+
+/* Hand-drawn underline under the hero's highlighted word. */
+.hh-scribble {
+  position: relative;
+  white-space: nowrap;
+}
+.hh-scribble::after {
+  content: '';
+  position: absolute;
+  left: -2%;
+  right: -2%;
+  bottom: -0.12em;
+  height: 0.28em;
+  background: var(--hh-primary);
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 20' preserveAspectRatio='none'%3E%3Cpath d='M3 14C40 5 90 3 197 9' stroke='black' stroke-width='6' fill='none' stroke-linecap='round'/%3E%3C/svg%3E")
+    center / 100% 100% no-repeat;
+  opacity: 0.85;
+  z-index: -1;
+}
+
 /* Price pins on the results map. Colours come from the design tokens. */
 .hh-map-pin {
   border-radius: 9999px;

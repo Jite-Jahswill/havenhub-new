@@ -9,7 +9,7 @@ import { NoAccess } from '@/components/admin/no-access';
 import { PropertyModeration } from '@/components/admin/property-moderation';
 import { PageHeader } from '@/components/dashboard/dashboard-shell';
 import { PropertyStatusBadge, VerificationBadge } from '@/components/dashboard/status-badge';
-import { LocationMapLazy } from '@/components/map/location-map-lazy';
+import { LocationMap } from '@/components/map/location-map';
 import { Photo } from '@/components/properties/photo';
 import { serverApi } from '@/lib/api/server';
 import { formatPrice } from '@/lib/format';
@@ -137,7 +137,7 @@ export default async function AdminPropertyPage({ params }: PageProps<'/admin/pr
               </div>
               {p.latitude !== null && p.longitude !== null && (
                 <div className="h-64 overflow-hidden rounded-control border border-border">
-                  <LocationMapLazy latitude={p.latitude} longitude={p.longitude} />
+                  <LocationMap latitude={p.latitude} longitude={p.longitude} />
                 </div>
               )}
             </CardBody>

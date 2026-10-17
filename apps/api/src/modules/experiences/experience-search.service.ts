@@ -1,10 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import type {
-  ExperienceDetail,
-  ExperienceSearchParams,
-  ExperienceSearchResult,
-  HotelAvailabilityView,
-  roomAvailabilityQuerySchema,
+import {
+  ratingSummary,
+  type ExperienceDetail,
+  type ExperienceSearchParams,
+  type ExperienceSearchResult,
+  type HotelAvailabilityView,
+  type roomAvailabilityQuerySchema,
 } from '@havenhub/shared';
 import type { z } from 'zod';
 
@@ -15,12 +16,14 @@ import { StorageService } from '../../infrastructure/storage/storage.service';
 import { num, toAmenityView } from '../properties/property.mapper';
 import { agentDisplayName } from '../properties/property.selects';
 import {
+  canBookOnline,
   toCleaningDetails,
   toEventDetails,
   toExperienceCard,
   toExperienceImageView,
   toExperienceVideoView,
   toHotelDetails,
+  toPackageItemView,
   toTourDetails,
 } from './experience.mapper';
 import { PUBLIC_EXPERIENCE_WHERE, experienceCardSelect } from './experience.selects';
@@ -45,7 +48,7 @@ export class ExperienceSearchService {
     if (!(await this.policies.enabledExperienceKinds()).includes(params.kind)) {
       return { items: [], page: params.page, pageSize: params.pageSize, total: 0, totalPages: 0 };
     }
-    const where = buildWhere(params, now);
+    const where = buildWhere(params, now, await this.cleanersCovering(params));
     const pastEvents = params.kind === 'EVENT' && params.when === 'past';
     const orderBy: Prisma.ExperienceOrderByWithRelationInput[] =
       params.kind === 'EVENT' && params.sort === 'soonest'
@@ -102,6 +105,7 @@ export class ExperienceSearchService {
           },
         },
         cleaning: true,
+        packageItems: { orderBy: { sortOrder: 'asc' } },
         agentProfile: {
           include: { user: { select: { fullName: true, avatarKey: true, createdAt: true } } },
         },
@@ -141,7 +145,9 @@ export class ExperienceSearchService {
       tour: row.tour ? toTourDetails(row.tour) : null,
       hotel: row.hotel ? toHotelDetails(row.hotel) : null,
       cleaning: row.cleaning ? toCleaningDetails(row.cleaning) : null,
-      purchasable: false,
+      packageItems: row.packageItems.map(toPackageItemView),
+      bookable: canBookOnline(row),
+      rating: ratingSummary(row.ratingSum, row.reviewCount),
       updatedAt: row.updatedAt.toISOString(),
     };
   }
@@ -213,9 +219,33 @@ export class ExperienceSearchService {
       })),
     };
   }
+
+  /**
+   * Cleaners travel: someone searching "Ughelli" should find cleaners whose
+   * service areas include it, not only those based there. Case-insensitive.
+   */
+  private async cleanersCovering(params: ExperienceSearchParams) {
+    if (params.kind !== 'CLEANING' || (!params.q && !params.city)) return { q: [], city: [] };
+    const match = async (pattern: string) =>
+      (
+        await this.prisma.$queryRaw<{ id: string }[]>`
+          SELECT experience_id AS id FROM cleaning_services
+          WHERE EXISTS (SELECT 1 FROM unnest(service_areas) AS area WHERE area ILIKE ${pattern})`
+      ).map((r) => r.id);
+    const escape = (v: string) => v.replace(/[\\%_]/g, (c) => `\\${c}`);
+    return {
+      q: params.q ? await match(`%${escape(params.q)}%`) : [],
+      city: params.city ? await match(escape(params.city)) : [],
+    };
+  }
 }
 
-export function buildWhere(params: ExperienceSearchParams, now: Date): Prisma.ExperienceWhereInput {
+export function buildWhere(
+  params: ExperienceSearchParams,
+  now: Date,
+  /** Cleaning: listings whose service areas match the search text or city. */
+  covering: { q: string[]; city: string[] } = { q: [], city: [] },
+): Prisma.ExperienceWhereInput {
   const and: Prisma.ExperienceWhereInput[] = [{ kind: params.kind }];
   const contains = (value: string) => ({ contains: value, mode: 'insensitive' as const });
   if (params.q) {
@@ -225,11 +255,19 @@ export function buildWhere(params: ExperienceSearchParams, now: Date): Prisma.Ex
         { city: contains(params.q) },
         { state: contains(params.q) },
         { addressLine: contains(params.q) },
+        ...(covering.q.length ? [{ id: { in: covering.q } }] : []),
       ],
     });
   }
   if (params.state) and.push({ state: { equals: params.state, mode: 'insensitive' } });
-  if (params.city) and.push({ city: { equals: params.city, mode: 'insensitive' } });
+  if (params.city) {
+    and.push({
+      OR: [
+        { city: { equals: params.city, mode: 'insensitive' } },
+        ...(covering.city.length ? [{ id: { in: covering.city } }] : []),
+      ],
+    });
+  }
   if (params.agent) and.push({ agentProfileId: params.agent });
   if (params.kind === 'TOUR' && params.category) and.push({ tour: { category: params.category } });
   if (params.kind === 'EVENT') {

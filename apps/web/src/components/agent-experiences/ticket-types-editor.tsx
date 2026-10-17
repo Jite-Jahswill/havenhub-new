@@ -38,8 +38,8 @@ const toRow = (t: TicketTypeView): Row => ({
 let next = 0;
 
 /**
- * An event's ticket types and listed prices. These describe what the
- * organiser offers; HavenHub does not sell tickets yet.
+ * An event's ticket types and prices. With online booking on, guests pay
+ * per person for each day they attend.
  */
 export function TicketTypesEditor({
   experience,
@@ -90,7 +90,7 @@ export function TicketTypesEditor({
     <Section
       id="tickets"
       title="Ticket types"
-      description="What you offer and the listed price of each. Ticket sales on HavenHub are coming later."
+      description="What you offer and the price of each, per person per day. Turn on online booking below to sell them on HavenHub."
     >
       {locked ? (
         initial.length ? (

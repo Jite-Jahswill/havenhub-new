@@ -23,12 +23,11 @@ import {
   Input,
   Select,
   Textarea,
-  cn,
 } from '@havenhub/ui';
-import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { useState, type FormEvent, type ReactNode } from 'react';
 
+import { CoordinatesField } from '@/components/map/coordinates-field';
 import { ApiErrorAlert } from '@/components/subscriptions/upgrade-prompt';
 import { api } from '@/lib/api/client';
 import { formText } from '@/lib/form';
@@ -39,14 +38,6 @@ import {
   PROPERTY_TYPE_LABELS,
 } from '@/lib/labels';
 import { useApiAction } from '@/lib/use-api-action';
-
-const LocationMap = dynamic(
-  () => import('@/components/map/location-map').then((m) => m.LocationMap),
-  {
-    ssr: false,
-    loading: () => <div className="size-full animate-pulse bg-surface-secondary" />,
-  },
-);
 
 const PERIODS: [PricingPeriod, string][] = [
   ['DAILY', 'Per night (short stay)'],
@@ -220,7 +211,7 @@ export function PropertyForm({
         <Section
           id="location"
           title="Location"
-          description="Click the map to place the pin, or drag it to adjust."
+          description="Add the street address, then the latitude and longitude from latlong.net."
         >
           <Field label="Street address" error={err('addressLine')}>
             {(a) => (
@@ -252,27 +243,13 @@ export function PropertyForm({
               )}
             </Field>
           </div>
-          <div>
-            <div className="h-72 overflow-hidden rounded-control border border-border">
-              <LocationMap
-                latitude={point.lat}
-                longitude={point.lng}
-                onPick={locked ? undefined : (lat, lng) => setPoint({ lat, lng })}
-              />
-            </div>
-            <p
-              className={cn(
-                'mt-2 text-xs',
-                err('latitude') || err('longitude') ? 'text-error' : 'text-text-muted',
-              )}
-            >
-              {err('latitude') ??
-                err('longitude') ??
-                (point.lat !== null
-                  ? `Pinned at ${point.lat.toFixed(5)}, ${point.lng!.toFixed(5)}`
-                  : 'No location pinned yet.')}
-            </p>
-          </div>
+          <CoordinatesField
+            value={point}
+            onChange={setPoint}
+            disabled={locked}
+            error={err('latitude') ?? err('longitude')}
+            mapClassName="h-72"
+          />
         </Section>
 
         <Section id="details" title="Property details">

@@ -21,7 +21,7 @@
 
   --hh-background: #ffffff;
   --hh-surface: #ffffff;
-  --hh-surface-secondary: #f5f5f5;
+  --hh-surface-secondary: #f7f4f1;
   --hh-surface-inverse: #222222;
   --hh-footer: #222222;
   --hh-footer-foreground: #ffffff;
@@ -42,9 +42,26 @@
   --hh-error: #b3261e;
   --hh-error-subtle: #fbeceb;
 
-  --hh-shadow-sm: 0 1px 2px rgb(34 34 34 / 0.06);
-  --hh-shadow-md: 0 4px 16px rgb(34 34 34 / 0.08);
-  --hh-shadow-lg: 0 12px 40px rgb(34 34 34 / 0.12);
+  /* Playful accents for category tiles and decoration — never for status. */
+  --hh-accent-sun: #b45f06;
+  --hh-accent-sun-subtle: #fff1dc;
+  --hh-accent-leaf: #1f7a4d;
+  --hh-accent-leaf-subtle: #e4f5ea;
+  --hh-accent-sky: #1d5fb8;
+  --hh-accent-sky-subtle: #e5effc;
+  --hh-accent-grape: #7a3fb8;
+  --hh-accent-grape-subtle: #f1e8fb;
+  --hh-accent-coral: #c2410c;
+  --hh-accent-coral-subtle: #ffeadf;
+  /* Soft warm glows behind the hero. */
+  --hh-glow-1: rgb(216 34 39 / 0.16);
+  --hh-glow-2: rgb(245 166 35 / 0.18);
+  --hh-dots: rgb(34 34 34 / 0.07);
+
+  --hh-shadow-sm: 0 1px 2px rgb(60 30 20 / 0.06);
+  --hh-shadow-md: 0 6px 20px -4px rgb(60 30 20 / 0.12);
+  --hh-shadow-lg: 0 18px 50px -12px rgb(60 30 20 / 0.22);
+  --hh-shadow-glow: 0 8px 20px -6px rgb(216 34 39 / 0.55);
 }
 
 [data-theme='dark'] {
@@ -79,7 +96,22 @@
   --hh-error: #f2726b;
   --hh-error-subtle: #331716;
 
+  --hh-accent-sun: #f5b14c;
+  --hh-accent-sun-subtle: #33240f;
+  --hh-accent-leaf: #5ccc8f;
+  --hh-accent-leaf-subtle: #13291d;
+  --hh-accent-sky: #7fb2f5;
+  --hh-accent-sky-subtle: #14233a;
+  --hh-accent-grape: #c39af0;
+  --hh-accent-grape-subtle: #261a36;
+  --hh-accent-coral: #fb9466;
+  --hh-accent-coral-subtle: #35190f;
+  --hh-glow-1: rgb(216 34 39 / 0.22);
+  --hh-glow-2: rgb(245 166 35 / 0.1);
+  --hh-dots: rgb(255 255 255 / 0.06);
+
   --hh-shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
-  --hh-shadow-md: 0 4px 16px rgb(0 0 0 / 0.45);
-  --hh-shadow-lg: 0 12px 40px rgb(0 0 0 / 0.55);
+  --hh-shadow-md: 0 6px 20px -4px rgb(0 0 0 / 0.5);
+  --hh-shadow-lg: 0 18px 50px -12px rgb(0 0 0 / 0.65);
+  --hh-shadow-glow: 0 8px 22px -6px rgb(216 34 39 / 0.6);
 }

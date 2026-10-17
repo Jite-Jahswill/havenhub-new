@@ -7,6 +7,7 @@ import {
   formatKobo,
   videoEmbedUrl,
   type ExperienceDetail,
+  type PropertyReviewsPage,
 } from '@havenhub/shared';
 import { Badge, Card, Container } from '@havenhub/ui';
 import {
@@ -23,20 +24,37 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 
 import { StartConversationButton } from '@/components/chat/start-conversation-button';
-import { LocationMapLazy } from '@/components/map/location-map-lazy';
+import { LocationMap } from '@/components/map/location-map';
 import { AgentAvatar } from '@/components/properties/agent-avatar';
 import { Gallery } from '@/components/properties/gallery';
+import { Rating } from '@/components/properties/rating';
+import { ReviewsList } from '@/components/reviews/reviews-list';
+import { serverApiData } from '@/lib/api/server';
 import { experiencePath, formatEventTime, KIND_SEGMENT } from '@/lib/experiences';
 import { AMENITY_CATEGORY_LABELS } from '@/lib/labels';
 import { getCurrentUser } from '@/lib/session';
 
+import { ExperienceBookingWidget } from './experience-booking-widget';
 import { HotelAvailability } from './hotel-availability';
 import { PurchaseUnavailable } from './purchase-unavailable';
 import { discountedKobo } from '@/lib/format';
 
 /** Public page of one event, tour, hotel or cleaning service. */
-export async function ExperienceDetailPage({ item }: { item: ExperienceDetail }) {
-  const user = await getCurrentUser();
+export async function ExperienceDetailPage({
+  item,
+  reviewPage = 1,
+}: {
+  item: ExperienceDetail;
+  reviewPage?: number;
+}) {
+  const [user, reviews] = await Promise.all([
+    getCurrentUser(),
+    item.rating
+      ? serverApiData<PropertyReviewsPage>(
+          `/experiences/${encodeURIComponent(item.slug)}/reviews?page=${Math.max(1, Math.trunc(reviewPage))}`,
+        )
+      : null,
+  ]);
   const viewer = !user ? 'guest' : user.accountType === 'CUSTOMER' ? 'customer' : 'other';
   const labels = EXPERIENCE_KIND_LABELS[item.kind];
   const place = [item.city, item.state].filter(Boolean).join(', ');
@@ -79,6 +97,11 @@ export async function ExperienceDetailPage({ item }: { item: ExperienceDetail })
           {item.title}
         </h1>
         {place && <p className="mt-1.5 text-text-secondary">{place}</p>}
+        {item.rating && (
+          <a href="#reviews" className="mt-2 inline-block hover:underline">
+            <Rating rating={item.rating} long />
+          </a>
+        )}
       </header>
 
       {item.images.length > 0 && <Gallery images={item.images} title={item.title} />}
@@ -228,9 +251,18 @@ export async function ExperienceDetailPage({ item }: { item: ExperienceDetail })
               )}
               {item.latitude !== null && item.longitude !== null && (
                 <div className="h-80 overflow-hidden rounded-card border border-border">
-                  <LocationMapLazy latitude={item.latitude} longitude={item.longitude} />
+                  <LocationMap latitude={item.latitude} longitude={item.longitude} />
                 </div>
               )}
+            </Section>
+          )}
+
+          {reviews && reviews.total > 0 && (
+            <Section title="Reviews">
+              <ReviewsList
+                reviews={reviews}
+                note="Only customers who completed a paid booking on HavenHub can review."
+              />
             </Section>
           )}
 
@@ -280,7 +312,9 @@ export async function ExperienceDetailPage({ item }: { item: ExperienceDetail })
                   <s className="text-text-muted">{formatKobo(item.priceFromKobo)}</s>{' '}
                   <span className="font-semibold text-success">{item.discountPercent}% off</span>
                   <span className="block text-xs text-text-muted">
-                    Offered by the provider. Arrange payment with them directly.
+                    {item.bookable
+                      ? 'Offered by the provider and applied when you book.'
+                      : 'Offered by the provider. Arrange payment with them directly.'}
                   </span>
                 </p>
               ) : null}
@@ -296,6 +330,8 @@ export async function ExperienceDetailPage({ item }: { item: ExperienceDetail })
               <p className="rounded-control bg-surface-secondary px-4 py-3 text-sm text-text-secondary">
                 This event has ended.
               </p>
+            ) : item.bookable ? (
+              <ExperienceBookingWidget item={item} viewer={viewer} path={path} />
             ) : (
               <PurchaseUnavailable kind={item.kind} />
             )}

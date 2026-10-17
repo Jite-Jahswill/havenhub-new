@@ -106,8 +106,12 @@ export const createPromoCodeSchema = z
     description: discountFields.description,
     percentOff: discountFields.percentOff,
     amountOffKobo: discountFields.amountOffKobo,
-    /** Your properties it applies to; empty or missing = all of them. */
+    /**
+     * Your properties and experiences (tours, events, hotels, cleaning) it
+     * applies to. Both empty or missing = all of your listings.
+     */
     propertyIds: z.array(z.uuid()).max(200).optional(),
+    experienceIds: z.array(z.uuid()).max(200).optional(),
     startsAt: discountFields.startsAt,
     endsAt: discountFields.endsAt,
     maxRedemptions: discountFields.maxRedemptions,
@@ -150,6 +154,7 @@ export interface AdminDiscountCodeView {
   agents: { agentProfileId: string; name: string; email: string }[];
   /** Booking codes: the agent's properties it covers (empty = all of them). */
   properties: { id: string; title: string }[];
+  experiences: { id: string; title: string }[];
   startsAt: string | null;
   endsAt: string | null;
   maxRedemptions: number | null;

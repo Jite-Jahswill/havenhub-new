@@ -12,8 +12,12 @@ export interface CodeFacts {
   agentProfileIds: string[];
   /** Booking codes: the agent who offers it. */
   ownerAgentProfileId: string | null;
-  /** Booking codes: the owner's properties it applies to (empty = all of them). */
+  /**
+   * Booking codes: the owner's properties and experiences it applies to.
+   * Both empty = all of the owner's listings; otherwise only those listed.
+   */
   propertyIds: string[];
+  experienceIds: string[];
   startsAt: Date | null;
   endsAt: Date | null;
   maxRedemptions: number | null;
@@ -26,7 +30,8 @@ export interface CodeFacts {
 /** What the code is being used on. */
 export type UseTarget =
   | { kind: 'PLAN'; agentProfileId: string; planId: string; planName: string }
-  | { kind: 'PROPERTY'; propertyId: string; ownerAgentProfileId: string };
+  | { kind: 'PROPERTY'; propertyId: string; ownerAgentProfileId: string }
+  | { kind: 'EXPERIENCE'; experienceId: string; ownerAgentProfileId: string };
 
 export interface UseFacts {
   target: UseTarget;
@@ -64,12 +69,20 @@ export function evaluateCode(code: CodeFacts | null, use: UseFacts): Evaluation 
   if (target.kind === 'PLAN' && code.planIds.length > 0 && !code.planIds.includes(target.planId)) {
     return { ok: false, reason: `This code does not apply to the ${target.planName} plan.` };
   }
-  if (
-    target.kind === 'PROPERTY' &&
-    code.propertyIds.length > 0 &&
-    !code.propertyIds.includes(target.propertyId)
-  ) {
-    return { ok: false, reason: 'This code does not apply to this property.' };
+  if (target.kind !== 'PLAN' && code.propertyIds.length + code.experienceIds.length > 0) {
+    const listed =
+      target.kind === 'PROPERTY'
+        ? code.propertyIds.includes(target.propertyId)
+        : code.experienceIds.includes(target.experienceId);
+    if (!listed) {
+      return {
+        ok: false,
+        reason:
+          target.kind === 'PROPERTY'
+            ? 'This code does not apply to this property.'
+            : 'This code does not apply to this listing.',
+      };
+    }
   }
   if (code.usedByUser >= code.perUserLimit) {
     return { ok: false, reason: 'You have already used this code.' };

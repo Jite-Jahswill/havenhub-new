@@ -10,6 +10,7 @@ import { useRef, useState, type FormEvent } from 'react';
 import { Photo } from '@/components/properties/photo';
 import { api, apiUpload } from '@/lib/api/client';
 import { formText } from '@/lib/form';
+import { useKeepScrollBelow } from '@/lib/use-keep-scroll';
 
 /** Allowances for display; null = unlimited. The API enforces them regardless. */
 type Limits = { images: number | null; videos: number | null };
@@ -37,6 +38,8 @@ export function MediaManager({
   const fromPlan = limitSource === 'plan';
   const router = useRouter();
   const input = useRef<HTMLInputElement>(null);
+  const root = useRef<HTMLDivElement>(null);
+  useKeepScrollBelow(root);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<{ text: string; upgrade: boolean } | null>(null);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
@@ -84,7 +87,7 @@ export function MediaManager({
   }
 
   return (
-    <Card id="media" className="scroll-mt-28">
+    <Card ref={root} id="media" className="scroll-mt-28">
       <CardHeader
         title="Photos & video"
         description={`${limits.images === null ? 'Unlimited' : `Up to ${limits.images}`} photos (JPEG, PNG, WebP; max 10 MB each) and ${limits.videos === null ? 'unlimited video links' : `${limits.videos} video ${limits.videos === 1 ? 'link' : 'links'}`}${fromPlan ? ' on your plan' : ' per listing'}. Photo location data is removed automatically.`}

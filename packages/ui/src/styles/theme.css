@@ -36,10 +36,22 @@
   --color-error: var(--hh-error);
   --color-error-subtle: var(--hh-error-subtle);
 
+  --color-accent-sun: var(--hh-accent-sun);
+  --color-accent-sun-subtle: var(--hh-accent-sun-subtle);
+  --color-accent-leaf: var(--hh-accent-leaf);
+  --color-accent-leaf-subtle: var(--hh-accent-leaf-subtle);
+  --color-accent-sky: var(--hh-accent-sky);
+  --color-accent-sky-subtle: var(--hh-accent-sky-subtle);
+  --color-accent-grape: var(--hh-accent-grape);
+  --color-accent-grape-subtle: var(--hh-accent-grape-subtle);
+  --color-accent-coral: var(--hh-accent-coral);
+  --color-accent-coral-subtle: var(--hh-accent-coral-subtle);
+
   --shadow-card: var(--hh-shadow-sm);
   --shadow-raised: var(--hh-shadow-md);
   --shadow-overlay: var(--hh-shadow-lg);
+  --shadow-glow: var(--hh-shadow-glow);
 
-  --radius-card: 1rem;
+  --radius-card: 1.25rem;
   --radius-control: 0.75rem;
 }

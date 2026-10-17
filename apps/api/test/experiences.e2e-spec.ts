@@ -456,7 +456,7 @@ describe('lifecycle and moderation', () => {
       const live = await publish(agent, kind);
       expect(live.status).toBe('PUBLISHED');
       const detail = (await publicDetail(live.slug).expect(200)).body.data;
-      expect(detail).toMatchObject({ kind, title: live.title, purchasable: false });
+      expect(detail).toMatchObject({ kind, title: live.title, bookable: false });
       const list = (await ctx.http().get(`/api/v1/experiences?kind=${kind}`).expect(200)).body.data;
       expect(list.items.map((i: { id: string }) => i.id)).toEqual([live.id]);
       // Other kinds' pages never show it.
@@ -563,7 +563,7 @@ describe('lifecycle and moderation', () => {
       .expect(200);
     const detail = (await publicDetail(live.slug).expect(200)).body.data;
     expect(detail.priceFromKobo).toBe(800_000);
-    expect(detail.purchasable).toBe(false);
+    expect(detail.bookable).toBe(false);
   });
 
   it('there is no purchase, ticket or booking endpoint', async () => {

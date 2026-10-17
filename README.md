@@ -126,9 +126,12 @@ One session system serves both client types; only the token transport differs.
 - **Search** (`GET /properties`): free text, state/city, type, rent/sale, pricing period, price range,
   bedrooms, bathrooms, guests, furnished, cleaning included, amenities (all must match), map bounding
   box, sort and pagination. Every filter maps to a real column.
-- **Maps:** MapLibre GL with a provider-agnostic tile config. Set `NEXT_PUBLIC_MAPBOX_TOKEN` for Mapbox
-  tiles (required in production); without it, OpenStreetMap tiles are used for development. MapLibre's
-  web worker is copied into `apps/web/public/vendor` before `dev` and `build`.
+- **Maps:** Google Maps. Single-location maps (listing pages, admin review, the agent form preview) are
+  Google Maps embeds and need no key. The search results map uses the Maps JavaScript API when
+  `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` is set; until then it falls back to MapLibre GL (Mapbox tiles with
+  `NEXT_PUBLIC_MAPBOX_TOKEN`, OpenStreetMap in development). Agents enter latitude/longitude from
+  latlong.net; the form shows how. MapLibre's web worker is copied into `apps/web/public/vendor` before
+  `dev` and `build`.
 - **Money** is integer kobo; prices use `BigInt` columns because sale prices exceed 32-bit kobo.
 
 | Area     | Routes (`/api/v1`)                                                                                                                                                                                                                                                                          |
@@ -510,7 +513,9 @@ See `.env.example` for the full annotated list.
 | `DATABASE_POOL_MAX`, `DATABASE_*_MS`  | API         | no       | Pool size, statement and connect timeouts (unset = driver defaults)              |
 | `API_INTERNAL_URL`                    | Web         | yes\*    | Where the web server reaches the API (\*default `http://localhost:4000`)         |
 | `NEXT_PUBLIC_SITE_URL`                | Web         | yes\*    | Canonical site URL                                                               |
-| `NEXT_PUBLIC_MAPBOX_TOKEN`            | Web         | prod     | Mapbox public token for map tiles (OpenStreetMap is used in development)         |
+| `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`     | Web         | prod     | Google Maps browser key (Maps JavaScript + Embed APIs) for the search map        |
+| `NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID`      | Web         | no       | Map ID for advanced markers (default Google's `DEMO_MAP_ID`)                     |
+| `NEXT_PUBLIC_MAPBOX_TOKEN`            | Web         | no       | Mapbox tiles for the fallback search map when no Google key is set               |
 | `STORAGE_DRIVER`                      | API         | prod     | `local` (development only) or `s3`                                               |
 | `STORAGE_*`                           | API         | with s3  | Bucket, credentials, endpoint and public base URL                                |
 | `PAYMENT_PROVIDER`                    | API         | prod     | `test` (development only, simulated) or `paystack`                               |

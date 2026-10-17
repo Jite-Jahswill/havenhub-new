@@ -3,6 +3,7 @@ import { z } from 'zod';
 import {
   EXPERIENCE_LIMITS,
   ExperienceKind,
+  PackageItemCategory,
   ExperienceStatus,
   TicketTypeKind,
   TourCategory,
@@ -12,8 +13,9 @@ import { paginationQuerySchema } from './admin.js';
 import { MAX_PRICE_KOBO, NIGERIA_BOUNDS, adminModeratePropertySchema } from './property.js';
 
 /**
- * Events & experiences (Phase 6) — catalogue only. Every price here is a
- * listed price in integer kobo for display; nothing is charged.
+ * Events & experiences. Prices are integer kobo. Tours, events, hotels and
+ * cleaning services with `onlineBooking` on can be booked and paid for (see
+ * booking schemas).
  */
 
 const kobo = z.number().int('Amounts are whole kobo').min(0).max(MAX_PRICE_KOBO);
@@ -41,8 +43,10 @@ const uniqueBy = <T>(items: T[], key: (item: T) => string) =>
 /** Fields every kind shares. Drafts may leave everything but the title empty. */
 const commonFields = {
   description: text(30, 5000).nullable().optional(),
-  /** "X% off" shown on the listing; null removes it. */
+  /** "X% off" shown on the listing (and applied to online bookings); null removes it. */
   discountPercent: z.number().int().min(1).max(90).nullable().optional(),
+  /** Take bookings and payment on HavenHub. */
+  onlineBooking: z.boolean().optional(),
   addressLine: text(3, 240).nullable().optional(),
   city: text(2, 100).nullable().optional(),
   state: text(2, 60).nullable().optional(),
@@ -102,6 +106,8 @@ export const cleaningDetailsSchema = z
       .max(7)
       .transform((days) => [...new Set(days)]),
     availabilityNote: optionalText(300),
+    /** Online bookings accepted per day; null = no limit. */
+    dailyCapacity: z.number().int().min(1).max(100).nullable(),
   })
   .partial();
 
@@ -192,6 +198,29 @@ export const replaceTicketTypesSchema = z.object({
     }),
 });
 export type ReplaceTicketTypesInput = z.input<typeof replaceTicketTypesSchema>;
+
+export const packageItemSchema = z.object({
+  category: z.enum(PackageItemCategory),
+  name: text(2, 80),
+  description: optionalText(300),
+  /** Price per day (per person per day when `perPerson`). */
+  priceKobo: kobo.min(100, 'Enter a price'),
+  perPerson: z.boolean().default(true),
+});
+
+/**
+ * Replaces what a tour, event or hotel guest can add to a booking (tour fee,
+ * food, place to stay, transport…). Customers take all of it or pick items.
+ */
+export const replacePackageItemsSchema = z.object({
+  items: z
+    .array(packageItemSchema)
+    .max(EXPERIENCE_LIMITS.packageItems)
+    .refine((list) => uniqueBy(list, (i) => i.name.toLowerCase()), {
+      message: 'Give each item a different name',
+    }),
+});
+export type ReplacePackageItemsInput = z.input<typeof replacePackageItemsSchema>;
 
 /** Replaces the tour's upcoming dates. Past dates are kept as history. */
 export const replaceTourDatesSchema = z.object({

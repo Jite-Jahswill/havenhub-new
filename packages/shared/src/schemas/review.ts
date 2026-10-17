@@ -68,7 +68,8 @@ export interface AdminReviewView {
   comment: string | null;
   status: 'PUBLISHED' | 'HIDDEN';
   hiddenReason: string | null;
-  property: { id: string; slug: string; title: string };
+  /** The reviewed listing: a property, or a tour, event, hotel or cleaning service. */
+  listing: { id: string; title: string; href: string };
   customer: { id: string; fullName: string; email: string };
   bookingReference: string;
   createdAt: string;

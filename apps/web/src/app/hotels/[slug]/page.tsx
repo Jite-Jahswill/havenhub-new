@@ -9,9 +9,13 @@ export async function generateMetadata({ params }: PageProps<'/hotels/[slug]'>):
   return experienceMetadata(await getExperience((await params).slug));
 }
 
-export default async function HotelsDetailPage({ params }: PageProps<'/hotels/[slug]'>) {
+export default async function HotelsDetailPage({
+  params,
+  searchParams,
+}: PageProps<'/hotels/[slug]'>) {
   const item = await getExperience((await params).slug);
   if (!item) notFound();
   if (item.kind !== 'HOTEL') permanentRedirect(experiencePath(item.kind, item.slug));
-  return <ExperienceDetailPage item={item} />;
+  const reviewPage = Number((await searchParams).reviews) || 1;
+  return <ExperienceDetailPage item={item} reviewPage={reviewPage} />;
 }
