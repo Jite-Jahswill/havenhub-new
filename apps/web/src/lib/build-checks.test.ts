@@ -6,7 +6,7 @@ const valid = {
   API_INTERNAL_URL: 'https://api.example.com',
   NEXT_PUBLIC_SITE_URL: 'https://example.com',
   NEXT_PUBLIC_REALTIME_URL: 'https://api.example.com',
-  NEXT_PUBLIC_MAPBOX_TOKEN: 'pk.public-token',
+  NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: 'AIza-public-key',
 };
 
 describe('productionBuildProblems', () => {
@@ -22,21 +22,12 @@ describe('productionBuildProblems', () => {
     }
   });
 
-  it('requires a Google Maps key or a Mapbox token instead of OpenStreetMap tiles', () => {
+  it('requires a Google Maps key', () => {
     for (const value of [undefined, '', '   ']) {
-      expect(productionBuildProblems({ ...valid, NEXT_PUBLIC_MAPBOX_TOKEN: value })).toEqual([
-        expect.stringMatching(
-          /^NEXT_PUBLIC_GOOGLE_MAPS_API_KEY \(or NEXT_PUBLIC_MAPBOX_TOKEN\) is required/,
-        ),
-      ]);
+      expect(productionBuildProblems({ ...valid, NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: value })).toEqual(
+        [expect.stringMatching(/^NEXT_PUBLIC_GOOGLE_MAPS_API_KEY is required/)],
+      );
     }
-    expect(
-      productionBuildProblems({
-        ...valid,
-        NEXT_PUBLIC_MAPBOX_TOKEN: undefined,
-        NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: 'AIza-public-key',
-      }),
-    ).toEqual([]);
   });
 
   it('keeps refusing development API and site URLs, and reports every problem', () => {

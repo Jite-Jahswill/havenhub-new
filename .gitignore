@@ -44,6 +44,3 @@ Thumbs.db
 # Deployment tooling
 .vercel
 .railway
-
-# Copied from node_modules at dev/build time
-apps/web/public/vendor/

@@ -8,20 +8,15 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
 
-import { GOOGLE_MAPS_KEY } from '@/components/map/google-maps';
-import type { Bounds } from '@/components/map/property-map';
+import type { Bounds } from '@/components/map/google-property-map';
 import { formatCompactPrice, plural } from '@/lib/format';
 
 import type { Viewer } from './favorite-button';
 import { PropertyCard } from './property-card';
 import type { SearchState } from './search-filters';
 
-// Google Maps when a key is configured; MapLibre (OpenStreetMap/Mapbox) otherwise.
 const PropertyMap = dynamic(
-  () =>
-    GOOGLE_MAPS_KEY
-      ? import('@/components/map/google-property-map').then((m) => m.GooglePropertyMap)
-      : import('@/components/map/property-map').then((m) => m.PropertyMap),
+  () => import('@/components/map/google-property-map').then((m) => m.GooglePropertyMap),
   {
     ssr: false,
     loading: () => <div className="size-full animate-pulse bg-surface-secondary" />,

@@ -3,29 +3,65 @@
 import { cn } from '@havenhub/ui';
 import { useEffect, useRef, useState } from 'react';
 
-import { GOOGLE_MAPS_MAP_ID, loadGoogleMaps } from './google-maps';
-import { NIGERIA_CENTER, NIGERIA_ZOOM } from './map-config';
-import type { Bounds, MapMarker } from './property-map';
+import {
+  GOOGLE_MAPS_KEY,
+  GOOGLE_MAPS_MAP_ID,
+  NIGERIA_CENTER,
+  NIGERIA_ZOOM,
+  googleEmbedUrl,
+  loadGoogleMaps,
+} from './google-maps';
 
-/**
- * The results map on Google Maps (used when NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
- * is set). Same contract as the MapLibre PropertyMap: markers mirror the
- * result list, the active one is highlighted, and only user pans/zooms
- * report bounds.
- */
-export function GooglePropertyMap({
-  markers,
-  activeId,
-  onSelect,
-  onMoveEnd,
-  className,
-}: {
+export interface MapMarker {
+  id: string;
+  latitude: number;
+  longitude: number;
+  label: string;
+  title: string;
+}
+
+export interface Bounds {
+  west: number;
+  south: number;
+  east: number;
+  north: number;
+}
+
+type Props = {
   markers: MapMarker[];
   activeId: string | null;
   onSelect: (id: string) => void;
   onMoveEnd?: (bounds: Bounds) => void;
   className?: string;
-}) {
+};
+
+/**
+ * The results map on Google Maps. With NEXT_PUBLIC_GOOGLE_MAPS_API_KEY it is
+ * interactive: markers mirror the result list, the active one is
+ * highlighted, and only user pans/zooms report bounds. Without a key
+ * (development only) it is a keyless Google embed of the active result.
+ */
+export function GooglePropertyMap(props: Props) {
+  return GOOGLE_MAPS_KEY ? <InteractiveMap {...props} /> : <EmbedMap {...props} />;
+}
+
+function EmbedMap({ markers, activeId, className }: Props) {
+  const focus = markers.find((m) => m.id === activeId) ?? markers[0];
+  const src = focus
+    ? googleEmbedUrl(focus.latitude, focus.longitude, 14)
+    : googleEmbedUrl(NIGERIA_CENTER.lat, NIGERIA_CENTER.lng, NIGERIA_ZOOM + 1);
+  return (
+    <iframe
+      title={focus ? `Map of ${focus.title}` : 'Map of results'}
+      src={src}
+      className={cn('size-full border-0', className)}
+      loading="lazy"
+      referrerPolicy="no-referrer-when-downgrade"
+    />
+  );
+}
+
+function InteractiveMap({ markers, activeId, onSelect, onMoveEnd, className }: Props) {
   const container = useRef<HTMLDivElement>(null);
   const [map, setMap] = useState<google.maps.Map | null>(null);
   const [failed, setFailed] = useState(false);
@@ -48,8 +84,8 @@ export function GooglePropertyMap({
       .then((maps) => {
         if (!active || !container.current) return;
         instance = new maps.Map(container.current, {
-          center: { lat: NIGERIA_CENTER[1], lng: NIGERIA_CENTER[0] },
-          zoom: Math.round(NIGERIA_ZOOM),
+          center: NIGERIA_CENTER,
+          zoom: NIGERIA_ZOOM,
           mapId: GOOGLE_MAPS_MAP_ID,
           mapTypeControl: false,
           streetViewControl: false,

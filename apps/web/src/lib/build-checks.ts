@@ -7,9 +7,8 @@ import { unsafeProductionUrl } from '@havenhub/shared';
  *  - API_INTERNAL_URL           the /api rewrite destination
  *  - NEXT_PUBLIC_SITE_URL       canonical URLs
  *  - NEXT_PUBLIC_REALTIME_URL   Socket.IO (else chat silently stops being live)
- *  - NEXT_PUBLIC_GOOGLE_MAPS_API_KEY (or NEXT_PUBLIC_MAPBOX_TOKEN for the
- *    MapLibre fallback)         the search map (OpenStreetMap tiles are
- *                               development only)
+ *  - NEXT_PUBLIC_GOOGLE_MAPS_API_KEY  the interactive search map (the
+ *                               keyless embed is development only)
  * Returns the problems; empty when the build may proceed.
  */
 export function productionBuildProblems(env: Record<string, string | undefined>): string[] {
@@ -23,9 +22,9 @@ export function productionBuildProblems(env: Record<string, string | undefined>)
     const problem = unsafeProductionUrl(value);
     if (problem) problems.push(`Invalid ${key} for a production build: ${value} ${problem}`);
   }
-  if (!env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY?.trim() && !env.NEXT_PUBLIC_MAPBOX_TOKEN?.trim()) {
+  if (!env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY?.trim()) {
     problems.push(
-      'NEXT_PUBLIC_GOOGLE_MAPS_API_KEY (or NEXT_PUBLIC_MAPBOX_TOKEN) is required for a production build (OpenStreetMap tiles are for development only)',
+      'NEXT_PUBLIC_GOOGLE_MAPS_API_KEY is required for a production build (the search map needs the Maps JavaScript API)',
     );
   }
   return problems;

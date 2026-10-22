@@ -1,15 +1,20 @@
 /// <reference types="google.maps" />
 
 /**
- * Google Maps. Single-location maps use the Maps Embed iframe, which works
- * without a key (the keyed Embed API is used when one is set). The
- * interactive results map needs the Maps JavaScript API and therefore
- * NEXT_PUBLIC_GOOGLE_MAPS_API_KEY; without it, search falls back to MapLibre.
+ * Google Maps, the only map provider. Single-location maps use the Maps
+ * Embed iframe, which works without a key (the keyed Embed API is used when
+ * one is set). The interactive results map needs the Maps JavaScript API and
+ * therefore NEXT_PUBLIC_GOOGLE_MAPS_API_KEY; without it (development only),
+ * the results map shows the selected result in an embed instead.
  */
 export const GOOGLE_MAPS_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || undefined;
 
 /** Advanced markers need a map ID; Google's DEMO_MAP_ID is fine until one is created. */
 export const GOOGLE_MAPS_MAP_ID = process.env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID || 'DEMO_MAP_ID';
+
+/** Roughly frames Nigeria. */
+export const NIGERIA_CENTER = { lat: 9.082, lng: 8.6753 };
+export const NIGERIA_ZOOM = 5;
 
 export function googleEmbedUrl(latitude: number, longitude: number, zoom = 15): string {
   const q = `${latitude},${longitude}`;

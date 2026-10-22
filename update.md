@@ -11,9 +11,9 @@ What changed in the app, who it affects, and what to do before deploying.
    - `20261018090000_experience_promos_cleaning`: promo codes on experiences; cleaning bookings per day
    - `20261018100000_experience_reviews`: reviews of tour, event, hotel and cleaning bookings
 2. **Set the Google Maps key** on the web app: `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`. In Google Cloud, enable the _Maps JavaScript API_ and _Maps Embed API_ and restrict the key to your domains. `NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID` is optional.
-   - A production build needs this key or the old `NEXT_PUBLIC_MAPBOX_TOKEN`.
+   - A production build needs this key. MapLibre, Mapbox and OpenStreetMap are gone: every map is Google Maps, and `NEXT_PUBLIC_MAPBOX_TOKEN` can be deleted.
 3. **Make sure pricing rates are saved** in Admin → Payments → Rates. Without saved rates, every online booking (rentals and experiences) shows "Online booking is not open yet."
-4. **Install dependencies** (`pnpm install`). The web app has one new dev dependency: `@types/google.maps`.
+4. **Install dependencies** (`pnpm install`). The web app has one new dev dependency, `@types/google.maps`, and no longer depends on `maplibre-gl`.
 
 ## Changes needed for the app (setup checklist)
 
@@ -22,7 +22,7 @@ What changed in the app, who it affects, and what to do before deploying.
 | 5 new database migrations                   | `pnpm db:deploy` (all environments)              | Experience bookings, hotel rooms, direct agent chats, promo codes on experiences, cleaning bookings, experience reviews |
 | `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`           | Web app env (`apps/web/.env.local`, hosting env) | Google Maps on the explore page. Location maps work without it.                                                         |
 | `NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID` (optional) | Web app env                                      | Your own map style for map pins; defaults to Google's demo ID                                                           |
-| `NEXT_PUBLIC_MAPBOX_TOKEN`                  | Web app env                                      | Now only a fallback. A production build needs this or the Google key.                                                   |
+| `NEXT_PUBLIC_MAPBOX_TOKEN`                  | Web app env                                      | No longer used; delete it. A production build needs the Google key.                                                     |
 | Pricing rates                               | Admin → Payments → Rates                         | Any online booking: rentals, tours, events, hotels, cleaning                                                            |
 | `pnpm install`                              | Repo root                                        | New `@types/google.maps` dev dependency                                                                                 |
 
